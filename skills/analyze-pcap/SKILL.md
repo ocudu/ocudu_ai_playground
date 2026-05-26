@@ -5,8 +5,10 @@ description: >
   a packet capture produced by an OCUDU application (`gnb`, `du`, `cu`, `cu_cp`,
   `cu_up`). Trigger phrases include: "analyze this pcap", "look at the pcap",
   "give me an overview of this pcap", "what's in this capture", "why did X
-  happen in this pcap", "investigate this run", "root-cause this failure", or
-  a path ending in `.pcap` / `.pcapng`, or a path under `.../ocudu-gnb-*/`.
+  happen in this pcap", "investigate this run", "root-cause this failure",
+  "what went wrong with", "debug this test", "why did this test fail", or
+  a path ending in `.pcap` / `.pcapng`, or a path under `.../ocudu-gnb-*/`,
+  or a retina test log path (e.g. `retina/log/tests/*/test_gnb[...]`).
   The skill operates in three explicit modes — `overview`, `query`,
   `investigation` — and uses `tshark` plus helper scripts to keep analysis
   cheap. When in doubt about scope or intent, the skill asks the user via
