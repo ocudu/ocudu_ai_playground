@@ -29,8 +29,6 @@ per file. A single test run typically produces five sibling pcaps in the same
 directory: `mac.pcap`, `rlc.pcap`, `f1ap.pcap`, `e1ap.pcap`, `ngap.pcap` — all
 sharing wall-clock epoch timestamps.
 
-For OCUDU **log** analysis use the sibling skill `analyze-ocudu-log` instead.
-
 ## Overall flow
 
 1. **Input resolution** — determine whether the user gave a single pcap or a
@@ -76,7 +74,7 @@ ask via `AskUserQuestion` with the three modes as options.
 | explicit question form ("why", "when", "how many", "which", "did X happen") | `query` |
 | "investigate", "root cause", "debug", "why did this fail", "find the bug" | `investigation` |
 
-When the user passed multiple things (e.g. "give me an overview and then
+When the user passed multiple  instructions (e.g. "give me an overview and then
 investigate why the handover failed"), do them in order — overview first,
 then ask before entering investigation.
 
@@ -170,15 +168,3 @@ per-run root-cause narratives — those don't generalise.
 all files under `references/`, dedupe, fix stale tshark syntax, and report a
 one-paragraph summary of what changed.
 
----
-
-## Activation
-
-This skill lives at `/home/xico/srs/ocudu_ai_playground/skills/analyze-pcap/`.
-To activate it under `~/.claude/skills/`, symlink it once:
-
-```bash
-ln -s /home/xico/srs/ocudu_ai_playground/skills/analyze-pcap ~/.claude/skills/analyze-pcap
-```
-
-Edits in place propagate immediately — no re-install needed.
