@@ -36,6 +36,9 @@ ngap.pcap   InitialContextSetupResponse
 
 ```bash
 # NGAP registration-relevant procedures, one UE
+# (15 = InitialUEMessage, 14 = InitialContextSetup — verified against OCUDU;
+#  46 = UplinkNASTransport, 47 = DownlinkNASTransport — 3GPP standard, not
+#  yet verified locally)
 tshark -r ngap.pcap \
     -Y 'ngap.RAN_UE_NGAP_ID == <N> && (ngap.procedureCode == 15 || ngap.procedureCode == 14 || ngap.procedureCode == 46 || ngap.procedureCode == 47)'
 
@@ -53,6 +56,3 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --ue <
 - `../cross-pcap-correlation.md`.
 
 ## Accumulated knowledge
-
-*Append: AMF cause-IE values seen in practice, NAS exchange counts per
-authentication flavour, common config mismatches and their signatures.*

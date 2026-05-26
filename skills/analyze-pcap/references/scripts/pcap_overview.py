@@ -25,30 +25,33 @@ from pathlib import Path
 
 import utils
 
-PROTO_FIELDS: dict[str, dict[str, list[str]]] = {
+# Each "ue" entry is a list of (label, tshark_field) pairs. Labels are reported
+# separately so an NGAP UE with ran_ue_ngap_id=0 and amf_ue_ngap_id=100 doesn't
+# look like two distinct UEs.
+PROTO_FIELDS: dict[str, dict] = {
     "ngap": {
         "proc": ["ngap.procedureCode"],
-        "ue": ["ngap.RAN_UE_NGAP_ID", "ngap.AMF_UE_NGAP_ID"],
+        "ue": [("ran", "ngap.RAN_UE_NGAP_ID"), ("amf", "ngap.AMF_UE_NGAP_ID")],
         "failure_filter": "ngap.unsuccessfulOutcome_element || ngap.cause",
     },
     "f1ap": {
         "proc": ["f1ap.procedureCode"],
-        "ue": ["f1ap.GNB_DU_UE_F1AP_ID", "f1ap.GNB_CU_UE_F1AP_ID"],
+        "ue": [("du", "f1ap.GNB_DU_UE_F1AP_ID"), ("cu", "f1ap.GNB_CU_UE_F1AP_ID")],
         "failure_filter": "f1ap.unsuccessfulOutcome_element || f1ap.cause",
     },
     "e1ap": {
         "proc": ["e1ap.procedureCode"],
-        "ue": ["e1ap.GNB_CU_CP_UE_E1AP_ID", "e1ap.GNB_CU_UP_UE_E1AP_ID"],
+        "ue": [("cp", "e1ap.GNB_CU_CP_UE_E1AP_ID"), ("up", "e1ap.GNB_CU_UP_UE_E1AP_ID")],
         "failure_filter": "e1ap.unsuccessfulOutcome_element || e1ap.cause",
     },
     "mac": {
         "proc": [],
-        "ue": ["mac-nr.rnti"],
+        "ue": [("rnti", "mac-nr.rnti")],
         "failure_filter": None,
     },
     "rlc": {
         "proc": [],
-        "ue": ["rlc-nr.ueid"],
+        "ue": [("ueid", "rlc-nr.ueid")],
         "failure_filter": None,
     },
 }
@@ -60,9 +63,9 @@ def summarise_pcap(pcap: Path, *, top: int) -> dict:
     out: dict = {"file": str(pcap), "proto": proto}
     fields = ["frame.time_epoch"]
     if spec:
-        fields += spec["proc"] + spec["ue"]
+        fields += spec["proc"] + [f for _, f in spec["ue"]]
 
-    rows = list(utils.iter_fields_cached(pcap, fields, tag=f"overview-{proto}"))
+    rows = list(utils.iter_fields_cached(pcap, fields, tag=f"overview-{proto}-v2"))
     out["packets"] = len(rows)
     if not rows:
         out["empty"] = True
@@ -82,12 +85,15 @@ def summarise_pcap(pcap: Path, *, top: int) -> dict:
         out["top_procedures"] = codes.most_common(top)
     if spec:
         ue_start = 1 + len(spec["proc"])
-        ue_vals: set[str] = set()
+        # Track distinct values per ID-type separately, so e.g. a single NGAP
+        # UE doesn't look like two distinct UEs just because it has both
+        # RAN-UE-NGAP-ID and AMF-UE-NGAP-ID populated.
+        per_label: dict[str, set[str]] = {label: set() for label, _ in spec["ue"]}
         for r in rows:
-            for c in r[ue_start : ue_start + len(spec["ue"])]:
-                if c:
-                    ue_vals.add(c)
-        out["distinct_ues"] = sorted(ue_vals)
+            for (label, _), val in zip(spec["ue"], r[ue_start : ue_start + len(spec["ue"])]):
+                if val:
+                    per_label[label].add(val)
+        out["distinct_ues_by_label"] = {k: sorted(v) for k, v in per_label.items()}
         if spec["failure_filter"]:
             try:
                 staged = utils.stage_for_tshark(pcap)
@@ -114,8 +120,17 @@ def render_text(summaries: list[dict]) -> str:
             f"  range:   {s.get('first_iso','?')} .. {s.get('last_iso','?')} "
             f"({s.get('duration_s', 0):.3f} s)"
         )
-        if "distinct_ues" in s and s["distinct_ues"]:
-            lines.append(f"  ues:     {', '.join(s['distinct_ues'])}")
+        if "distinct_ues_by_label" in s:
+            parts = []
+            for label, vals in s["distinct_ues_by_label"].items():
+                if not vals:
+                    continue
+                if len(vals) <= 5:
+                    parts.append(f"{label}({len(vals)})={','.join(vals)}")
+                else:
+                    parts.append(f"{label}({len(vals)})={','.join(vals[:5])},…")
+            if parts:
+                lines.append(f"  ues:     {'  '.join(parts)}")
         if "top_procedures" in s and s["top_procedures"]:
             top = ", ".join(f"{code}×{count}" for code, count in s["top_procedures"])
             lines.append(f"  top:     {top}")

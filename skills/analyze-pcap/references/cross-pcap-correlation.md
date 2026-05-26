@@ -80,12 +80,10 @@ Adjust the window:
 
 ## Cache
 
-`correlate_run.py` writes its joined event list to
-`/tmp/analyze-pcap-cache-<sha>.tsv` (sha256 of the canonical input path).
-Re-runs reuse the cache if the source pcaps haven't been touched.
+Each helper script caches its tshark field-extraction output as one TSV per
+(pcap, column-set) tuple at `/tmp/analyze-pcap-cache-<sha>.tsv` (sha256 of
+the canonical pcap path + tag). `correlate_run.py` reads back per-protocol
+caches and joins in-process — re-runs against the same run dir reuse all
+the caches and skip tshark entirely.
 
 ## Accumulated knowledge
-
-*Append new correlation patterns here. Examples to watch for: protocol pairs
-that don't share any ID and need temporal-only join, new ID fields introduced
-in newer dissector versions, ID lifetime quirks across handover.*

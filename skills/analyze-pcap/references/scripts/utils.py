@@ -44,8 +44,13 @@ def stage_for_tshark(pcap_path: str | os.PathLike[str]) -> Path:
     trigger "You don't have permission to read the file" even when Unix perms
     allow it. Hard-link (or copy on a different fs) into /tmp/analyze-pcap-stage/,
     keyed by canonical source path sha + basename.
+
+    If the source is already under /tmp (likely already accessible), pass it
+    through unchanged.
     """
     src = Path(pcap_path).resolve()
+    if str(src).startswith("/tmp/"):
+        return src
     digest = hashlib.sha256(str(src).encode()).hexdigest()[:16]
     _TSHARK_STAGE_DIR.mkdir(parents=True, exist_ok=True)
     staged = _TSHARK_STAGE_DIR / f"{digest}-{src.name}"
@@ -137,12 +142,17 @@ def epoch_to_iso(epoch: float | str) -> str:
 
 
 def parse_fields(line: str, expected: int, sep: str = "\t") -> list[str]:
-    """Split a TSV line into exactly `expected` columns, padding with ''."""
+    """Split a TSV line into exactly `expected` columns.
+
+    Pads short rows with '' and truncates long ones. tshark `-T fields` output
+    shouldn't contain embedded tabs in a single field value, so silently
+    truncating extras is safe.
+    """
     parts = line.split(sep)
     if len(parts) < expected:
         parts.extend([""] * (expected - len(parts)))
     elif len(parts) > expected:
-        parts = parts[: expected - 1] + [sep.join(parts[expected - 1 :])]
+        parts = parts[:expected]
     return parts
 
 
@@ -183,12 +193,16 @@ def iter_fields_cached(
     *,
     display_filter: str | None = None,
     tag: str | None = None,
+    force: bool = False,
 ) -> Iterator[list[str]]:
-    """Yield rows of the requested tshark fields, caching to /tmp."""
+    """Yield rows of the requested tshark fields, caching to /tmp.
+
+    Pass force=True to bypass the cache (will still write a fresh cache file).
+    """
     fields_list = list(fields)
     tag_str = tag or "+".join(fields_list) + ("|" + display_filter if display_filter else "")
     cf = cache_path(pcap, tag_str)
-    if cf.exists():
+    if cf.exists() and not force:
         with cf.open() as fh:
             for line in fh:
                 line = line.rstrip("\n")

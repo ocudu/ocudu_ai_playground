@@ -76,9 +76,6 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py <rlc.pcap>
 
 ## Accumulated knowledge
 
-*Append: bearer-ID conventions observed in OCUDU runs, dissector field-name
-drift across versions, AM-vs-UM bearer assignment patterns.*
-
 - 2026-05-26 — tshark 4.4.7 uses hyphenated names for RLC-NR bearer fields:
   `rlc-nr.bearer-type`, `rlc-nr.bearer-id`. The unhyphenated forms
   `rlc-nr.bearertype` / `rlc-nr.bearerid` are not valid. RLC mode is

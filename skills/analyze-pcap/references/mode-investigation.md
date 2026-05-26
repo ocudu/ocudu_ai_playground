@@ -88,16 +88,7 @@ to your satisfaction, produce a single closing block:
 ## Phase E — persist learnings
 
 For every generalisable insight discovered during the investigation, append to
-the appropriate file (see SKILL.md § Memory). Specifically:
-
-- New filter recipe → `references/tshark-recipes.md` or `references/protocols/<proto>.md`.
-- New failure signature for a procedure → `references/procedures/<proc>.md` § Accumulated knowledge.
-- New dissector quirk → `references/pcap-format.md`.
-- New correlation pattern → `references/cross-pcap-correlation.md`.
-
-**Do not** write the specific run's RNTIs, frame numbers, epoch timestamps, or
-root-cause narrative into `references/` — those values do not survive past
-this one run.
+the appropriate file (see SKILL.md § Memory).
 
 ## Question-asking discipline
 

@@ -58,6 +58,3 @@ tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 11' \
 - `../cross-pcap-correlation.md` — joining MAC and F1AP by RNTI.
 
 ## Accumulated knowledge
-
-*Append: RA-RNTI computation surprises, RAPID mapping observations,
-contention-resolution timing patterns.*

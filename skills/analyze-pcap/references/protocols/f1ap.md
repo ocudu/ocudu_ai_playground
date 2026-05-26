@@ -38,6 +38,10 @@ tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 13'   # ULRRCMessageTransfer
 - `f1ap.GNB_DU_UE_F1AP_ID` — DU-assigned, present from InitialULRRCMessageTransfer.
 - `f1ap.GNB_CU_UE_F1AP_ID` — CU-assigned, present once UEContextSetupRequest
   has been sent.
+- `f1ap.C_RNTI` — present in InitialULRRCMessageTransfer (the DU's C-RNTI for
+  this UE). Note the field name uses an underscore and capital `C` — the
+  natural-looking `f1ap.cRNTI` is **not** a valid tshark field.
+- See `../cross-pcap-correlation.md` for joining to NGAP / E1AP.
 
 ## UE arrival paths in f1ap.pcap
 
@@ -49,14 +53,10 @@ A UE shows up in `f1ap.pcap` via one of two first-message paths, depending on
 | `InitialULRRCMessageTransfer` (proc 11) | UE attached via RACH on this cell. The DU has just allocated a C-RNTI; the CU has not yet assigned a `gNB-CU-UE-F1AP-ID`. | Source/only DU. |
 | `UEContextSetup` (proc 5) — Request from CU | UE was handed over to this DU from elsewhere under the same CU. No preceding RACH on this DU; the C-RNTI in the request is freshly allocated for the target cell. | Target DU. |
 
-So in a handover test, the first-F1AP-message variation across UEs is the
+In a handover test, the first-F1AP-message variation across UEs is the
 *expected* signature, not an anomaly. See
 [`../procedures/handover.md`](../procedures/handover.md) for the full target-DU
 sequence.
-- `f1ap.C_RNTI` — present in InitialULRRCMessageTransfer (the DU's C-RNTI for
-  this UE). Note the field name uses an underscore and capital `C` — the
-  natural-looking `f1ap.cRNTI` is **not** a valid tshark field.
-- See `../cross-pcap-correlation.md` for joining to NGAP / E1AP.
 
 ## Common procedures and codes
 
@@ -93,9 +93,6 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --prot
 ```
 
 ## Accumulated knowledge
-
-*Append: new field names, surprises in UE-context teardown timing, version
-differences in cause IE values.*
 
 - 2026-05-26 — tshark 4.4.7 field name for the per-UE C-RNTI carried in
   InitialULRRCMessageTransfer is `f1ap.C_RNTI` (capital `C`, underscore). The

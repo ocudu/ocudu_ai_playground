@@ -13,8 +13,8 @@ file is the reference table; per-protocol detail lives in
 | `gNB-CU-UE-F1AP-ID` | `f1ap.GNB_CU_UE_F1AP_ID` | CU | One CU, one UE | Yes (intra-CU HO) | Yes |
 | `RAN-UE-NGAP-ID` | `ngap.RAN_UE_NGAP_ID` | gNB | One NG association | Yes | Yes |
 | `AMF-UE-NGAP-ID` | `ngap.AMF_UE_NGAP_ID` | AMF | One AMF | Yes | Yes |
-| `gNB-CU-CP-UE-E1AP-ID` | `e1ap.gNB_CU_CP_UE_E1AP_ID` | CU-CP | One E1 association | Yes | Yes |
-| `gNB-CU-UP-UE-E1AP-ID` | `e1ap.gNB_CU_UP_UE_E1AP_ID` | CU-UP | One E1 association | Yes | Yes |
+| `gNB-CU-CP-UE-E1AP-ID` | `e1ap.GNB_CU_CP_UE_E1AP_ID` | CU-CP | One E1 association | Yes | Yes |
+| `gNB-CU-UP-UE-E1AP-ID` | `e1ap.GNB_CU_UP_UE_E1AP_ID` | CU-UP | One E1 association | Yes | Yes |
 
 ## Time base
 
@@ -42,6 +42,3 @@ For an event-level cross-protocol timeline, use `correlate_run.py`.
 There is no per-protocol clock skew.
 
 ## Accumulated knowledge
-
-*Append: newly observed identifier fields, version-specific renames, ID
-lifetime surprises.*

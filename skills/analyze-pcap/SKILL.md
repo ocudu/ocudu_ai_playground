@@ -15,7 +15,7 @@ version: 0.1.0
 user-invocable: true
 context: fork
 agent: Explore
-allowed-tools: Bash(ls:*), Bash(grep:*), Bash(capinfos:*), Bash(tshark:*), Bash(python3:*), Bash(jq:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(realpath:*), Bash(sha256sum:*), Bash(find:*)
+allowed-tools: Bash(ls:*), Bash(grep:*), Bash(capinfos:*), Bash(tshark:*), Bash(python3:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(realpath:*), Bash(sha256sum:*), Bash(find:*)
 ---
 
 # Analyze OCUDU pcap files
@@ -149,48 +149,24 @@ protocol/procedure reference files in `references/protocols/` and
 
 ## Memory
 
-Two destinations, by kind:
+After analysis, append generalisable insights to the right reference file:
 
-### Generalisable knowledge → `references/` (git-tracked with the skill)
+- New tshark filter recipe → `references/protocols/<proto>.md` § Key tshark filters (or `references/tshark-recipes.md` if cross-cutting).
+- New procedure failure signature → `references/procedures/<proc>.md` § Accumulated knowledge.
+- Upper-PDU framing quirk / dissector binding edge case → `references/pcap-format.md`.
+- New helper script or flag → script file + invocation line in the relevant `protocols/<proto>.md` § Parsing script.
+- New cross-protocol correlation pattern → `references/cross-pcap-correlation.md`.
 
-Append after every analysis where something new was learned:
+Operator-/preference-level knowledge (user shortcuts, local quirks, named
+conventions) goes to the project's auto-memory directory under
+`~/.claude/projects/<project-key>/memory/`, not to `references/`.
 
-| Kind of finding | Destination |
-|---|---|
-| Tshark filter that worked, with context for when to use it | `references/tshark-recipes.md` or the relevant `references/protocols/<proto>.md` |
-| Procedure failure signature (procedureCode + cause IE pattern) | `references/procedures/<proc>.md` § Accumulated knowledge |
-| Upper-PDU framing quirk (dissector binding edge case, DLT detail) | `references/pcap-format.md` |
-| New helper script, new flag on an existing script | new file under `references/scripts/`; document invocation in matching `protocols/<proto>.md` § Parsing script |
-| Cross-pcap correlation pattern | `references/cross-pcap-correlation.md` |
+**Never** save specific RNTIs, UE-IDs, frame numbers, run timestamps, KPIs, or
+per-run root-cause narratives — those don't generalise.
 
-### Operator/preference knowledge → auto-memory
-
-Write to `/home/xico/.claude/projects/-home-xico-srs-ocudu-ai-playground/memory/`
-(via the auto-memory system, not by direct file writes from this skill) when
-the user says something that is true *for them* but not generally:
-
-- Preferences: "always check time alignment first", "skip MAC unless asked".
-- Local gNB build/version quirks the user calls out.
-- Named shortcuts the user invents: "when I say *the usual three*, look at
-  ngap+f1ap+e1ap procedure counts".
-- Operator conventions: CI run-directory naming, default UE count for a test.
-
-### Never saved anywhere
-
-- Specific RNTI / UE-ID values, frame numbers, run timestamps.
-- Root-cause narratives tied to one run.
-- KPIs or packet counts observed in a specific capture.
-- Anything that only makes sense in the context of one run.
-
-### Maintenance
-
-When the user says **"reorganize pcap knowledge"**:
-
-1. Read all files under `references/`.
-2. Dedupe entries; merge entries that belong together.
-3. Fix stale tshark syntax for the installed tshark version.
-4. Move stray run-specific values out (they should never have been there).
-5. Print a one-paragraph summary of what changed.
+**Maintenance trigger**: if the user says "reorganize pcap knowledge", re-read
+all files under `references/`, dedupe, fix stale tshark syntax, and report a
+one-paragraph summary of what changed.
 
 ---
 

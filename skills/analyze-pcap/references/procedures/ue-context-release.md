@@ -5,6 +5,11 @@ or by the gNB (RLF detected). The cause IE distinguishes the two.
 
 ## Trigger events
 
+Codes 41 (NGAP UEContextRelease) and 6 (F1AP UEContextRelease) are verified
+against an OCUDU capture. Code 40 (NGAP UEContextReleaseRequest) is from the
+3GPP standard, not yet verified locally — check via `tshark -V` if a run
+exhibits it.
+
 | Initiator | Trigger PDU | File |
 |---|---|---|
 | AMF | `UEContextReleaseCommand` (procedureCode 41) | `ngap.pcap` |
@@ -70,6 +75,3 @@ tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 6'
 - `../cross-pcap-correlation.md`
 
 ## Accumulated knowledge
-
-*Append: cause-IE values you've seen and how they map to log lines, RLF timing
-patterns, AMF release-policy observations.*

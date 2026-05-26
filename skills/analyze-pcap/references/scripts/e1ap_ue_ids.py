@@ -86,6 +86,10 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pcap", help="path to e1ap.pcap")
     ap.add_argument("--ue", help="filter rows mentioning this identifier value")
+    ap.add_argument("--limit", type=int, default=200,
+                    help="cap text output rows (default 200; use 0 for no cap)")
+    ap.add_argument("--no-cache", action="store_true",
+                    help="bypass /tmp tshark-extraction cache and re-run tshark")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
@@ -96,7 +100,8 @@ def main(argv: list[str] | None = None) -> int:
 
     rows: list[dict] = []
     try:
-        for r in utils.iter_fields_cached(pcap, FIELDS, tag="e1ap-ue-ids-v1"):
+        for r in utils.iter_fields_cached(pcap, FIELDS, tag="e1ap-ue-ids-v1",
+                                          force=args.no_cache):
             frame, epoch, code, cpid, upid = r
             if not epoch:
                 continue
@@ -139,7 +144,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     header = ("frame", "first_iso", "message", "e1_cp_ue_id", "e1_up_ue_id")
     print(", ".join(header))
-    for r in out_list:
+    rendered = out_list if args.limit <= 0 else out_list[: args.limit]
+    for r in rendered:
         print(", ".join([
             str(r["frame"]) if r["frame"] is not None else "-",
             r["first_iso"],
@@ -147,6 +153,8 @@ def main(argv: list[str] | None = None) -> int:
             r["e1_cp_ue_id"] or "-",
             r["e1_up_ue_id"] or "-",
         ]))
+    if args.limit > 0 and len(out_list) > args.limit:
+        print(f"... {len(out_list) - args.limit} more rows truncated (use --limit 0 to show all)")
     return 0
 
 

@@ -61,6 +61,3 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py <mac.pcap>
 ```
 
 ## Accumulated knowledge
-
-*Append: MAC sub-PDU patterns observed, LCID assignments seen in OCUDU
-deployments, dissector quirks for `mac-nr` vs `mac-nr-framed`.*

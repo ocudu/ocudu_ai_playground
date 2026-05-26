@@ -79,6 +79,3 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/extract_proc_codes.py <ngap.pcap>
 ```
 
 ## Accumulated knowledge
-
-*Append: new procedure-code observations, cause-IE values you've encountered,
-field-name variations across tshark versions.*

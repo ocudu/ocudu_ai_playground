@@ -36,11 +36,12 @@ once the user plane is up.
 
 ```bash
 # NGAP PDU-session procedures for one UE
+# (29 = PDUSessionResourceSetup, verified; 28 = ResourceNotify, 30 = ResourceRelease — standard)
 tshark -r ngap.pcap \
     -Y '(ngap.procedureCode == 29 || ngap.procedureCode == 30 || ngap.procedureCode == 28) && ngap.RAN_UE_NGAP_ID == <N>'
 
-# E1AP bearer-context events
-tshark -r e1ap.pcap -Y 'e1ap.procedureCode in {1,2,3,4,5}'
+# E1AP bearer-context lifecycle (codes 8..12 — verified against an OCUDU pcap)
+tshark -r e1ap.pcap -Y 'e1ap.procedureCode == 8 || e1ap.procedureCode == 9 || e1ap.procedureCode == 10 || e1ap.procedureCode == 11 || e1ap.procedureCode == 12'
 
 # Unified timeline around the request
 python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --around <T0> --window-ms 5000
@@ -53,6 +54,3 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --arou
 - `../protocols/f1ap.md`
 
 ## Accumulated knowledge
-
-*Append: cause-IE values for `BearerContextSetupFailure`, observed timing
-ranges for AMF→CU→DU plumbing, S-NSSAI handling quirks.*

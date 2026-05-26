@@ -29,9 +29,9 @@ Not every test produces all five. Single-UE attach tests sometimes write only
 
 ## Timestamps
 
-All pcaps share a wall-clock epoch reference (microsecond precision in the
-pcap-tools-classic header). To align events across the 5 files, use
-`frame.time_epoch` directly — see `cross-pcap-correlation.md`.
+All pcaps share a wall-clock epoch reference (microsecond precision; libpcap
+classic format). To align events across the 5 files, use `frame.time_epoch`
+directly — see `cross-pcap-correlation.md`.
 
 ## Dissection — happy path
 
@@ -41,10 +41,13 @@ read. Standard display filters work out of the box:
 ```bash
 tshark -r ngap.pcap -Y 'ngap.procedureCode == 14'   # InitialContextSetup
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 5'    # UEContextSetup
-tshark -r e1ap.pcap -Y 'e1ap.procedureCode == 1'    # BearerContextSetup
+tshark -r e1ap.pcap -Y 'e1ap.procedureCode == 8'    # bearerContextSetup
 tshark -r mac.pcap  -Y 'mac-nr'                     # any MAC-NR PDU
 tshark -r rlc.pcap  -Y 'rlc-nr'                     # any RLC-NR PDU
 ```
+
+For the full per-protocol code tables, see the protocol files under
+`references/protocols/`.
 
 ## Dissection — fallback (rare)
 
@@ -113,10 +116,6 @@ adding `file r /home/*/srs/**,` (requires `sudo systemctl reload apparmor`).
 The script-side workaround is preferred because it needs no root.
 
 ## Accumulated knowledge
-
-*Append new framing quirks here: dissector-name strings that didn't match the
-expected dissector identifier, link-layer surprises, version-specific
-behaviour. Format: date — observation — workaround.*
 
 - 2026-05-26 — On Ubuntu, the Canonical AppArmor profile for tshark
   (`/etc/apparmor.d/tshark`) blocks reads outside `/tmp` and system paths.

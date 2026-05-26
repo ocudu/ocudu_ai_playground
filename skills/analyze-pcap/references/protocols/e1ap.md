@@ -77,9 +77,6 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --prot
 
 ## Accumulated knowledge
 
-*Append: GTP-U TEID handling quirks, CU-UP-initiated release patterns,
-multi-DRB bearer surprises.*
-
 - 2026-05-26 — Per-UE E1AP IDs are exposed in tshark 4.4.7 as
   `e1ap.GNB_CU_CP_UE_E1AP_ID` / `e1ap.GNB_CU_UP_UE_E1AP_ID` (uppercase G).
   The lowercase `e1ap.gNB_*` variants exist in the dissector but are not

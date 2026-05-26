@@ -112,7 +112,8 @@ def main(argv: list[str] | None = None) -> int:
             utils.warn(f"tshark failed for {proto}: {e}")
             continue
         if ev:
-            spans.append((proto, ev[0]["epoch"], ev[-1]["epoch"]))
+            epochs = [e["epoch"] for e in ev]
+            spans.append((proto, min(epochs), max(epochs)))
         events.extend(ev)
 
     if spans:
@@ -133,8 +134,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.ue:
         u = args.ue
-        events = [e for e in events if u in e["ue_ids"] or e["summary"].find(f"rnti={u}") >= 0
-                  or e["summary"].find(f"ueid={u}") >= 0]
+        # Exact-match against the per-event ue_ids list, plus exact rnti/ueid
+        # equality (not substring) for MAC/RLC events whose IDs aren't in ue_ids.
+        def _matches(e: dict) -> bool:
+            if u in e["ue_ids"]:
+                return True
+            for tag in ("rnti", "ueid"):
+                needle = f"{tag}={u} "
+                if needle in e["summary"] + " ":
+                    return True
+            return False
+        events = [e for e in events if _matches(e)]
 
     events.sort(key=lambda e: e["epoch"])
 

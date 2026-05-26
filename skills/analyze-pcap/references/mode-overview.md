@@ -43,24 +43,15 @@ If the input was a run dir, additionally produce:
 
 ## Phase D — summary block
 
-Output a single concise summary in this shape:
+After collecting Phase B/C output, present it back to the user as one block:
 
-```
-## Capture summary
-- Input: <path>            (run directory | single pcap)
-- Duration: <H:MM:SS>      from <ISO> to <ISO>
-- Files: mac (X pkts), rlc (Y pkts), f1ap (Z pkts), e1ap (W pkts), ngap (V pkts)
-
-## Activity
-- UEs observed: <count> (RAN-UE-NGAP-IDs: …)
-- NGAP procedures: <top with counts>
-- F1AP UE contexts: <created> setup, <released> released
-- E1AP bearer contexts: <created> setup, <released> released
-- Failures / Rejects: <count, with first epoch>
-
-## Anomalies (if any)
-- <one bullet per Failure/Reject/unexpected release>
-```
+- Input path (single pcap or run directory).
+- One line per pcap: packets, time range, top procedure codes, failure count
+  (i.e. the `pcap_overview.py` output verbatim — don't paraphrase).
+- For a run dir: a one-line activity headline (UE counts per protocol, total
+  setup/release procedures observed) drawn from the sibling roll-up.
+- Anomalies bulleted last, one bullet each — non-zero failure counts,
+  unbalanced setup/release, sibling pcaps with non-overlapping time ranges.
 
 ## Phase E — optional escalation
 

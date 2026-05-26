@@ -56,7 +56,7 @@ f1ap.pcap (src)     UEContextReleaseComplete                   (T0 + ~200 ms)
 | `UEContextSetupFailure` on target | Target DU can't admit — resources, cell config, S-NSSAI. |
 | No CFRA RAR on target after target context setup | Target PRACH not configured for CFRA, or UE never sent the preamble (logs). |
 | No `RRCReconfigComplete` after RAR | UE failed on target; expect re-establishment or release. |
-| Re-establishment after HO (`InitialULRRCMessageTransfer` with cause `reestablishment`) | HO failed; the UE is recovering. |
+| Re-establishment after HO (a new `InitialULRRCMessageTransfer` for the same UE after the HO window, carrying an `RRCReestablishmentRequest` inside the RRC container) | HO failed; the UE is recovering. The RRC `cause` IE lives inside the embedded RRC message, not as an F1AP field. |
 | Inter-CU: `HandoverFailure` (NGAP) | Target rejected — check NGAP cause IE. |
 
 ## tshark filters
@@ -76,9 +76,6 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> \
 - `../cross-pcap-correlation.md`
 
 ## Accumulated knowledge
-
-*Append: timing budgets observed for each HO variant, CFRA preamble allocation
-patterns, re-establishment-vs-HO-failure decision signals.*
 
 - 2026-05-26 — On a target DU in an intra-CU inter-DU HO, the UE's first
   F1AP message is `UEContextSetup` (proc 5), not `InitialULRRCMessageTransfer`
