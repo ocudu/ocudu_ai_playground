@@ -17,6 +17,7 @@ Usage:
 
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 
@@ -61,10 +62,16 @@ def parse_cfg(cfg_path: Path) -> dict:
     if not cfg_path.exists():
         return result
 
-    text = cfg_path.read_text(errors="replace")
-    # Strip block and line comments
-    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-    text = re.sub(r"//[^\n]*", "", text)
+    # Strip comments line-by-line. A whole-file DOTALL /* */ regex is unsafe here
+    # because RF-driver URLs like "tcp://*:31000" contain the substring "/*",
+    # which a non-greedy match pairs with a later "*/", deleting the cells block.
+    lines = []
+    for line in cfg_path.read_text(errors="replace").splitlines():
+        if line.lstrip().startswith("//"):
+            continue
+        line = re.sub(r"/\*.*?\*/", "", line)  # single-line block comments only
+        lines.append(line)
+    text = "\n".join(lines)
 
     m = re.search(r"ue_count\s*:\s*(\d+)", text)
     if m:
@@ -164,7 +171,7 @@ def parse_ue_log(ue_log: Path) -> dict:
                 if nas_m:
                     uid, gmm, cm = nas_m.group(1), nas_m.group(2), nas_m.group(3)
                     result["nas_states"].append((ts, uid, gmm, cm))
-                    if re.match(r"^\d{4}$", uid):
+                    if re.match(r"^[0-9a-fA-F]{4}$", uid):  # UE IDs are hex (e.g. 000a, 0080)
                         result["ue_ids"].add(uid)
 
             elif layer == "PROD":
@@ -288,11 +295,11 @@ def summarize(path_str: str):
     if cfg["imsi"]:
         print(f"  IMSI        : {cfg['imsi']}")
     if cfg["bands"]:
-        print(f"  Bands       : {', '.join('n' + str(b) for b in cfg['bands'])}")
+        print(f"  Bands       : {', '.join('n' + str(b) for b in sorted(set(cfg['bands'])))}")
     if cfg["bandwidths"]:
-        print(f"  Bandwidths  : {', '.join(str(b) + ' MHz' for b in cfg['bandwidths'])}")
+        print(f"  Bandwidths  : {', '.join(str(b) + ' MHz' for b in sorted(set(cfg['bandwidths'])))}")
     if cfg["n_cells"] > 1:
-        print(f"  RF ports    : {cfg['n_cells']}")
+        print(f"  Cells       : {cfg['n_cells']} (configured in cell_groups)")
     if cfg["sim_events"]:
         print(f"  Sim events  : {' → '.join(cfg['sim_events'])}")
     print()
@@ -319,21 +326,38 @@ def summarize(path_str: str):
         print(f"  Cells found : {', '.join('Cell ' + str(c) for c in out['cells_sib'])}")
     print()
 
-    # ----- NAS state timeline (deduped) -----
-    print("=== NAS State Timeline ===")
-    if log["nas_states"]:
+    # ----- NAS state: per-line timeline (single UE) or aggregate (multi-UE) -----
+    multi_ue = cfg["ue_count"] > 1 or len(log["ue_ids"]) > 1
+    if not log["nas_states"]:
+        print("=== NAS State Timeline ===")
+        print("  (no NAS state transitions found)")
+        print()
+    elif multi_ue:
+        # Per-UE timelines would flood output; aggregate by final state instead.
+        print("=== NAS State Summary (multi-UE) ===")
+        final_per_ue = {}
+        reached_registered = set()
+        for ts, uid, gmm, cm in log["nas_states"]:
+            final_per_ue[uid] = f"{gmm} {cm}"
+            if gmm == "5GMM-REGISTERED":
+                reached_registered.add(uid)
+        print(f"  UEs seen           : {len(final_per_ue)}")
+        print(f"  Reached REGISTERED : {len(reached_registered)}")
+        print("  Final state breakdown:")
+        for state, n in Counter(final_per_ue.values()).most_common():
+            print(f"    {n:4d} ×  {state}")
+        print()
+    else:
+        print("=== NAS State Timeline ===")
         prev = None
         for ts, uid, gmm, cm in log["nas_states"]:
             state = f"{gmm} {cm}"
             if state != prev:
                 print(f"  {ts}  [{uid}]  {state}")
                 prev = state
-    else:
-        print("  (no NAS state transitions found)")
-    print()
+        print()
 
-    # ----- Key RRC events -----
-    print("=== Key RRC Events ===")
+    # ----- Key RRC events: timeline (single UE) or counts (multi-UE) -----
     KEY_RRC = {
         "MIB", "SIB1",
         "RRC setup", "RRC setup complete",
@@ -343,18 +367,28 @@ def summarize(path_str: str):
         "RRC reestablishment complete",
         "RRC release", "RRC reject",
     }
-    MAX_RRC_SHOWN = 20
     key_events = [
         (ts, direction, cell, channel, msg_type)
         for ts, direction, cell, channel, msg_type in log["rrc_events"]
         if channel.startswith("BCCH") or any(k.lower() in msg_type.lower() for k in KEY_RRC)
     ]
-    for ts, direction, cell, channel, msg_type in key_events[:MAX_RRC_SHOWN]:
-        print(f"  {ts}  {direction}  CL{cell}  {channel}: {msg_type}")
-    if len(key_events) > MAX_RRC_SHOWN:
-        print(f"  ... ({len(key_events) - MAX_RRC_SHOWN} more — use ue_log_search.py for full list)")
-    if not key_events:
-        print("  (no key RRC messages found)")
+    if multi_ue:
+        # 256 UEs interleave; a timeline is noise. Count by message type instead.
+        print("=== Key RRC Message Counts (multi-UE) ===")
+        counts = Counter(f"{d} {ch}: {mt}" for _, d, _, ch, mt in key_events)
+        for label, n in counts.most_common():
+            print(f"  {n:5d} ×  {label}")
+        if not counts:
+            print("  (no key RRC messages found)")
+    else:
+        print("=== Key RRC Events ===")
+        MAX_RRC_SHOWN = 20
+        for ts, direction, cell, channel, msg_type in key_events[:MAX_RRC_SHOWN]:
+            print(f"  {ts}  {direction}  CL{cell}  {channel}: {msg_type}")
+        if len(key_events) > MAX_RRC_SHOWN:
+            print(f"  ... ({len(key_events) - MAX_RRC_SHOWN} more — use ue_log_search.py for full list)")
+        if not key_events:
+            print("  (no key RRC messages found)")
     print()
 
     # ----- Procedure summary -----
@@ -364,7 +398,7 @@ def summarize(path_str: str):
     print(f"  Reestablishments   : {log['reest_count']}")
     print(f"  PHY CRC failures   : {log['crc_fail_count']}")
     print(f"  Error log lines    : {log['error_count']}")
-    if log["nas_states"]:
+    if log["nas_states"] and not multi_ue:
         _, _, gmm, cm = log["nas_states"][-1]
         print(f"  Final NAS state    : {gmm} {cm}")
     print()
@@ -386,11 +420,16 @@ def summarize(path_str: str):
                   f" loss={loss} ({pct:.2f}%)")
         print()
 
-    # ----- Sim events timeline -----
+    # ----- Sim events: timeline (single UE) or counts (multi-UE) -----
     if log["prod_events"]:
-        print("=== Sim Events Timeline ===")
-        for ts, ev in log["prod_events"]:
-            print(f"  {ts}  {ev}")
+        if multi_ue:
+            print("=== Sim Event Counts (multi-UE) ===")
+            for ev, n in Counter(e for _, e in log["prod_events"]).most_common():
+                print(f"  {n:5d} ×  {ev}")
+        else:
+            print("=== Sim Events Timeline ===")
+            for ts, ev in log["prod_events"]:
+                print(f"  {ts}  {ev}")
         print()
 
     # ----- Anomalies -----
@@ -406,15 +445,16 @@ def summarize(path_str: str):
                 anomalies.append(f"Packet loss {addr}: {pct:.1f}% ({sent-recv}/{sent})")
     if not log["log_end_date"]:
         anomalies.append("No clean exit marker in ue.log (possible crash)")
-    if log["nas_states"]:
+    if log["nas_states"] and not multi_ue:
         final_gmm = log["nas_states"][-1][2]
         all_gmm_states = {s[2] for s in log["nas_states"]}
         prod_types = [e for _, e in log["prod_events"]]
         # Unexpected NULL: quit event missing
         if "NULL" in final_gmm and "quit" not in prod_types:
             anomalies.append(f"UE ended in {final_gmm} without quit sim event")
-        # Never registered: power_on fired but UE never made it to REGISTERED
-        if not any("REGISTERED" in s for s in all_gmm_states) and "power_on" in prod_types:
+        # Never registered: power_on fired but UE never reached 5GMM-REGISTERED.
+        # Use exact match — "5GMM-DEREGISTERED" also contains the substring "REGISTERED".
+        if "5GMM-REGISTERED" not in all_gmm_states and "power_on" in prod_types:
             anomalies.append(f"UE never reached 5GMM-REGISTERED (final: {final_gmm})")
     if out["warnings"]:
         for w in out["warnings"]:

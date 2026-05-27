@@ -102,17 +102,17 @@ def block_matches(header_line: str, body_lines: list[str], args) -> bool:
     if body_lines:
         full_text += "\n" + "\n".join(body_lines)
 
-    # UE ID filter — must appear after the layer tag on the header line
-    if args.ue:
-        # UE ID is the field after [LAYER] DIR on the header
-        # Quick check: the UE ID should be in the header line
-        if args.ue not in header_line:
-            return False
+    # Positional field match. Fields after the "[LAYER]" tag are:
+    #   <dir> <ue_id> <cell_id> ...   (ue_id is an SFN for broadcast RRC lines)
+    # Matching by position avoids false hits (e.g. substring "00" inside an RNTI).
+    after = header_line.split("]", 1)[1].split() if "]" in header_line else []
+    ue_field = after[1] if len(after) > 1 else None
+    cell_field = after[2] if len(after) > 2 else None
 
-    # Cell filter
-    if args.cell:
-        if args.cell not in header_line:
-            return False
+    if args.ue and ue_field != args.ue:
+        return False
+    if args.cell and cell_field != args.cell:
+        return False
 
     # Pattern filter (across entire block, multiline so ^ and $ work per line)
     if args.pattern:
@@ -125,9 +125,6 @@ def block_matches(header_line: str, body_lines: list[str], args) -> bool:
 def search(args):
     log_path = resolve_ue_log(args.path)
 
-    match_count = 0
-    output_lines = 0
-    truncated = False
     output_blocks = []
 
     current_header = None
@@ -167,22 +164,22 @@ def search(args):
         print(len(output_blocks))
         return
 
+    # Print whole blocks only; stop before exceeding the line cap (always show ≥1).
+    output_lines = 0
+    shown_blocks = 0
     for block in output_blocks:
-        lines = block.split("\n")
-        remaining_budget = args.max_lines - output_lines
-        if remaining_budget <= 0:
-            truncated = True
+        n_lines = block.count("\n") + 2  # block lines + blank separator
+        if shown_blocks > 0 and output_lines + n_lines > args.max_lines:
             break
-        to_print = lines[:remaining_budget]
-        for l in to_print:
-            print(l)
+        print(block)
         print()
-        output_lines += len(lines) + 1  # +1 for blank separator
+        output_lines += n_lines
+        shown_blocks += 1
 
-    if truncated:
-        remaining = len(output_blocks) - output_lines  # approximate
-        print(f"... output truncated at {args.max_lines} lines."
-              f" Use --after/--before or --ue/--cell to narrow the search.")
+    if shown_blocks < len(output_blocks):
+        remaining = len(output_blocks) - shown_blocks
+        print(f"... {remaining} more matching block(s) not shown (stopped near the "
+              f"{args.max_lines}-line cap). Narrow with --after/--before/--ue/--cell.")
 
 
 if __name__ == "__main__":

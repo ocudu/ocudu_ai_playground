@@ -11,8 +11,8 @@ Restate the question in one sentence. Identify:
 - Whether scoping by UE ID or cell ID is needed.
 
 Ask via `AskUserQuestion` **only** when scoping is genuinely ambiguous:
-- Multi-UE run and the question does not pin one UE → list UE IDs from
-  `grep -o " [0-9]\{4\} " ue.log | sort -u`.
+- Multi-UE run and the question does not pin one UE → list the UE IDs (hex) with
+  `grep -oE ' [0-9a-f]{4} New state' ue.log | sort -u`.
 - Time window needed but not specified → offer candidate windows derived
   from NAS state transitions.
 
@@ -50,17 +50,9 @@ Examples for common questions:
 
 ### Otherwise, use targeted grep
 
-```bash
-grep -n "<pattern>" <run-dir>/ue.log | head -n 200
-```
-
-If the result exceeds 200 lines, add time constraints or a UE ID filter, or
-redirect to a temp file:
-```bash
-grep -n "<pattern>" ue.log > /tmp/amari-ue-query.txt
-wc -l /tmp/amari-ue-query.txt
-head -n 50 /tmp/amari-ue-query.txt
-```
+Use the canonical recipes in `references/log-format.md` § Key grep recipes.
+Always cap with `| head -n 200`; if a result is larger, narrow it (time window,
+UE ID) or spill to `/tmp/amari-ue-query.txt` and report the path.
 
 ## Phase C — answer
 

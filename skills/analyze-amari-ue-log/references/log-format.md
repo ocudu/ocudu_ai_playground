@@ -42,7 +42,8 @@ PDU message bodies, indented with spaces).
 | PROD | `HH:MM:SS.mmm [PROD] -  - SIM-Event: EVENT_TYPE` | Simulation event |
 | TRX | `HH:MM:SS.mmm [TRX] -  MESSAGE` | RF driver info |
 
-**UE_ID**: 4-char decimal (e.g. `0001`, `0002`).
+**UE_ID**: 4-char hex (e.g. `0001`, `000a`, `0080`). In multi-UE runs it ranges
+up to `ue_count`, so values above `0009` are hex.
 **CELL_ID**: 2-char decimal (e.g. `00`, `01`).
 **RNTI**: 4-char hex (e.g. `4601`, `ffff` for broadcast).
 **SFN.SF**: `NN.M` — system frame number dot subframe (e.g. `16.1`).
@@ -70,6 +71,7 @@ PDU message bodies, indented with spaces).
 | `cbr_recv` | Start constant-bit-rate DL traffic |
 | `cbr_send` | Start constant-bit-rate UL traffic |
 | `ping` | Send ICMP pings |
+| `rrc_reest` | Trigger an RRC reestablishment (simulated radio link failure) |
 
 ### Key PHY channel keywords
 
@@ -92,7 +94,7 @@ PDU message bodies, indented with spaces).
 |---|---|
 | `BCCH-BCH-NR` | MIB on PBCH |
 | `BCCH-NR` | SIB1, SIB2, … on PDSCH |
-| `CCCH-NR` | RRC Setup Request / RRC Setup / RRC Reject |
+| `CCCH-NR` | RRC Setup Request / RRC Setup / RRC Reject / RRC Reestablishment Request |
 | `DCCH-NR` | Dedicated connection messages (RRC Reconfiguration, etc.) |
 
 ### Key RRC message types (in DCCH-NR)
