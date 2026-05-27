@@ -14,7 +14,8 @@
 # Started on 2026-05-18 18:17:35
 ```
 
-The `# Ended on` line appears at the very end of the file when the UE exited cleanly.
+The `# Ended on` line appears at the very end of the file when the UE exited
+cleanly (graceful quit). An abnormal exit (crash or kill) leaves no end marker.
 
 ### Log line format
 
@@ -149,6 +150,11 @@ SRO (ppm), SINR (dB), RSRP (dBm), DL mcs, DL retx, DL rxfail, DL txok, DL brate,
 CBR stats: `sent` = packets sent by the source, `recv` = packets acknowledged/received
 at the sink. `recv < sent` indicates packet loss.
 
+In multi-cell runs the CL column shows the UE's current serving cell; the RNTI
+changes on every handover. The startup `Warning, ... hyperthreading` and
+`Warning: ... unused property ...` lines are expected for OCUDU-driver configs and
+do not indicate errors.
+
 ---
 
 ## File: amarisoft_ue.cfg
@@ -182,7 +188,7 @@ grep -n "\[RRC\]" ue.log | grep -v "^#"
 grep -n "\[RRC\].*DCCH-NR:" ue.log
 
 # Handovers (reconfigurationWithSync appears in body)
-grep -n "reconfigurationWithSync" ue.log
+grep -n "reconfigurationWithSync {" ue.log
 
 # RRC reestablishment
 grep -n "reestablishment" ue.log | grep "\[RRC\]"
@@ -211,20 +217,3 @@ grep "SIB found" stdout.log
 # Log duration
 grep -E "^# (Started|Ended)" ue.log
 ```
-
----
-
-## Accumulated knowledge
-
-<!-- Append new generalisable findings here as they are discovered. -->
-
-- `reconfigurationWithSync` is a continuation-line keyword inside the body of a
-  `[RRC] DL ... DCCH-NR: RRC reconfiguration` message. It signals a handover.
-  The RRC Reconfiguration Complete after a HO is sent on the **target cell**
-  (different CL index).
-- In multi-cell tests, the CL (cell index) column in stdout.log shows which cell
-  the UE is currently served by. RNTI changes on every handover.
-- `# Ended on` only appears in ue.log if the UE exited cleanly (graceful quit).
-  An abnormal exit (crash, kill) leaves no end marker.
-- Warnings in stdout.log about "unused property" are expected for OCUDU-driver
-  configs and do not indicate errors.

@@ -104,6 +104,10 @@ NAS_STATE_RE = re.compile(r"(\S+)\s+New state\s*:\s*(\S+)\s+(\S+)")
 PROD_EVENT_RE = re.compile(r"SIM-Event:\s*(\S+)")
 # RRC rest = "<ue_or_sfn> <cell_id> <channel>: <msg>" (direction already consumed by LINE_RE)
 RRC_MSG_RE = re.compile(r"(\S+)\s+(\S+)\s+([\w\-]+):\s*(.*)")
+# A handover shows up as the ASN.1 body structure "reconfigurationWithSync {".
+# Match the brace, not the bare word — diagnostic lines (e.g. "PDCP reestablish ...
+# without reconfigurationWithSync ... ignore it") mention the word but are not HOs.
+RECONFIG_SYNC_RE = re.compile(r"reconfigurationWithSync\s*\{")
 
 
 def parse_ue_log(ue_log: Path) -> dict:
@@ -145,8 +149,10 @@ def parse_ue_log(ue_log: Path) -> dict:
                         result["log_end_date"] = m.group(1)
                 continue
 
-            # Count reconfigurationWithSync (continuation line → handover)
-            if "reconfigurationWithSync" in line:
+            # Count handovers via the ASN.1 body structure "reconfigurationWithSync {"
+            # (a continuation line). The bare word also appears in diagnostic prose,
+            # so matching the brace avoids false positives.
+            if RECONFIG_SYNC_RE.search(line):
                 result["ho_count"] += 1
                 continue
 

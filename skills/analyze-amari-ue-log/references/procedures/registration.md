@@ -38,7 +38,9 @@
 
 ## Investigation checklist
 
-When the UE fails to attach, work through this checklist in order:
+When the UE fails to attach, work through this checklist in order. In multi-UE
+runs all UEs share one `ue.log`, so filter by the (hex) UE ID — e.g.
+`grep " 0001 " ue.log` — to isolate one UE's sequence.
 
 ### 1. Did the UE find a cell?
 
@@ -50,6 +52,8 @@ grep "SIB found" stdout.log
 - If no PSS → UE never locked to a cell. Check RF config (band, ARFCN) in
   `amarisoft_ue.cfg` vs. gNB config.
 - If PSS found but no SIB1 → cell barred or SIB decoding issue.
+- In multi-cell configs the UE may see several cells (CELL_ID 00, 01, …); it
+  selects the one with the strongest RSRP at PSS time for initial access.
 
 ### 2. Did PRACH succeed?
 
@@ -89,12 +93,3 @@ grep "# Ended on" ue.log
 ```
 
 - Missing `# Ended on` → abnormal exit (crash or forced kill).
-
-## Accumulated knowledge
-
-<!-- Append new generalisable findings here as they are discovered. -->
-
-- When `ue_count > 1`, NAS state lines show different UE IDs (0001, 0002, ...).
-  All UEs share the same ue.log. Filter by UE ID to isolate one UE's sequence.
-- In multi-cell configs, the UE may see multiple cells (CELL_ID 00, 01, ...).
-  The cell chosen for initial access is the one with the strongest RSRP at PSS time.

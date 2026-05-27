@@ -69,7 +69,7 @@ let the user drive the next request.
 
 ## Persist learnings
 
-Append to `references/log-format.md` § Key grep recipes only when:
-- A grep/script combination is non-obvious and likely to be reused.
-- A log field format turns out to be different from what `log-format.md` documents
-  (fix the format table too).
+If you wrote a non-obvious, reusable grep/script combination, or found a log field
+documented incorrectly, persist the fix via `SKILL.md` § Memory & self-maintenance
+(propose → confirm → integrate into the natural section, e.g. § Key grep recipes or
+the relevant format table).

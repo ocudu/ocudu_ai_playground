@@ -31,8 +31,9 @@ Examples:
   # Count PRACH attempts
   python3 ue_log_search.py ue.log --layer PHY --pattern "PRACH:" --count
 
-  # Handovers
-  python3 ue_log_search.py ue.log --pattern "reconfigurationWithSync" --count
+  # Handovers (match the ASN.1 body structure, not the bare word, which also
+  # appears in diagnostic log lines)
+  python3 ue_log_search.py ue.log --pattern "reconfigurationWithSync {" --count
 
   # PHY CRC failures in a time window
   python3 ue_log_search.py ue.log --layer PHY --pattern "crc=FAIL" \\

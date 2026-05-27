@@ -17,8 +17,7 @@ description: >
 version: 0.1.0
 user-invocable: true
 context: fork
-agent: Explore
-allowed-tools: Bash(ls:*), Bash(grep:*), Bash(python3:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*)
+allowed-tools: Bash(ls:*), Bash(grep:*), Bash(python3:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
 ---
 
 # Analyze Amarisoft UE logs
@@ -43,8 +42,8 @@ Ignore `metrics.json` — it is empty in these runs.
 1. **Input resolution** — resolve the user's path to a run directory.
 2. **Mode dispatch** — pick `overview`, `query`, or `investigation`; ask if ambiguous.
 3. **Mode branch** — load and follow `references/mode-{overview,query,investigation}.md`.
-4. **Persist learnings** — after analysis, append generalisable findings to the
-   right reference file (see § Memory).
+4. **Persist learnings** — after analysis, weave any generalisable findings into
+   the natural place in `references/` (see § Memory & self-maintenance).
 
 ---
 
@@ -119,20 +118,55 @@ procedure/format reference files in `references/procedures/` and
 
 ---
 
-## Memory
+## Memory & self-maintenance
 
-After analysis, append generalisable insights to the right reference file:
+This skill improves itself over time. When analysis surfaces a generalisable
+learning — or reveals that the skill's own docs or scripts are wrong — propose the
+change and, **only after the user approves**, apply it with `Edit` (or `Write` for
+a brand-new reference file).
 
-- New grep recipe or log pattern → `references/log-format.md` § Key grep recipes.
-- New procedure failure signature → the matching `references/procedures/<proc>.md`
-  § Accumulated knowledge.
-- New log event type or layer message format discovered →
-  `references/log-format.md` § Log format by layer.
-- New helper script or flag → script file + note in relevant procedure file.
+**Only ever edit files inside this skill's own `references/` tree.** Never touch
+files elsewhere in the repo, and never run git/commit — edits are left as diffs
+for the user to review and commit.
+
+Three kinds of edit:
+
+1. **Add a learning** — put it where a reader would naturally look, matching the
+   surrounding format (extend a table row, add a line to a code block, add a bullet
+   to an existing list). **Do not prepend dates/timestamps.** Natural homes:
+   - new grep recipe → `references/log-format.md` § Key grep recipes
+   - new field / keyword / state / event → the matching table in
+     `references/log-format.md` (§ Per-layer format, § NAS state values, § Key PHY
+     channel keywords, § RRC channel keywords, § Key RRC message types,
+     § PROD sim event types)
+   - new failure signature / diagnostic step → the relevant
+     `references/procedures/<proc>.md` (§ Investigation checklist or § Expected sequence)
+   If a learning is substantial and distinct, create a **new file** following the
+   template of its siblings and wire it in:
+   - new `procedures/<name>.md` → add a row to the dispatch table in
+     `references/mode-investigation.md` § Phase B
+   - new `scripts/<name>.py` → document its invocation in the relevant `mode-*.md`
+     and/or procedure file
+2. **Fix existing content** — correct a stale recipe, wrong field name, or
+   outdated statement; dedupe/reorganise a reference file.
+3. **Fix a helper script** — when analysis exposes a parsing or logic bug in
+   `references/scripts/*.py`, correct it.
+
+For every edit:
+- **Propose first** — show the file path, the section, and the exact text/diff.
+- **Confirm** via `AskUserQuestion`: **Apply** / **Edit wording** *(open text)* / **Skip**.
+- **Apply** only on approval.
+- **After editing a `.py` script**, run `python3 -m py_compile <script>` to confirm
+  it still compiles (and, when practical, re-run it on the current input to confirm
+  behaviour). If it breaks, fix or revert before finishing.
+- **Report** what changed.
 
 **Never** save specific RNTIs, UE IDs, timestamps, KPIs, or per-run root-cause
-narratives — those do not generalise.
+narratives — those do not generalise. Operator-/preference-level knowledge (user
+shortcuts, local quirks, named conventions) goes to the project's auto-memory
+directory under `~/.claude/projects/<project-key>/memory/`, not `references/`.
 
-**Maintenance trigger**: if the user says "reorganize amari-ue knowledge",
-re-read all files under `references/`, dedupe, fix stale grep patterns, and
-report a one-paragraph summary of what changed.
+**Maintenance trigger**: if the user says "reorganize amari-ue knowledge", re-read
+all files under `references/`, dedupe, fix stale grep patterns, and report a
+one-paragraph summary of what changed — proposing each edit under the same confirm
+flow above.

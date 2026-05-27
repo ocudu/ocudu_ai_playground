@@ -27,6 +27,12 @@ In stdout.log, data flow appears as non-zero `brate` values in UE stats rows.
 `recv < sent` indicates packet loss. Expected: 0% loss on a clean run.
 Acceptable during HO: brief spike corresponding to the HO duration.
 
+`recv > sent` is a counting artefact (e.g. a UE-side CBR sender whose echo-reply
+returns through the same counter), not actual gain. With
+`sim_events_loop_count > 1` the UE repeats the whole event sequence N times, each
+loop including a power_off + re-attach — so high CBR loss in loops 2+ but not
+loop 1 points at a re-attach or DRB re-setup problem rather than the radio.
+
 ### PHY throughput from stats table (stdout.log)
 
 ```
@@ -52,7 +58,7 @@ Key columns:
 1. Confirm PDU session was established (reconfiguration without reconfigurationWithSync):
    ```bash
    grep -n "DCCH-NR: RRC reconfiguration" ue.log
-   grep -n "reconfigurationWithSync" ue.log
+   grep -n "reconfigurationWithSync {" ue.log
    ```
    If there is no `RRC reconfiguration` after `5GMM-REGISTERED` → PDU session
    never set up. Check AMF/UPF logs.
@@ -78,7 +84,7 @@ Key columns:
 
 2. Check if loss correlates with a handover:
    ```bash
-   grep -n "reconfigurationWithSync" ue.log
+   grep -n "reconfigurationWithSync {" ue.log
    ```
    HO-related loss: brief (< 100 ms). Sustained loss → DRB config issue or UPF routing.
 
@@ -101,14 +107,3 @@ grep -n "SIM-Event: ping" ue.log
 
 Ping stats are not shown in stdout.log (CBR stats only). Check gNB/5GC side
 for ICMP round-trip measurements.
-
-## Accumulated knowledge
-
-<!-- Append new generalisable findings here as they are discovered. -->
-
-- A `sim_events_loop_count > 1` in the cfg means the UE repeats the event
-  sequence N times. Each loop includes a power_off + re-attach cycle.
-  High CBR loss in loops 2+ but not loop 1 → re-attach or DRB re-setup issue.
-- CBR `recv` can exceed `sent` if the CBR sender is on the UE side and the
-  ICMP echo-reply comes back through the same counter. Treat `recv > sent` as
-  a counting artefact, not actual gain.

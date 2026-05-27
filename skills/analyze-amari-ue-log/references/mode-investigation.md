@@ -89,9 +89,10 @@ produce a single closing block:
 
 ## Phase E — persist learnings
 
-For every generalisable insight discovered, append to the appropriate reference file:
-- New failure signature → `references/procedures/<proc>.md` § Accumulated knowledge.
-- New grep recipe → `references/log-format.md` § Key grep recipes.
+If the investigation surfaced a generalisable learning (a reusable grep recipe, a
+new failure signature, a log/format detail), persist it via the flow in `SKILL.md`
+§ Memory & self-maintenance — propose it, confirm, then weave it into the natural
+section (or create a new procedure/script file if warranted).
 
 ## Question-asking discipline
 

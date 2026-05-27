@@ -15,16 +15,17 @@
 
 Key indicator: the `RRC reconfiguration complete` is sent on the **target cell**
 (different CL index than the `RRC reconfiguration`). In stdout.log the RNTI also
-changes on the next stats row.
+changes on the next stats row. In inter-RU handovers (two RF ports) the UE
+alternates between CL 00 and CL 01, with a fresh RNTI on each HO.
 
 ### Grep for handovers
 
 ```bash
 # Count handovers
-grep -c "reconfigurationWithSync" ue.log
+grep -c "reconfigurationWithSync {" ue.log
 
 # Find handover timestamps
-grep -n "reconfigurationWithSync" ue.log
+grep -n "reconfigurationWithSync {" ue.log
 
 # See which cell each reconfiguration complete was sent on
 grep -n "DCCH-NR: RRC reconfiguration" ue.log
@@ -40,8 +41,11 @@ bearer or measurement config update, not a handover. Confirm with:
 grep -n "DL.*DCCH-NR: RRC reconfiguration$" ue.log
 
 # For each line N, check lines N+1 through N+200 for reconfigurationWithSync
-grep -A 200 "DL.*DCCH-NR: RRC reconfiguration$" ue.log | grep -m1 "reconfigurationWithSync\|RRC reconfiguration complete"
+grep -A 200 "DL.*DCCH-NR: RRC reconfiguration$" ue.log | grep -m1 "reconfigurationWithSync {\|RRC reconfiguration complete"
 ```
+
+A `reconfigurationWithSync` that carries a new `servingCellConfigCommon` block is a
+full cell change (new frequency/band), not just a PCI or beam change.
 
 ---
 
@@ -85,7 +89,7 @@ grep -n "crc=FAIL" ue.log | head -20
 
 1. Check if HO was supposed to happen (config has multiple cells, or intra-RU HO test):
    ```bash
-   grep "reconfigurationWithSync" ue.log | wc -l
+   grep "reconfigurationWithSync {" ue.log | wc -l
    grep -n "DCCH-NR: RRC reconfiguration" ue.log | wc -l
    ```
 2. Count all reconfigurations vs. those with sync — if counts differ, some were
@@ -99,7 +103,7 @@ grep -n "crc=FAIL" ue.log | head -20
 
 1. Find exact HO timestamp:
    ```bash
-   grep -n "reconfigurationWithSync" ue.log | head -5
+   grep -n "reconfigurationWithSync {" ue.log | head -5
    ```
 2. Check reconfiguration complete was sent (expected: ~10–30 ms later on target cell):
    ```bash
@@ -111,8 +115,9 @@ grep -n "crc=FAIL" ue.log | head -20
    python3 ${CLAUDE_SKILL_DIR}/references/scripts/ue_log_search.py ue.log \
      --layer PHY --pattern "PRACH:" --after <HO-time>
    ```
-4. If PRACH retried many times → RA failure; if no PRACH → UE may have used
-   preconfigured RA (CFRA) successfully.
+4. If PRACH retried many times → RA failure; if no PRACH → the UE likely used a
+   preconfigured CFRA preamble (the gNB pre-assigns it), so a HO can complete with
+   no visible PRACH line — that absence is normal, not a failure.
 
 ### Reestablishment: rejected or looping
 
@@ -123,15 +128,3 @@ grep -n "crc=FAIL" ue.log | head -20
 2. If followed by `RRC setup` (not `RRC reestablishment`) → gNB rejected,
    forcing full re-attach. Likely the UE's context was released on the gNB side.
 3. If no response at all → gNB did not respond; check gNB logs.
-
-## Accumulated knowledge
-
-<!-- Append new generalisable findings here as they are discovered. -->
-
-- In CFRA (contention-free RA) handovers, the PRACH may not appear in ue.log
-  because the gNB pre-assigns the preamble. The HO can still complete without
-  visible PRACH lines.
-- In inter-RU handovers with two RF ports, stdout.log shows the UE alternating
-  between CL 00 and CL 01 RNTI assignments on each HO.
-- `reconfigurationWithSync` containing a new `servingCellConfigCommon` block
-  indicates a full cell change (including frequency/band change).
