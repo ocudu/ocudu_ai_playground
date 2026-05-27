@@ -1,0 +1,4 @@
+\.git/
+\.reuse/
+REUSE\.toml$
+\.md$
