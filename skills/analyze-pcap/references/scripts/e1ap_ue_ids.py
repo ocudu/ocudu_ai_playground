@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
+# SPDX-License-Identifier: BSD-3-Clause-Open-MPI
+
 """Per-UE E1AP identity table.
 
 Clusters E1AP rows by `gNB-CU-CP-UE-E1AP-ID`, attaching `gNB-CU-UP-UE-E1AP-ID`

@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
+# SPDX-License-Identifier: BSD-3-Clause-Open-MPI
+
 """One-shot summary for an OCUDU run directory.
 
 Calls pcap_overview.py, then the three per-protocol UE-ID scripts for whichever

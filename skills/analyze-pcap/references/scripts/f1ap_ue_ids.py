@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
+# SPDX-License-Identifier: BSD-3-Clause-Open-MPI
+
 """Per-UE F1AP identity table.
 
 Clusters F1AP rows by the CU-assigned `gNB-CU-UE-F1AP-ID` when available,
