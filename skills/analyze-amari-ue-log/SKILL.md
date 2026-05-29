@@ -17,7 +17,7 @@ description: >
 version: 0.1.0
 user-invocable: true
 context: fork
-allowed-tools: Bash(ls:*), Bash(grep:*), Bash(python3:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
+allowed-tools: Bash(ls:*), Bash(grep:*), Bash(python3:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sort:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
 ---
 
 # Analyze Amarisoft UE logs
@@ -108,8 +108,8 @@ procedure/format reference files in `references/procedures/` and
   outputs that the agent may want to post-filter later) lives under one
   per-session, user-private directory:
   `${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/`. It is
-  shared with the `analyze-pcap` skill so both can cross-reference cached
-  outputs in one run. Create the dir lazily (`mkdir -p` via the python
+  shared with the `analyze-pcap` and `analyze-ocudu-gnb-log` skills so all
+  three can cross-reference cached outputs in one run. Create the dir lazily (`mkdir -p` via the python
   helpers, or `python3 -c 'import os; os.makedirs(...)'`) and use the
   `amari-` prefix on files you write here (e.g. `amari-summary-<sha>.txt`,
   `amari-search-<sha>.txt`). The OS reaps `/tmp` on reboot — no manual
