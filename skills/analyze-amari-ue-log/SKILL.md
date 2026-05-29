@@ -104,14 +104,25 @@ procedure/format reference files in `references/procedures/` and
 
 ## Efficiency rules
 
+- **Session cache dir.** Intermediate state (large grep spills, cached script
+  outputs that the agent may want to post-filter later) lives under one
+  per-session, user-private directory:
+  `${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/`. It is
+  shared with the `analyze-pcap` skill so both can cross-reference cached
+  outputs in one run. Create the dir lazily (`mkdir -p` via the python
+  helpers, or `python3 -c 'import os; os.makedirs(...)'`) and use the
+  `amari-` prefix on files you write here (e.g. `amari-summary-<sha>.txt`,
+  `amari-search-<sha>.txt`). The OS reaps `/tmp` on reboot — no manual
+  cleanup needed.
 - **Never** read raw `ue.log` into context — it can be 90k–200k+ lines.
   Always grep for specific patterns or use the summary script.
 - **Cap** any grep output at 200 lines with `| head -n 200`; for larger results
-  write to `/tmp/amari-ue-<sha256-of-path>.txt` and report the path.
+  write to `<cache-dir>/amari-<purpose>-<sha>.txt` and report the path.
 - **Prefer** the helper scripts in `references/scripts/` over hand-crafted
   grep chains — they emit compact, token-efficient summaries.
-- **Reuse** temp files: if `/tmp/amari-ue-<sha>.txt` exists for the same path,
-  skip re-running the script.
+- **Reuse** cached output: if a file you'd produce already exists in the cache
+  dir for the same input, **post-filter** it (grep, head) instead of re-running
+  the script.
 - `stdout.log` is short (30–100 lines) — safe to read in full.
 - `amarisoft_ue.cfg` is short (100–150 lines) — safe to read in full.
 - In multi-UE mode (`ue_count > 1`), scope grep queries by UE ID early.

@@ -52,7 +52,9 @@ Examples for common questions:
 
 Use the canonical recipes in `references/log-format.md` § Key grep recipes.
 Always cap with `| head -n 200`; if a result is larger, narrow it (time window,
-UE ID) or spill to `/tmp/amari-ue-query.txt` and report the path.
+UE ID) or spill into the session cache dir as
+`${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/amari-query-<sha>.txt`
+and report the path (see SKILL.md § Efficiency rules).
 
 ## Phase C — answer
 
