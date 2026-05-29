@@ -4,9 +4,17 @@
 
 OCUDU writes captures in the **Wireshark Upper PDU** export format
 (link-layer type 252, `WTAP_ENCAP_WIRESHARK_UPPER_PDU`). Each record begins
-with a small `wireshark-upper-pdu` header whose `dissector_name` field carries
-a string that tells Wireshark which application-layer dissector to invoke.
-Strings observed: `ngap`, `f1ap`, `e1ap`, `mac-nr-framed`, `rlc-nr`.
+with a small `wireshark-upper-pdu` header.
+
+- **Control-plane pcaps** (`ngap`, `f1ap`, `e1ap`) carry a `dissector_name`
+  string (`ngap`/`f1ap`/`e1ap`) and **auto-dispatch** to the right dissector —
+  `frame.protocols` ends in `...:ngap` etc.
+- **`mac.pcap` / `rlc.pcap` are different**: the Upper-PDU `Protocol Name` is
+  `udp`, and the NR PDU is carried inside a UDP frame (ports 0xbeef/0xdead).
+  `frame.protocols` is `exported_pdu:udp:data` — tshark does **not** reach the
+  MAC-NR/RLC-NR dissector by default, so every `mac-nr.*`/`rlc-nr.*` field and
+  `-Y mac-nr`/`-Y rlc-nr` filter returns nothing **unless** the UDP heuristic
+  dissectors are enabled (see below).
 
 The captures **do not** contain L1/PHY frames, IP, Ethernet, or SCTP — only
 the application-layer 3GPP PDUs as they leave the protocol layer. One pcap
@@ -33,39 +41,32 @@ All pcaps share a wall-clock epoch reference (microsecond precision; libpcap
 classic format). To align events across the 5 files, use `frame.time_epoch`
 directly — see `cross-pcap-correlation.md`.
 
-## Dissection — happy path
+## Dissection
 
-tshark 4.4.7 auto-dispatches via the `wireshark-upper-pdu` header on first
-read. Standard display filters work out of the box:
+Control-plane pcaps auto-dispatch; standard filters work directly:
 
 ```bash
 tshark -r ngap.pcap -Y 'ngap.procedureCode == 14'   # InitialContextSetup
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 5'    # UEContextSetup
 tshark -r e1ap.pcap -Y 'e1ap.procedureCode == 8'    # bearerContextSetup
-tshark -r mac.pcap  -Y 'mac-nr'                     # any MAC-NR PDU
-tshark -r rlc.pcap  -Y 'rlc-nr'                     # any RLC-NR PDU
 ```
+
+**MAC/RLC require the UDP heuristic dissectors** (they ship disabled). Add
+`--enable-heuristic mac_nr_udp` / `--enable-heuristic rlc_nr_udp` to every
+read; without them the filters silently return zero:
+
+```bash
+tshark -r mac.pcap --enable-heuristic mac_nr_udp -Y 'mac-nr'          # MAC-NR PDUs
+tshark -r mac.pcap --enable-heuristic mac_nr_udp -e mac-nr.rnti -e mac-nr.direction -T fields
+tshark -r rlc.pcap --enable-heuristic rlc_nr_udp -Y 'rlc-nr'          # RLC-NR PDUs
+```
+
+The helper scripts inject both flags automatically for any `-r` read
+(`utils.run_tshark`), so script-driven analysis already works; only **hand-run**
+tshark on `mac.pcap`/`rlc.pcap` needs the flags added explicitly.
 
 For the full per-protocol code tables, see the protocol files under
 `references/protocols/`.
-
-## Dissection — fallback (rare)
-
-If `tshark -r <file.pcap> -Y '<proto>'` returns zero packets despite the file
-containing the protocol, the dissector name string in the Upper PDU header
-may differ from the dissector identifier tshark expects. Symptoms:
-
-- `tshark -r mac.pcap -Y 'mac-nr'` returns nothing but the file is non-empty.
-- `tshark -V -c 1 -r <file.pcap>` shows the wrong protocol tree.
-
-Workaround: force the dissector via `-d user_dlt`:
-
-```bash
-tshark -r mac.pcap -d user_dlt:252,mac-nr-framed -V -c 1
-```
-
-The dissector identifier to map to depends on the Upper-PDU header content.
-Record any newly observed mapping here in this fallback section.
 
 ## Why this format matters for analysis
 

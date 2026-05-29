@@ -41,8 +41,8 @@ mac.pcap     DL MAC PDU on RNTI = X (Msg4)                                   (T0
 ## tshark filters
 
 ```bash
-# All RAR PDUs in order
-tshark -r mac.pcap -Y 'mac-nr.rar' \
+# All RAR PDUs in order (mac.pcap needs the MAC-NR UDP heuristic)
+tshark -r mac.pcap --enable-heuristic mac_nr_udp -Y 'mac-nr.rar' \
     -T fields -e frame.number -e frame.time_epoch -e mac-nr.rnti
 
 # First F1AP per UE (procedureCode 11 = InitialULRRCMessageTransfer)

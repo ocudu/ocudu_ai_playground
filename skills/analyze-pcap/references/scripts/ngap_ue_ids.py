@@ -37,6 +37,7 @@ FIELDS = [
 PROC_NAMES: dict[str, str] = {
     "0":  "AMFConfigurationUpdate",
     "1":  "RANConfigurationUpdate",
+    "4":  "DownlinkNASTransport",
     "14": "InitialContextSetup",
     "15": "InitialUEMessage",
     "16": "NASNonDeliveryIndication",
@@ -45,8 +46,8 @@ PROC_NAMES: dict[str, str] = {
     "29": "PDUSessionResourceSetup",
     "36": "UEContextModification",
     "41": "UEContextRelease",
+    "44": "UERadioCapabilityInfoIndication",
     "46": "UplinkNASTransport",
-    "47": "DownlinkNASTransport",
 }
 
 

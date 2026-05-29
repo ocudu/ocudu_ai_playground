@@ -120,16 +120,21 @@ def main(argv: list[str] | None = None) -> int:
             spans.append((proto, min(epochs), max(epochs)))
         events.extend(ev)
 
-    if spans:
-        gmin = min(s[1] for s in spans)
-        gmax = max(s[2] for s in spans)
-        for proto, lo, hi in spans:
-            if lo > gmin + 1.0 or hi < gmax - 1.0:
-                utils.warn(
-                    f"{proto}.pcap range {utils.epoch_to_iso(lo)}..{utils.epoch_to_iso(hi)} "
-                    f"is shorter than the union "
-                    f"{utils.epoch_to_iso(gmin)}..{utils.epoch_to_iso(gmax)} — alignment may be partial"
-                )
+    if len(spans) > 1:
+        # Only warn when the captures are genuinely DISJOINT (no common interval),
+        # which would make cross-pcap correlation impossible. Staggered start/stop
+        # (a few seconds of non-overlap at the edges) is normal and not flagged.
+        inter_lo = max(s[1] for s in spans)
+        inter_hi = min(s[2] for s in spans)
+        if inter_lo > inter_hi:
+            ranges = ", ".join(
+                f"{p}={utils.epoch_to_iso(lo)}..{utils.epoch_to_iso(hi)}"
+                for p, lo, hi in spans
+            )
+            utils.warn(
+                "pcap time ranges do not all overlap — cross-pcap correlation may be "
+                f"unreliable: {ranges}"
+            )
 
     if args.around is not None:
         half = args.window_ms / 2000.0

@@ -13,8 +13,8 @@ Provides:
 All on-disk intermediate state (tshark caches, AppArmor-staged pcaps) lives under
 a single per-session directory derived from CLAUDE_CODE_TMPDIR and
 CLAUDE_CODE_SESSION_ID. The directory is shared with the analyze-amari-ue-log
-skill so both can cross-reference cached outputs in one run. The OS reaps /tmp on
-reboot — no manual cleanup needed.
+and analyze-ocudu-gnb-log skills so all three can cross-reference cached outputs
+in one run. The OS reaps /tmp on reboot — no manual cleanup needed.
 """
 
 from __future__ import annotations
@@ -30,7 +30,8 @@ from typing import Iterable, Iterator, Sequence
 
 PCAP_NAMES = ("mac.pcap", "rlc.pcap", "f1ap.pcap", "e1ap.pcap", "ngap.pcap")
 
-# Per-session cache root, shared with the analyze-amari-ue-log skill.
+# Per-session cache root, shared with the analyze-amari-ue-log and
+# analyze-ocudu-gnb-log skills.
 # CLAUDE_CODE_TMPDIR (e.g. /tmp/claude-1000) is the per-user tmpdir Claude Code
 # sets up with 0700 perms; nesting our session dir inside it inherits that
 # privacy. CLAUDE_CODE_SESSION_ID isolates concurrent sessions on the same box.
@@ -129,10 +130,20 @@ def run_tshark(args: Sequence[str], *, check: bool = True) -> list[str]:
 
     Benign wireshark-config permission warnings are filtered from any raised
     TsharkError so the real cause is visible.
+
+    For any read invocation (`-r` present) we enable the MAC-NR / RLC-NR UDP
+    heuristic dissectors. OCUDU's mac.pcap / rlc.pcap wrap the NR PDUs in a
+    UDP-framed Upper-PDU (frame.protocols = exported_pdu:udp:data); without these
+    heuristics (which ship disabled) every `mac-nr.*` / `rlc-nr.*` field and
+    `-Y mac-nr`/`-Y rlc-nr` filter silently returns nothing. The flags are inert
+    for ngap/f1ap/e1ap captures.
     """
     tshark = require_tshark()
+    extra: list[str] = []
+    if "-r" in args:
+        extra = ["--enable-heuristic", "mac_nr_udp", "--enable-heuristic", "rlc_nr_udp"]
     proc = subprocess.run(
-        [tshark, *args],
+        [tshark, *extra, *args],
         check=False,
         capture_output=True,
         text=True,

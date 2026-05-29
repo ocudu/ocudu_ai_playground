@@ -16,7 +16,7 @@ description: >
 version: 0.1.0
 user-invocable: true
 context: fork
-allowed-tools: Bash(ls:*), Bash(grep:*), Bash(capinfos:*), Bash(tshark:*), Bash(python3:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(realpath:*), Bash(sha256sum:*), Bash(find:*), Edit, Write
+allowed-tools: Bash(ls:*), Bash(grep:*), Bash(capinfos:*), Bash(tshark:*), Bash(python3:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(realpath:*), Bash(sha256sum:*), Bash(find:*), Edit, Write
 ---
 
 # Analyze OCUDU pcap files
@@ -131,8 +131,8 @@ protocol/procedure reference files in `references/protocols/` and
 - **Session cache dir.** All intermediate state (tshark caches, AppArmor-staged
   pcaps, large spills) lives under one per-session, user-private directory:
   `${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/`.
-  It is shared with the `analyze-amari-ue-log` skill so both can cross-reference
-  cached outputs in one run. Helper scripts resolve it automatically (see
+  It is shared with the `analyze-amari-ue-log` and `analyze-ocudu-gnb-log`
+  skills so all three can cross-reference cached outputs in one run. Helper scripts resolve it automatically (see
   `references/scripts/utils.py::_CACHE_ROOT`); when spilling output yourself,
   write under that path with a descriptive prefix (`pcap-…`). The OS reaps
   `/tmp` on reboot — no manual cleanup needed.

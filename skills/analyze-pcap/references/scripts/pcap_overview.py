@@ -36,17 +36,20 @@ PROTO_FIELDS: dict[str, dict] = {
     "ngap": {
         "proc": ["ngap.procedureCode"],
         "ue": [("ran", "ngap.RAN_UE_NGAP_ID"), ("amf", "ngap.AMF_UE_NGAP_ID")],
-        "failure_filter": "ngap.unsuccessfulOutcome_element || ngap.cause",
+        # Count only true protocol failures (unsuccessfulOutcome). A `cause` IE
+        # also rides on normal messages (e.g. UEContextReleaseCommand with
+        # user-inactivity), so it must NOT be treated as a failure.
+        "failure_filter": "ngap.unsuccessfulOutcome_element",
     },
     "f1ap": {
         "proc": ["f1ap.procedureCode"],
         "ue": [("du", "f1ap.GNB_DU_UE_F1AP_ID"), ("cu", "f1ap.GNB_CU_UE_F1AP_ID")],
-        "failure_filter": "f1ap.unsuccessfulOutcome_element || f1ap.cause",
+        "failure_filter": "f1ap.unsuccessfulOutcome_element",
     },
     "e1ap": {
         "proc": ["e1ap.procedureCode"],
         "ue": [("cp", "e1ap.GNB_CU_CP_UE_E1AP_ID"), ("up", "e1ap.GNB_CU_UP_UE_E1AP_ID")],
-        "failure_filter": "e1ap.unsuccessfulOutcome_element || e1ap.cause",
+        "failure_filter": "e1ap.unsuccessfulOutcome_element",
     },
     "mac": {
         "proc": [],
@@ -69,7 +72,7 @@ def summarise_pcap(pcap: Path, *, top: int) -> dict:
     if spec:
         fields += spec["proc"] + [f for _, f in spec["ue"]]
 
-    rows = list(utils.iter_fields_cached(pcap, fields, tag=f"overview-{proto}-v2"))
+    rows = list(utils.iter_fields_cached(pcap, fields, tag=f"overview-{proto}-v3"))
     out["packets"] = len(rows)
     if not rows:
         out["empty"] = True

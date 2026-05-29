@@ -36,11 +36,10 @@ ngap.pcap   InitialContextSetupResponse
 
 ```bash
 # NGAP registration-relevant procedures, one UE
-# (15 = InitialUEMessage, 14 = InitialContextSetup — verified against OCUDU;
-#  46 = UplinkNASTransport, 47 = DownlinkNASTransport — 3GPP standard, not
-#  yet verified locally)
+# (15 = InitialUEMessage, 14 = InitialContextSetup, 46 = UplinkNASTransport,
+#  4 = DownlinkNASTransport — all verified against OCUDU ngap.pcap)
 tshark -r ngap.pcap \
-    -Y 'ngap.RAN_UE_NGAP_ID == <N> && (ngap.procedureCode == 15 || ngap.procedureCode == 14 || ngap.procedureCode == 46 || ngap.procedureCode == 47)'
+    -Y 'ngap.RAN_UE_NGAP_ID == <N> && (ngap.procedureCode == 15 || ngap.procedureCode == 14 || ngap.procedureCode == 46 || ngap.procedureCode == 4)'
 
 # F1AP UE context setup outcomes
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 5'

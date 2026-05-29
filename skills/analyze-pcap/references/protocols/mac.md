@@ -11,18 +11,23 @@ For PRACH detection failures, fall back to logs.
 
 ## Key tshark filters
 
+> **Required for `mac.pcap`:** add `--enable-heuristic mac_nr_udp` to every
+> hand-run tshark command — the MAC-NR PDUs are UDP-framed and won't dissect
+> otherwise (`mac-nr.*` returns nothing). The helper scripts add it
+> automatically.
+
 ```bash
 # All MAC-NR PDUs
-tshark -r mac.pcap -Y 'mac-nr'
+tshark -r mac.pcap --enable-heuristic mac_nr_udp -Y 'mac-nr'
 
 # RAR (RACH response)
-tshark -r mac.pcap -Y 'mac-nr.rar'
+tshark -r mac.pcap --enable-heuristic mac_nr_udp -Y 'mac-nr.rar'
 
 # Specific RNTI
-tshark -r mac.pcap -Y 'mac-nr.rnti == <RNTI>'
+tshark -r mac.pcap --enable-heuristic mac_nr_udp -Y 'mac-nr.rnti == <RNTI>'
 
 # Per-RNTI packet counts
-tshark -r mac.pcap -T fields -e mac-nr.rnti | sort | uniq -c | sort -rn
+tshark -r mac.pcap --enable-heuristic mac_nr_udp -T fields -e mac-nr.rnti | sort | uniq -c | sort -rn
 ```
 
 ## Identifier mapping
@@ -53,7 +58,7 @@ tshark -r mac.pcap -T fields -e mac-nr.rnti | sort | uniq -c | sort -rn
 
 ```bash
 # Per-RNTI PDU counts and direction split
-tshark -r mac.pcap -T fields -e mac-nr.rnti -e mac-nr.direction | \
+tshark -r mac.pcap --enable-heuristic mac_nr_udp -T fields -e mac-nr.rnti -e mac-nr.direction | \
     awk -F'\t' '{print $1"\t"$2}' | sort | uniq -c | sort -rn
 
 # Use the overview helper for top-level counts
