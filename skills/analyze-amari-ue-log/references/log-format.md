@@ -33,7 +33,7 @@ PDU message bodies, indented with spaces).
 |---|---|---|
 | NAS | `HH:MM:SS.mmm [NAS] -  UE_ID New state : GMM_STATE CM_STATE` | State transition |
 | NAS | `HH:MM:SS.mmm [NAS] DL/UL UE_ID CHANNEL: MSG_TYPE` | NAS message |
-| RRC | `HH:MM:SS.mmm [RRC] DL SFN CELL_ID CHANNEL: MSG_TYPE` | Broadcast (before attach) |
+| RRC | `HH:MM:SS.mmm [RRC] DL f000 CELL_ID CHANNEL: MSG_TYPE` | Broadcast (before attach); the UE_ID field is the fixed pseudo-id `f000`, not an SFN |
 | RRC | `HH:MM:SS.mmm [RRC] DL/UL UE_ID CELL_ID CHANNEL: MSG_TYPE` | Dedicated (after attach) |
 | PHY | `HH:MM:SS.mmm [PHY] DL UE_ID CELL_ID RNTI SFN.SF CHANNEL: PARAMS` | DL channel event |
 | PHY | `HH:MM:SS.mmm [PHY] UL UE_ID CELL_ID RNTI SFN.SF CHANNEL: PARAMS` | UL channel event |
@@ -109,8 +109,8 @@ up to `ue_count`, so values above `0009` are hex.
 | RRC reestablishment complete | UL | Reestablishment done |
 | RRC setup | DL | Initial connection setup |
 | RRC setup complete | UL | Connection established |
-| RRC security mode command | DL | Activate AS security |
-| RRC security mode complete | UL | AS security activated |
+| Security mode command | DL | Activate AS security (note: **no** `RRC ` prefix in the log) |
+| Security mode complete | UL | AS security activated (note: **no** `RRC ` prefix in the log) |
 | RRC release | DL | Network releases the RRC connection |
 
 ---

@@ -50,7 +50,7 @@ After step 31 the UE is fully attached and DRBs are operational. The gNB's
 | Where it fails | Marker | Likely cause |
 |---|---|---|
 | Before step 1 | PRACH not detected at all | UE TX power / SSB alignment / wrong `prach_config_index` |
-| Step 1 → 6 | MSG3 doesn't decode (`crc=FAIL` on PUSCH for that rnti) | Power / timing / wrong MSG3 grant params |
+| Step 1 → 6 | MSG3 doesn't decode (`crc=KO` on PUSCH for that rnti) | Power / timing / wrong MSG3 grant params |
 | Step 8 missing | `Initial ULRRCMessageTransfer` arrived but `UE created` not logged | CU-CP rejected the UE — check warnings; could be max_nof_ues hit |
 | Step 11 missing | `rrcSetupComplete` never seen | UE never decoded MSG4 or NAS PDU encoding failed |
 | Step 15 missing | NAS exchange stalls between RRC and `InitialContextSetupRequest` | AMF auth failure (check `amf_ue` ID transition), 5GC issue |

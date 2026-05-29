@@ -2,7 +2,7 @@
 
 The gNB log is a poor source for raw radio quality — most of that lives in
 the UE log. The gNB log signals PHY problems indirectly: PRACH not progressing,
-persistent `crc=FAIL` on PUSCH, late HARQs, ZMQ "Waiting for data" stalls
+persistent `crc=KO` on PUSCH, late HARQs, ZMQ "Waiting for data" stalls
 (simulator only), and metrics rows showing degraded SNR.
 
 ## Markers
@@ -10,7 +10,7 @@ persistent `crc=FAIL` on PUSCH, late HARQs, ZMQ "Waiting for data" stalls
 | Marker | Meaning |
 |---|---|
 | `[PHY     ] [I] [   N.N] PRACH: rsi=N rssi=N detected_preambles=[]` | PRACH occasion but no preamble decoded (UE didn't send, or power too low) |
-| `[PHY     ] [I] ... PUSCH: rnti=0x... crc=FAIL ... sinr=N.NdB` | UL block didn't decode — possible UE TX issue or radio degradation |
+| `[PHY     ] [I] ... PUSCH: rnti=0x... crc=KO ... sinr=N.NdB` | UL block didn't decode — possible UE TX issue or radio degradation |
 | Many `[PHY     ] [I] ... PUSCH: ... sinr=-infdB` | UL silence (no UE TX during the slot) — only a problem when expected to be active |
 | `[SCHED   ] [W] [...] Late DL HARQ ACK` | DL HARQ feedback didn't arrive in time → throughput regression |
 | `[SCHED   ] [W] [...] Late UL HARQ` | UL HARQ ack window missed |
@@ -26,10 +26,10 @@ persistent `crc=FAIL` on PUSCH, late HARQs, ZMQ "Waiting for data" stalls
    python3 ocudu_log_search.py gnb.log --pattern "UE created" --count
    ```
    If PRACH count > UE creations by a lot, MSG3 / MSG4 are failing — check
-   `crc=FAIL` and `msg3_nok` in the metrics rows.
+   `crc=KO` and `msg3_nok` in the metrics rows.
 2. CRC failure timeline (cap at 100):
    ```bash
-   python3 ocudu_log_search.py gnb.log --layer PHY --pattern "crc=FAIL" --max-lines 100
+   python3 ocudu_log_search.py gnb.log --layer PHY --pattern "crc=KO" --max-lines 100
    ```
 3. Late HARQs from metrics:
    ```bash

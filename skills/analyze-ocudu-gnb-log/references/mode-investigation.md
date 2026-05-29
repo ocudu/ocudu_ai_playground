@@ -37,7 +37,7 @@ Match the symptom to the most likely procedure file:
 | RRC reestablishment seen (`rrcReestablishmentRequest`) | `procedures/reestablishment.md` |
 | UE released unexpectedly | `procedures/ue-release.md` |
 | NGAP / AMF connection lost or never established | `procedures/ngap-setup.md` |
-| PHY-only failures (PRACH undecoded, persistent `crc=FAIL`, ZMQ rx waiting) | `procedures/phy-issues.md` |
+| PHY-only failures (PRACH undecoded, persistent `crc=KO`, ZMQ rx waiting) | `procedures/phy-issues.md` |
 | Throughput regression / late HARQs / failed PDCCH | `procedures/throughput-degradation.md` |
 | Process crashed / abnormal exit | `procedures/abnormal-exit.md` |
 

@@ -148,7 +148,7 @@ state transitions:
 | `teid=0xNNNNNNNN` | GTP-U TEID | GTPU / CU-UP |
 | `qfi=QFI=N` | QoS Flow Identifier | GTPU |
 | `psi=N` | PDU Session ID | CU-UP |
-| `crc=OK` / `crc=FAIL` | UL PUSCH decode result | PHY |
+| `crc=OK` / `crc=KO` | UL PUSCH decode result | PHY |
 | `sinr=N.NdB` | SNR estimate | PHY |
 | `tbs=N` | Transport block size in bytes | SCHED / MAC |
 
@@ -291,7 +291,7 @@ grep -nE "reestablishmentRequest|rrcReestablishment(Complete)?" gnb.log
 grep -nE "\[SCHED   \].*prach\(" gnb.log
 
 # PHY CRC failures
-grep -n "crc=FAIL" gnb.log
+grep -n "crc=KO" gnb.log
 
 # Scheduler metrics rows (one per period per cell)
 grep -nE "\[METRICS \] Scheduler cell" gnb.log

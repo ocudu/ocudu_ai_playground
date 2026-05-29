@@ -58,7 +58,7 @@ gNB ID), it falls back to a full RRC Setup:
 4. PHY/MAC view of the radio link in the seconds before the reestablishment:
    ```bash
    python3 ocudu_log_search.py gnb.log --layer PHY --rnti <old_hex> \
-       --after <T-2s> --before <reest_ts> --pattern "crc=FAIL|sr=yes" --max-lines 30
+       --after <T-2s> --before <reest_ts> --pattern "crc=KO|sr=yes" --max-lines 30
    ```
 5. Cross-correlate with the Amarisoft UE log — the UE log emits
    `rrc_reestablishment` SIM-Event or an internal RLF notification.

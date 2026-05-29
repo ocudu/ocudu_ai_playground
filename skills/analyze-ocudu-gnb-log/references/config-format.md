@@ -104,9 +104,9 @@ When a user asks "why do I not see X in the log?", first check the matching
 | `cell_cfg.nof_antennas_dl` / `nof_antennas_ul` | int | MIMO layout (1, 2, 4) |
 | `cell_cfg.prach.prach_config_index` | int | PRACH preamble format / occasion table |
 | `cell_cfg.tdd_ul_dl_cfg.*` | map | TDD pattern; presence implies TDD mode |
-| `cu_cp.amf.addrs` | list | AMF SCTP target IPs |
+| `cu_cp.amf.addrs` | scalar or list | AMF SCTP target IP(s). In the example runs it is a **scalar** (`addrs: 172.20.0.10`); the summary script's regex matches the scalar form |
 | `cu_cp.amf.port` | int | AMF SCTP port (default 38412) |
-| `cu_cp.amf.bind_addrs` | list | Local bind addresses for N2 |
+| `cu_cp.amf.bind_addrs` | scalar or list | Local bind address(es) for N2 (scalar in the example runs) |
 | `cu_cp.amf.supported_tracking_areas` | list | TAC + PLMN + slice (sst/sd) advertised at NG setup |
 | `cu_cp.mobility.trigger_handover_from_measurements` | bool | If true, the gNB initiates HO from RRC meas reports |
 | `cu_cp.security.integrity` / `confidentiality` | enum | `not_needed` / `preferred` / `required` |

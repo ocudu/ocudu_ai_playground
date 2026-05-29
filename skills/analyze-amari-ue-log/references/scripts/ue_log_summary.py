@@ -368,10 +368,12 @@ def summarize(path_str: str):
         print()
 
     # ----- Key RRC events: timeline (single UE) or counts (multi-UE) -----
+    # Note: the AS-security messages are logged WITHOUT an "RRC " prefix
+    # ("Security mode command" / "Security mode complete"); the rest carry it.
     KEY_RRC = {
         "MIB", "SIB1",
         "RRC setup", "RRC setup complete",
-        "RRC security mode command", "RRC security mode complete",
+        "Security mode command", "Security mode complete",
         "RRC reconfiguration", "RRC reconfiguration complete",
         "RRC reestablishment", "RRC reestablishment request",
         "RRC reestablishment complete",
@@ -466,6 +468,19 @@ def summarize(path_str: str):
         # Use exact match — "5GMM-DEREGISTERED" also contains the substring "REGISTERED".
         if "5GMM-REGISTERED" not in all_gmm_states and "power_on" in prod_types:
             anomalies.append(f"UE never reached 5GMM-REGISTERED (final: {final_gmm})")
+    elif log["nas_states"] and multi_ue:
+        # Per-UE: how many of the UEs that appeared ever reached 5GMM-REGISTERED?
+        # Exact token match — "5GMM-DEREGISTERED" also contains "REGISTERED".
+        seen_ues, registered_ues = set(), set()
+        for _, uid, gmm, _ in log["nas_states"]:
+            seen_ues.add(uid)
+            if gmm == "5GMM-REGISTERED":
+                registered_ues.add(uid)
+        never = len(seen_ues) - len(registered_ues)
+        if never > 0:
+            anomalies.append(
+                f"{never} of {len(seen_ues)} UEs never reached 5GMM-REGISTERED"
+            )
     if out["warnings"]:
         for w in out["warnings"]:
             anomalies.append(f"Stdout warning: {w[:100]}")

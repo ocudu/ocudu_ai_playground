@@ -17,8 +17,8 @@ Usage:
 
 Options:
   --layer <LAYER>       Filter by log layer: NAS, RRC, PHY, MAC, RLC, PDCP, PROD, TRX
-  --ue <ue_id>          Filter by UE ID (4-digit decimal, e.g. 0001)
-  --cell <cell_id>      Filter by cell index (2-digit decimal, e.g. 00, 01)
+  --ue <ue_id>          Filter by UE ID (4-char hex, e.g. 0001, 000a, 0080)
+  --cell <cell_id>      Filter by cell index (2-char decimal, e.g. 00, 01)
   --after <ts>          Only include lines at or after HH:MM:SS.mmm
   --before <ts>         Only include lines at or before HH:MM:SS.mmm
   --pattern <regex>     Additional regex pattern (searched across entire block)
@@ -74,7 +74,7 @@ def parse_args(argv=None):
     )
     ap.add_argument("path", help="ue.log file or containing directory")
     ap.add_argument("--layer", help="Layer filter (NAS, RRC, PHY, MAC, RLC, PDCP, PROD, TRX)")
-    ap.add_argument("--ue", help="UE ID filter (e.g. 0001)")
+    ap.add_argument("--ue", help="UE ID filter (4-char hex, e.g. 0001, 000a)")
     ap.add_argument("--cell", help="Cell ID filter (e.g. 00, 01)")
     ap.add_argument("--after", help="Start timestamp HH:MM:SS.mmm (inclusive)")
     ap.add_argument("--before", help="End timestamp HH:MM:SS.mmm (inclusive)")
@@ -108,7 +108,8 @@ def block_matches(header_line: str, body_lines: list[str], args) -> bool:
         full_text += "\n" + "\n".join(body_lines)
 
     # Positional field match. Fields after the "[LAYER]" tag are:
-    #   <dir> <ue_id> <cell_id> ...   (ue_id is an SFN for broadcast RRC lines)
+    #   <dir> <ue_id> <cell_id> ...   (ue_id is the pseudo-id `f000` on broadcast
+    #   RRC lines, a 4-char hex UE id otherwise).
     # Matching by position avoids false hits (e.g. substring "00" inside an RNTI).
     after = header_line.split("]", 1)[1].split() if "]" in header_line else []
     ue_field = after[1] if len(after) > 1 else None

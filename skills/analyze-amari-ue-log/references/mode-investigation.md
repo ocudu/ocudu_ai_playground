@@ -8,7 +8,7 @@ next planned check + the reason, then ask the user to confirm or redirect.
 Establish the symptom in one short paragraph:
 
 - Which run directory and UE component.
-- Which UE ID (if known) and how it's identified (4-digit decimal UE_ID in log).
+- Which UE ID (if known) and how it's identified (4-char hex UE_ID in log, e.g. `0001`, `000a`).
 - What the expected behaviour was vs. what was observed.
 - Approximate timestamp window (from NAS state timeline or stdout CBR stats).
 

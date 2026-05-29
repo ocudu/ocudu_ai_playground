@@ -16,8 +16,8 @@
 [RRC]   DL 0001 00 CCCH-NR: RRC setup
 [RRC]   UL 0001 00 DCCH-NR: RRC setup complete
 [NAS]   0001 New state : 5GMM-REGISTERED-INITIATED CM-CONNECTED
-[RRC]   DL 0001 00 DCCH-NR: RRC security mode command
-[RRC]   UL 0001 00 DCCH-NR: RRC security mode complete
+[RRC]   DL 0001 00 DCCH-NR: Security mode command
+[RRC]   UL 0001 00 DCCH-NR: Security mode complete
 [RRC]   DL 0001 00 DCCH-NR: RRC reconfiguration   ← bearer setup
 [RRC]   UL 0001 00 DCCH-NR: RRC reconfiguration complete
 [NAS]   0001 New state : 5GMM-REGISTERED CM-CONNECTED        ← attached!

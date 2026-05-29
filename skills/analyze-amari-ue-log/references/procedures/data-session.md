@@ -20,9 +20,10 @@ In stdout.log, data flow appears as non-zero `brate` values in UE stats rows.
 ### CBR (constant-bit-rate) traffic
 
 ```
-[addr:2000] CBR_RECV: sent=N, recv=M   ← DL: gNB sent N, UE received M
-[addr:2001] CBR_SEND: sent=N, recv=M   ← UL: UE sent N, gNB received M
+[addr:2000] CBR_RECV: sent N, recv M   ← DL: gNB sent N, UE received M
+[addr:2001] CBR_SEND: sent N, recv M   ← UL: UE sent N, gNB received M
 ```
+(Note: space-separated `sent N, recv M` — no `=`.)
 
 `recv < sent` indicates packet loss. Expected: 0% loss on a clean run.
 Acceptable during HO: brief spike corresponding to the HO duration.

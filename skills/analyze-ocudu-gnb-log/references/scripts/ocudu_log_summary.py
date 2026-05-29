@@ -61,6 +61,7 @@ CFG_KEYS = (
     "gnb_id", "ran_node_name",
     "all_level", "lib_level", "rrc_level", "ngap_level", "f1ap_level",
     "e1ap_level", "pdcp_level", "mac_level", "phy_level", "sec_level",
+    "cu_level", "xnap_level", "rlc_level",
     "config_level", "hex_max_size",
     "pci", "band", "dl_arfcn", "channel_bandwidth_MHz", "common_scs",
     "nof_antennas_dl", "nof_antennas_ul",
@@ -98,10 +99,12 @@ def parse_cfg(cfg_path: Path) -> dict:
                      "e2ap_cu_cp", "e2ap_cu_up", "e2ap_du"}:
             result["pcaps"].append(proto)
 
-    # Per-layer log levels — keep only ones explicitly set.
+    # Per-layer log levels — keep only ones explicitly set. cu_level gates the
+    # CU-CP/CU-UP layers (UE creates, bearers, Initial Context Setup), so it must
+    # be shown to explain why those procedure counts may be zero.
     for lvl in ("all_level", "lib_level", "rrc_level", "ngap_level",
-                "f1ap_level", "e1ap_level", "pdcp_level", "mac_level",
-                "phy_level", "sec_level", "config_level"):
+                "f1ap_level", "e1ap_level", "cu_level", "pdcp_level", "mac_level",
+                "phy_level", "sec_level", "xnap_level", "rlc_level", "config_level"):
         if lvl in result["raw"]:
             result["log_levels"][lvl.removesuffix("_level")] = result["raw"][lvl]
 
@@ -257,7 +260,7 @@ def parse_gnb_log(gnb_log: Path) -> dict:
                 result["prach_events"] += 1
 
             # PHY CRC failures
-            if layer == "PHY" and "crc=FAIL" in msg:
+            if layer == "PHY" and "crc=KO" in msg:
                 result["crc_fails"] += 1
 
             # UE creation (CU-CP)
@@ -422,6 +425,8 @@ def parse_metrics(metrics_path: Path) -> dict:
         "failed_pdcch": 0,
         "failed_uci": 0,
         "errors": 0,
+        "msg3_ok": 0,
+        "msg3_nok": 0,
         "event_counts": Counter(),
     }
     if not metrics_path.exists():
@@ -438,6 +443,9 @@ def parse_metrics(metrics_path: Path) -> dict:
             result["failed_pdcch"] += cm.get("nof_failed_pdcch_allocs", 0) or 0
             result["failed_uci"] += cm.get("nof_failed_uci_allocs", 0) or 0
             result["errors"] += cm.get("error_indication_count", 0) or 0
+            # Msg3 (RACH 3rd message) decode outcomes — high nok = RACH contention.
+            result["msg3_ok"] += cm.get("msg3_nof_ok", 0) or 0
+            result["msg3_nok"] += cm.get("msg3_nof_nok", 0) or 0
             for ue in cell.get("ue_list", []) or []:
                 dl = ue.get("dl_brate", 0) or 0
                 ul = ue.get("ul_brate", 0) or 0
@@ -586,7 +594,16 @@ def summarize(path_str: str) -> None:
     print(f"  Bearer modifications: {log['bearer_modifications']}")
     print(f"  Bearer releases     : {log['bearer_releases']}")
     print(f"  PRACH events        : {log['prach_events']}")
-    print(f"  PHY CRC failures    : {log['crc_fails']}")
+    print(f"  PHY CRC failures (crc=KO) : {log['crc_fails']}")
+    # Caveat: these counters come from RRC/NGAP/F1AP/E1AP/CU layers. If those are
+    # logged at 'warning', the layers are silent and the counts read 0 even when
+    # the procedures happened — say so rather than implying nothing occurred.
+    muted = [name for name, lvl in cfg["log_levels"].items()
+             if lvl == "warning" and name in ("rrc", "ngap", "f1ap", "e1ap", "cu")]
+    if muted:
+        print(f"  NOTE: {', '.join(muted)} logged at 'warning' — the above procedure "
+              f"counts are unreliable (layers silent). Infer HO from SCHED PRACH on the "
+              f"target cell / metrics 'ue_reconf' events, or enable info logging.")
     print()
 
     # ----- Scheduler metrics rollup -----
@@ -601,6 +618,8 @@ def summarize(path_str: str) -> None:
         print(f"  Failed PDCCH allocs : {met['failed_pdcch']}")
         print(f"  Failed UCI allocs   : {met['failed_uci']}")
         print(f"  Error indications   : {met['errors']}")
+        print(f"  Msg3 ok/nok         : {met['msg3_ok']}/{met['msg3_nok']}"
+              + ("  (high nok = RACH contention)" if met['msg3_nok'] else ""))
         if met["event_counts"]:
             evs = ", ".join(f"{n}×{k}" for k, n in met["event_counts"].most_common())
             print(f"  Events              : {evs}")
@@ -631,7 +650,12 @@ def summarize(path_str: str) -> None:
             f"at capture end, or failed)"
         )
     if log["crc_fails"] > 100:
-        anomalies.append(f"High PHY CRC failures: {log['crc_fails']}")
+        anomalies.append(f"High PHY CRC failures (crc=KO): {log['crc_fails']}"
+                         f" — may include Msg3 RACH contention in multi-UE runs")
+    if met.get("msg3_nok", 0) > 0:
+        total = met["msg3_ok"] + met["msg3_nok"]
+        anomalies.append(f"Msg3 RACH failures: {met['msg3_nok']}/{total} "
+                         f"(contention or coverage)")
     if log["errors"]:
         anomalies.append(f"Error-level log lines: {len(log['errors'])}"
                          f" (first: [{log['errors'][0][1]}] {log['errors'][0][2][:80]})")

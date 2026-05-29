@@ -51,7 +51,7 @@ Examples:
   python3 ocudu_log_search.py gnb.log --pattern "reconfigurationWithSync \\{" --count
 
   # PHY CRC failures in a window (partial timestamp form OK)
-  python3 ocudu_log_search.py gnb.log --layer PHY --pattern "crc=FAIL" \\
+  python3 ocudu_log_search.py gnb.log --layer PHY --pattern "crc=KO" \\
       --after 18:18:30.000 --before 18:18:31.000
 
   # Errors and warnings across the run
@@ -169,16 +169,28 @@ def block_matches(header_line: str, body_lines: list[str], args) -> bool:
     return True
 
 
+def _is_config_echo_header(line: str) -> bool:
+    """The `[CONFIG  ] [D] Input configuration (all values):` line, whose body is
+    the ~440-line effective-config dump echoed at the top of every gnb.log."""
+    m = HEADER_RE.match(line)
+    return bool(m) and m.group("layer").strip() == "CONFIG" and \
+        m.group("lvl") == "D" and "Input configuration" in line
+
+
 def iter_blocks(log_path: Path, include_config_echo: bool):
     """Yield (header_line, body_lines) blocks from the log.
 
     A block is a header line (matching HEADER_RE) plus any subsequent
     non-header lines that belong to the same record (continuation lines
     for ASN.1 PDU dumps, SIB1 JSON, the CONFIG echo, ...).
+
+    By default the giant CONFIG echo block (header + its untimestamped YAML body)
+    is skipped entirely — it is redundant with ocudu_gnb.yml and would otherwise
+    let `--pattern` match config text. Pass include_config_echo=True to keep it.
     """
     current_header = None
     current_body: list[str] = []
-    started = False
+    skipping = False
 
     with open(log_path, encoding="utf-8", errors="replace") as f:
         for raw in f:
@@ -189,14 +201,18 @@ def iter_blocks(log_path: Path, include_config_echo: bool):
             if HEADER_RE.match(line):
                 if current_header is not None:
                     yield current_header, current_body
-                current_header = line
-                current_body = []
-                started = True
+                if (not include_config_echo) and _is_config_echo_header(line):
+                    current_header = None
+                    current_body = []
+                    skipping = True
+                else:
+                    current_header = line
+                    current_body = []
+                    skipping = False
             else:
-                if not started and not include_config_echo:
+                if skipping or current_header is None:
                     continue
-                if current_header is not None:
-                    current_body.append(line)
+                current_body.append(line)
 
         if current_header is not None:
             yield current_header, current_body
