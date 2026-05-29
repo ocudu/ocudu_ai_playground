@@ -28,8 +28,8 @@ tshark -r rlc.pcap -Y 'rlc-nr.am.p == 1'
 
 - `rlc-nr.direction` — UL / DL.
 - `rlc-nr.ueid` — UE index (DU-local, not C-RNTI).
-- `rlc-nr.bearer-type` — SRB / DRB / CCCH (note hyphen, not `bearertype`).
-- `rlc-nr.bearer-id` — bearer index within the type (note hyphen).
+- `rlc-nr.bearer-type` — SRB / DRB / CCCH.
+- `rlc-nr.bearer-id` — bearer index within the type.
 - `rlc-nr.mode` — AM / UM / TM.
 
 ## AM data fields
@@ -73,10 +73,3 @@ tshark -r rlc.pcap \
 
 python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py <rlc.pcap>
 ```
-
-## Accumulated knowledge
-
-- 2026-05-26 — tshark 4.4.7 uses hyphenated names for RLC-NR bearer fields:
-  `rlc-nr.bearer-type`, `rlc-nr.bearer-id`. The unhyphenated forms
-  `rlc-nr.bearertype` / `rlc-nr.bearerid` are not valid. RLC mode is
-  `rlc-nr.mode`, not `rlc-nr.rlcmode`.

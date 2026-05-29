@@ -77,5 +77,3 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/ngap_procedures.py <ngap.pcap> --
 
 python3 ${CLAUDE_SKILL_DIR}/references/scripts/extract_proc_codes.py <ngap.pcap> --proto ngap
 ```
-
-## Accumulated knowledge

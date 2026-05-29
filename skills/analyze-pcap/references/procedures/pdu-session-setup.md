@@ -52,5 +52,3 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --arou
 - `../protocols/ngap.md`
 - `../protocols/e1ap.md`
 - `../protocols/f1ap.md`
-
-## Accumulated knowledge

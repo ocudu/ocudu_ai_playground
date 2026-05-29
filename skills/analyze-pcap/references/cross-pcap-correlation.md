@@ -81,9 +81,9 @@ Adjust the window:
 ## Cache
 
 Each helper script caches its tshark field-extraction output as one TSV per
-(pcap, column-set) tuple at `/tmp/analyze-pcap-cache-<sha>.tsv` (sha256 of
-the canonical pcap path + tag). `correlate_run.py` reads back per-protocol
-caches and joins in-process — re-runs against the same run dir reuse all
-the caches and skip tshark entirely.
-
-## Accumulated knowledge
+(pcap, column-set) tuple at
+`${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/pcap-cache-<sha>.tsv`
+(sha256 of the canonical pcap path + tag). `correlate_run.py` reads back the
+per-protocol caches and joins in-process — re-runs against the same run dir
+reuse all the caches and skip tshark entirely. The directory is shared with the
+`analyze-amari-ue-log` skill for the lifetime of the Claude session.

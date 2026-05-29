@@ -40,5 +40,3 @@ For an event-level cross-protocol timeline, use `correlate_run.py`.
 
 `frame.time_epoch` is comparable across all 5 sibling pcaps (µs precision).
 There is no per-protocol clock skew.
-
-## Accumulated knowledge

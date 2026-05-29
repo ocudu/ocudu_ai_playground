@@ -56,5 +56,3 @@ tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 11' \
 - `../protocols/mac.md` — MAC fields used here.
 - `../protocols/f1ap.md` — F1AP procedures.
 - `../cross-pcap-correlation.md` — joining MAC and F1AP by RNTI.
-
-## Accumulated knowledge

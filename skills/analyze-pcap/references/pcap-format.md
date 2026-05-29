@@ -65,7 +65,7 @@ tshark -r mac.pcap -d user_dlt:252,mac-nr-framed -V -c 1
 ```
 
 The dissector identifier to map to depends on the Upper-PDU header content.
-Document any newly observed mapping in § Accumulated knowledge below.
+Record any newly observed mapping here in this fallback section.
 
 ## Why this format matters for analysis
 
@@ -99,26 +99,22 @@ giveaway.
 
 The helper scripts in `references/scripts/` handle this transparently:
 `utils.stage_for_tshark()` hard-links (or copies on a different filesystem)
-the source pcap into `/tmp/analyze-pcap-stage/<sha>-<basename>.pcap` and
-points tshark at that path. The cache stays in `/tmp` across runs of the
-skill.
+the source pcap into the per-session cache dir's `pcap-stage/` subfolder
+(`${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/pcap-stage/<sha>-<basename>.pcap`)
+and points tshark at that path. Staged files live under `/tmp` and so satisfy
+the AppArmor confinement; the directory is reused for the lifetime of the
+Claude session.
 
-If running tshark by hand against a confined path, do the same:
+If running tshark by hand against a confined path, do the same — stage into
+any directory under `/tmp` (the session cache dir is a fine choice):
 
 ```bash
-mkdir -p /tmp/analyze-pcap-stage
-ln -f <source.pcap> /tmp/analyze-pcap-stage/x.pcap
-tshark -r /tmp/analyze-pcap-stage/x.pcap ...
+STAGE="${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/pcap-stage"
+mkdir -p "$STAGE"
+ln -f <source.pcap> "$STAGE/x.pcap"
+tshark -r "$STAGE/x.pcap" ...
 ```
 
 A permanent fix is a local override file at `/etc/apparmor.d/local/tshark`
 adding `file r /home/*/srs/**,` (requires `sudo systemctl reload apparmor`).
 The script-side workaround is preferred because it needs no root.
-
-## Accumulated knowledge
-
-- 2026-05-26 — On Ubuntu, the Canonical AppArmor profile for tshark
-  (`/etc/apparmor.d/tshark`) blocks reads outside `/tmp` and system paths.
-  Symptom: `tshark: You don't have permission to read the file` for paths
-  the user can read with `cat`. Workaround implemented in
-  `references/scripts/utils.py::stage_for_tshark()`.

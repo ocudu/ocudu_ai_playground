@@ -74,11 +74,3 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> \
 
 - `../protocols/ngap.md`, `../protocols/f1ap.md`, `../protocols/mac.md`
 - `../cross-pcap-correlation.md`
-
-## Accumulated knowledge
-
-- 2026-05-26 — On a target DU in an intra-CU inter-DU HO, the UE's first
-  F1AP message is `UEContextSetup` (proc 5), not `InitialULRRCMessageTransfer`
-  (proc 11). The latter would only appear if the UE arrived via a fresh
-  RACH on this DU. This is the routine signature of a HO-target context,
-  not an anomaly worth reporting.

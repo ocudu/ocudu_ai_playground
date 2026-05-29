@@ -39,8 +39,7 @@ tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 13'   # ULRRCMessageTransfer
 - `f1ap.GNB_CU_UE_F1AP_ID` — CU-assigned, present once UEContextSetupRequest
   has been sent.
 - `f1ap.C_RNTI` — present in InitialULRRCMessageTransfer (the DU's C-RNTI for
-  this UE). Note the field name uses an underscore and capital `C` — the
-  natural-looking `f1ap.cRNTI` is **not** a valid tshark field.
+  this UE).
 - See `../cross-pcap-correlation.md` for joining to NGAP / E1AP.
 
 ## UE arrival paths in f1ap.pcap
@@ -91,13 +90,3 @@ Verified against an OCUDU `f1ap.pcap` capture:
 python3 ${CLAUDE_SKILL_DIR}/references/scripts/extract_proc_codes.py <f1ap.pcap> --proto f1ap
 python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --protocols f1ap
 ```
-
-## Accumulated knowledge
-
-- 2026-05-26 — tshark 4.4.7 field name for the per-UE C-RNTI carried in
-  InitialULRRCMessageTransfer is `f1ap.C_RNTI` (capital `C`, underscore). The
-  natural-looking `f1ap.cRNTI` is **not** a valid field — using it makes
-  tshark exit 1 with "Some fields aren't valid".
-- 2026-05-26 — F1AP procedure codes in the OCUDU build differ from the
-  initial documentation: InitialULRRCMessageTransfer is 11 (not 12),
-  DLRRCMessageTransfer is 12 (not 16), ULRRCMessageTransfer is 13 (not 15).

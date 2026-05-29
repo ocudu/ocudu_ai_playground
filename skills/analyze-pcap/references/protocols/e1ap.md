@@ -10,7 +10,7 @@ fine via NGAP but throughput is zero or PDU session setup fails.
 ## Key tshark filters
 
 ```bash
-# All E1AP messages with both UE IDs (note the uppercase G in GNB_*)
+# All E1AP messages with both UE IDs
 tshark -r e1ap.pcap \
     -T fields -E separator=$'\t' \
     -e frame.number -e frame.time_epoch \
@@ -30,9 +30,7 @@ tshark -r e1ap.pcap -Y 'e1ap.procedureCode == 7'    # E1Release
 
 ## Identifier mapping
 
-- `e1ap.GNB_CU_CP_UE_E1AP_ID` — CU-CP-assigned. **Note the uppercase G**
-  in the tshark field name; the lowercase `e1ap.gNB_CU_CP_UE_E1AP_ID` is a
-  different (unpopulated) dissector field.
+- `e1ap.GNB_CU_CP_UE_E1AP_ID` — CU-CP-assigned.
 - `e1ap.GNB_CU_UP_UE_E1AP_ID` — CU-UP-assigned (after BearerContextSetupResponse).
 - Bearer / PDU-session ID fields:
   - `e1ap.pDU_Session_ID` — per-PDU-session selector.
@@ -74,13 +72,3 @@ Verified against an OCUDU `e1ap.pcap` capture:
 python3 ${CLAUDE_SKILL_DIR}/references/scripts/extract_proc_codes.py <e1ap.pcap> --proto e1ap
 python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --protocols e1ap
 ```
-
-## Accumulated knowledge
-
-- 2026-05-26 — Per-UE E1AP IDs are exposed in tshark 4.4.7 as
-  `e1ap.GNB_CU_CP_UE_E1AP_ID` / `e1ap.GNB_CU_UP_UE_E1AP_ID` (uppercase G).
-  The lowercase `e1ap.gNB_*` variants exist in the dissector but are not
-  populated for the IEs in OCUDU pcaps. Same caveat applies to F1AP.
-- 2026-05-26 — Procedure codes in the OCUDU build verified against an
-  inter-RU HO capture: bearerContextSetup=8, bearerContextModification=9,
-  bearerContextRelease=11 (not 1/2/4 as initially documented).

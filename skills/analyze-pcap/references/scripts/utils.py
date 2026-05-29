@@ -5,7 +5,13 @@ Provides:
 - epoch_to_iso(): format float epoch as ISO-8601 with millisecond precision.
 - parse_fields(): split a TSV line into the expected column count.
 - walk_run_dir(): map a directory path to its OCUDU pcap siblings.
-- cache_path(): deterministic /tmp cache path for a (pcap, columns) pair.
+- cache_path(): deterministic per-session cache path for a (pcap, columns) pair.
+
+All on-disk intermediate state (tshark caches, AppArmor-staged pcaps) lives under
+a single per-session directory derived from CLAUDE_CODE_TMPDIR and
+CLAUDE_CODE_SESSION_ID. The directory is shared with the analyze-amari-ue-log
+skill so both can cross-reference cached outputs in one run. The OS reaps /tmp on
+reboot — no manual cleanup needed.
 """
 
 from __future__ import annotations
@@ -21,7 +27,15 @@ from typing import Iterable, Iterator, Sequence
 
 PCAP_NAMES = ("mac.pcap", "rlc.pcap", "f1ap.pcap", "e1ap.pcap", "ngap.pcap")
 
-_TSHARK_STAGE_DIR = Path("/tmp/analyze-pcap-stage")
+# Per-session cache root, shared with the analyze-amari-ue-log skill.
+# CLAUDE_CODE_TMPDIR (e.g. /tmp/claude-1000) is the per-user tmpdir Claude Code
+# sets up with 0700 perms; nesting our session dir inside it inherits that
+# privacy. CLAUDE_CODE_SESSION_ID isolates concurrent sessions on the same box.
+_CACHE_ROOT = (
+    Path(os.environ.get("CLAUDE_CODE_TMPDIR", "/tmp"))
+    / f"claude-skills-{os.environ.get('CLAUDE_CODE_SESSION_ID', 'default')}"
+)
+_TSHARK_STAGE_DIR = _CACHE_ROOT / "pcap-stage"
 
 
 class TsharkError(RuntimeError):
@@ -42,8 +56,9 @@ def stage_for_tshark(pcap_path: str | os.PathLike[str]) -> Path:
     Canonical ships an AppArmor profile (/etc/apparmor.d/tshark) that restricts
     /usr/bin/tshark to /tmp and a few system paths. Files under ~/srs/ etc.
     trigger "You don't have permission to read the file" even when Unix perms
-    allow it. Hard-link (or copy on a different fs) into /tmp/analyze-pcap-stage/,
-    keyed by canonical source path sha + basename.
+    allow it. Hard-link (or copy on a different fs) into the per-session
+    pcap-stage/ subdir (see _CACHE_ROOT), keyed by canonical source path sha +
+    basename.
 
     If the source is already under /tmp (likely already accessible), pass it
     through unchanged.
@@ -181,10 +196,14 @@ def is_run_dir(path: str | os.PathLike[str]) -> bool:
 
 
 def cache_path(input_path: str | os.PathLike[str], tag: str) -> Path:
-    """Return a deterministic /tmp cache path for an input + column set tag."""
+    """Return a deterministic cache path inside the per-session cache root.
+
+    File: pcap-cache-<sha>.tsv under _CACHE_ROOT. Callers must ensure the parent
+    directory exists before writing (iter_fields_cached does this).
+    """
     canonical = str(Path(input_path).resolve())
     digest = hashlib.sha256(f"{canonical}\0{tag}".encode()).hexdigest()[:16]
-    return Path(f"/tmp/analyze-pcap-cache-{digest}.tsv")
+    return _CACHE_ROOT / f"pcap-cache-{digest}.tsv"
 
 
 def iter_fields_cached(
@@ -217,6 +236,7 @@ def iter_fields_cached(
     if display_filter:
         args += ["-Y", display_filter]
     lines = run_tshark(args)
+    cf.parent.mkdir(parents=True, exist_ok=True)
     cf.write_text("\n".join(lines) + ("\n" if lines else ""))
     for line in lines:
         yield parse_fields(line, len(fields_list))

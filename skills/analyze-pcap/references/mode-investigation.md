@@ -87,8 +87,9 @@ to your satisfaction, produce a single closing block:
 
 ## Phase E — persist learnings
 
-For every generalisable insight discovered during the investigation, append to
-the appropriate file (see SKILL.md § Memory).
+If the investigation surfaced a generalisable learning, persist it via the flow in
+`SKILL.md` § Memory & self-maintenance — propose it, confirm, then weave it into
+the natural section (or create a new procedure/script file if warranted).
 
 ## Question-asking discipline
 

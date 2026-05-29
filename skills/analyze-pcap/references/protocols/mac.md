@@ -59,5 +59,3 @@ tshark -r mac.pcap -T fields -e mac-nr.rnti -e mac-nr.direction | \
 # Use the overview helper for top-level counts
 python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py <mac.pcap>
 ```
-
-## Accumulated knowledge

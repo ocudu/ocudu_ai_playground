@@ -73,5 +73,3 @@ tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 6'
 
 - `../protocols/ngap.md`, `../protocols/f1ap.md`, `../protocols/e1ap.md`
 - `../cross-pcap-correlation.md`
-
-## Accumulated knowledge

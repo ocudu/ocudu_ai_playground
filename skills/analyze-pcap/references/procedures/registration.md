@@ -54,5 +54,3 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --ue <
 - `../protocols/ngap.md` — NGAP procedure codes and cause IEs.
 - `../protocols/f1ap.md` — F1AP UE-context lifecycle.
 - `../cross-pcap-correlation.md`.
-
-## Accumulated knowledge

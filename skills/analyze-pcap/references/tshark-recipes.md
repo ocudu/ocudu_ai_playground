@@ -32,5 +32,3 @@ tshark -r <file.pcap> \
 ```bash
 tshark -r <file.pcap> -Y 'frame.time_epoch >= X && frame.time_epoch < Y'
 ```
-
-## Accumulated knowledge

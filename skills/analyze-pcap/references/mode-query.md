@@ -65,8 +65,7 @@ questions — let the user drive the next request.
 
 ## Persist learnings
 
-Append to `references/tshark-recipes.md` only when:
-- A filter you wrote is non-obvious *and* likely to be reused.
-- A dissector field name turned out to be different from what
-  `references/protocols/<proto>.md` documents — in that case, fix the
-  protocol file too.
+If you wrote a non-obvious, reusable tshark filter, or found a dissector field
+documented incorrectly, persist the fix via `SKILL.md` § Memory & self-maintenance
+(propose → confirm → integrate into the natural section, e.g. a protocol's
+§ Key tshark filters or `tshark-recipes.md`).
