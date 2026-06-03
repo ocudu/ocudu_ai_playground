@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "ocudu-ai-playground",
+  "description": "Skills for the OCUDU 5G CU/DU project",
+  "owner": {
+    "name": "ocudu",
+    "url": "https://gitlab.com/ocudu"
+  },
+  "plugins": [
+    {
+      "name": "ci-triage",
+      "description": "Triage failed jobs in a GitLab CI pipeline — classify each failure and match it to known issues in the ocudu group.",
+      "source": "./skills/ci-triage"
+    },
+    {
+      "name": "analyze-pcap",
+      "description": "Analyze packet captures produced by OCUDU applications (gnb, du, cu, cu_cp, cu_up).",
+      "source": "./skills/analyze-pcap"
+    }
+  ]
+}
