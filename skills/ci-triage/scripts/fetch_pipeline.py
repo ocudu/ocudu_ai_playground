@@ -29,15 +29,11 @@ import json
 import os
 import re
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 import zipfile
 from pathlib import Path
-from urllib.parse import quote
-
-try:
-    import requests
-except ImportError:
-    print("ERROR: requests is required. Install with: pip install requests")
-    sys.exit(2)
 
 # https://gitlab.example.com/group/sub/project/-/jobs/123
 # https://gitlab.example.com/group/sub/project/-/pipelines/123
@@ -57,34 +53,37 @@ _SCHEDULE_API_RE = re.compile(r"(https?://[^/]+)/api/v4/projects/([^/]+)/pipelin
 class _Client:
     def __init__(self, base_url: str, token: str = ""):
         self._base = base_url.rstrip("/")
-        self._session = requests.Session()
-        if token:
-            self._session.headers["PRIVATE-TOKEN"] = token
+        self._headers = {"PRIVATE-TOKEN": token} if token else {}
 
-    def _get(self, path: str, **kwargs) -> requests.Response:
+    def _get(self, path: str, params: dict | None = None) -> bytes:
         url = f"{self._base}/api/v4/{path.lstrip('/')}"
-        r = self._session.get(url, **kwargs)
-        r.raise_for_status()
-        return r
+        if params:
+            url = f"{url}?{urllib.parse.urlencode(params)}"
+        req = urllib.request.Request(url, headers=self._headers)
+        with urllib.request.urlopen(req) as resp:
+            return resp.read()
+
+    def _get_json(self, path: str, params: dict | None = None) -> dict | list:
+        return json.loads(self._get(path, params).decode())
 
     def _project_root(self, project: str) -> str:
-        encoded = quote(project, safe="") if "/" in project else project
+        encoded = urllib.parse.quote(project, safe="") if "/" in project else project
         return f"projects/{encoded}"
 
     def job(self, project: str, job_id: int) -> dict:
-        return self._get(f"{self._project_root(project)}/jobs/{job_id}").json()
+        return self._get_json(f"{self._project_root(project)}/jobs/{job_id}")
 
     def pipeline(self, project: str, pipeline_id: int) -> dict:
-        return self._get(f"{self._project_root(project)}/pipelines/{pipeline_id}").json()
+        return self._get_json(f"{self._project_root(project)}/pipelines/{pipeline_id}")
 
     def schedule(self, project: str, schedule_id: int) -> dict:
-        return self._get(f"{self._project_root(project)}/pipeline_schedules/{schedule_id}").json()
+        return self._get_json(f"{self._project_root(project)}/pipeline_schedules/{schedule_id}")
 
     def latest_scheduled_pipeline(self, project: str, schedule_id: int) -> dict:
-        pipelines = self._get(
+        pipelines = self._get_json(
             f"{self._project_root(project)}/pipeline_schedules/{schedule_id}/pipelines",
-            params={"per_page": 1, "order_by": "id", "sort": "desc"},
-        ).json()
+            {"per_page": 1, "order_by": "id", "sort": "desc"},
+        )
         if not pipelines:
             raise ValueError(f"No pipelines found for schedule {schedule_id}")
         return pipelines[0]
@@ -92,10 +91,10 @@ class _Client:
     def pipeline_jobs(self, project: str, pipeline_id: int) -> list:
         jobs, page = [], 1
         while True:
-            batch = self._get(
+            batch = self._get_json(
                 f"{self._project_root(project)}/pipelines/{pipeline_id}/jobs",
-                params={"per_page": 100, "page": page, "include_retried": "false"},
-            ).json()
+                {"per_page": 100, "page": page, "include_retried": "false"},
+            )
             if not batch:
                 break
             jobs.extend(batch)
@@ -103,14 +102,14 @@ class _Client:
         return jobs
 
     def job_trace(self, project: str, job_id: int) -> str:
-        return self._get(f"{self._project_root(project)}/jobs/{job_id}/trace").text
+        return self._get(f"{self._project_root(project)}/jobs/{job_id}/trace").decode(errors="replace")
 
     def artifacts_zip(self, project: str, job_id: int) -> bytes | None:
         """Download the full artifacts zip. Returns None if no artifacts exist for this job."""
         try:
-            return self._get(f"{self._project_root(project)}/jobs/{job_id}/artifacts").content
-        except requests.HTTPError as exc:
-            if exc.response is not None and exc.response.status_code == 404:
+            return self._get(f"{self._project_root(project)}/jobs/{job_id}/artifacts")
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
                 return None
             raise
 
@@ -199,7 +198,7 @@ def main():
 
     try:
         project, pipeline_id, extra = _resolve(client, args.url, log=log)
-    except (ValueError, requests.HTTPError) as exc:
+    except (ValueError, urllib.error.HTTPError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         sys.exit(1)
 
@@ -246,7 +245,7 @@ def main():
             trace_path.write_text(trace, encoding="utf-8", errors="replace")
             job_entry["trace"] = str(trace_path)
             log(f"    trace: {len(trace):,} bytes")
-        except requests.HTTPError as exc:
+        except urllib.error.HTTPError as exc:
             log(f"    trace: skipped ({exc})")
 
         if _ARTIFACT_PATTERNS:

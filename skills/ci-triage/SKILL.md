@@ -13,8 +13,8 @@ version: 0.1.0
 user-invocable: true
 context: inline
 license: BSD-3-Clause-Open-MPI
-compatibility: Requires python3 (stdlib only), glab (GitLab CLI), and jq. glab must be authenticated to gitlab.com/ocudu.
-allowed-tools: Bash(python3 *ci-triage*), Bash(glab *), Bash(jq *), Bash(awk *), Bash(grep *), Bash(tail *), Read(/tmp/triage/*), Write(/tmp/triage/*)
+compatibility: Requires python3 (stdlib only) and jq. Set GITLAB_TOKEN to a personal access token with api scope for gitlab.com/ocudu.
+allowed-tools: Bash(python3 *ci-triage*), Bash(jq *), Read(/tmp/triage/*), Write(/tmp/triage/*)
 ---
 
 # CI Job Failure Triage
@@ -23,9 +23,14 @@ allowed-tools: Bash(python3 *ci-triage*), Bash(glab *), Bash(jq *), Bash(awk *),
 
 Triage all failed jobs in a GitLab CI pipeline. For each failure, classify it and find the best matching issue in the `gitlab.com/ocudu` group. Output is a single summary table.
 
-> **Prerequisites:** `python3` (stdlib), `glab` (authenticated to gitlab.com/ocudu), `jq`.
+> **Prerequisites:** `python3` (stdlib only), `jq`. Set `GITLAB_TOKEN` to a personal access token with `api` scope for gitlab.com/ocudu.
 
-> **Tool constraint:** Use the fetch script for pipeline and job data. Use `glab` CLI for issue queries. Never use `curl`, `wget`, or direct HTTP calls. Never use inline `python3 -c` for data processing — use `jq` instead.
+> **Tool constraint:**
+> - **`/tmp/triage/` paths**: use the `Read` tool exclusively. Never run any bash command (`cat`, `wc`, `ls`, `find`, `jq`, `awk`, `grep`, `tail`, or anything else) on paths under `/tmp/triage/` — every new job directory triggers a permission prompt.
+> - **Pipeline/job data**: run `fetch_pipeline.py`; its JSON is the tool result — already in context.
+> - **Issue queries**: run `query_issues.py`; its JSON is the tool result — read `.issues` directly in context, do not post-process with any shell command.
+> - **`jq`**: only for processing piped script output, e.g. `python3 .../query_issues.py ... | jq '.issues[].title'`. Never point `jq` at a file path.
+> - Never use `curl`, `wget`, `glab`, or direct HTTP calls. Never use inline `python3 -c`.
 
 ---
 
@@ -60,10 +65,10 @@ If `failed_jobs` is empty, report "No failed jobs in this pipeline" and stop.
 **Fetch all open `bug::ci` issues:**
 
 ```bash
-glab api '/groups/ocudu/issues?labels=bug%3A%3Aci&state=opened&per_page=100'
+python3 ${CLAUDE_SKILL_DIR}/scripts/query_issues.py --group ocudu --labels "bug::ci" --state opened
 ```
 
-Keep this list in context — it is reused for every job without further API calls.
+Returns `{"issues": [...], "total": N}`. Keep the `issues` array in context — it is reused for every job without further API calls.
 
 ## Step 2 — Analyze each failed job
 
@@ -77,23 +82,21 @@ Process each job from `failed_jobs` in turn.
 - **ctest / GoogleTest** — `[  FAILED  ] TestSuite.TestName`, assertion lines (`EXPECT_*/ASSERT_*`), or exception messages
 - **pytest (Retina E2E)** — `FAILED tests/<file>.py::<test_name>[<suite.param>]` lines; may also have a Pass/Fail Criteria table and per-component log sections
 
-Start with the tail of the **script** section — strip `after_script` first (it only contains cleanup/artifact upload noise):
+Use the `Read` tool on `job.trace`. Start with the last 200 lines:
 
-```bash
-awk '/section_start.*after_script/{exit} {print}' "<job.trace>" | tail -n 200
+```
+Read(file=job.trace, offset=-200)
 ```
 
-If the tail surfaces test names or error markers, grep for all failures and for context around each one:
+When reading, ignore everything after any line containing `section_start` and `after_script` — that section is only cleanup/artifact upload noise.
 
-```bash
-# All failure lines with line numbers
-grep -n "FAILED\|\[  FAILED  \]\|error:\|Error:" "<job.trace>"
+If the tail surfaces test names or error markers, read more context around them:
 
-# Context around a specific test or error
-grep -n -A 20 "<test_name_or_error>" "<job.trace>"
+```
+Read(file=job.trace, offset=<line_number-10>, limit=40)
 ```
 
-Only read the full trace if the tail and greps are inconclusive.
+Read the full trace only if the tail is inconclusive.
 
 ### 2b — Extract failure details
 
@@ -122,24 +125,28 @@ For each failure found, extract:
 
 ### 2d — Match against issues
 
-**Tier 1 — open `bug::ci` issues** (match client-side against the pre-fetched list, no API call):
+**Tier 1 — open `bug::ci` issues** (in-context match, no command):
+
+The issues list from Step 1 is already in your context window. Scan it mentally — do not run any shell command. Look for:
 
 - **High**: suite name or exact error phrase in the issue **title**
 - **Medium**: key error phrase or component name in the issue **description**
 
-Within each confidence tier, sort by `updated_at` descending — issues not updated in a long time are less likely to be the active cause of the current failure.
+Within each confidence tier, prefer issues with a more recent `updated_at`.
 
 **Tier 2 — all open issues, keyword search** (only if Tier 1 yields no High match):
 
 ```bash
-glab api '/groups/ocudu/issues?state=opened&per_page=30&search=KEYWORD'
+python3 ${CLAUDE_SKILL_DIR}/scripts/query_issues.py --group ocudu --state opened --search "KEYWORD" --per-page 30
 ```
 
 **Tier 3 — closed `bug::ci` issues, keyword search** (only if Tiers 1–2 yield no match at all):
 
 ```bash
-glab api '/groups/ocudu/issues?labels=bug%3A%3Aci&state=closed&per_page=30&search=KEYWORD'
+python3 ${CLAUDE_SKILL_DIR}/scripts/query_issues.py --group ocudu --labels "bug::ci" --state closed --search "KEYWORD" --per-page 30
 ```
+
+All three commands return `{"issues": [...], "total": N}` — read the `issues` array.
 
 Collect the **top 3 candidates** per test, ranked by confidence (High > Medium > Low), then by tier (open bug::ci > open > closed).
 
@@ -161,9 +168,11 @@ Print a single table. Before rendering, **group rows that share the same High-co
 - **Check** — Medium or Low match(es); manually confirm before closing
 - **No match** — no existing issue found; new issue needed
 
-## Step 4 — Generate MD
+## Step 4 — Generate MD (optional)
 
-Write the output to `/tmp/triage/<pipeline_id>.md`. The file should contain:
+If the `Write` tool is available, write the output to `/tmp/triage/<pipeline_id>.md`:
 
 1. A h2 header: `## [pipeline_id](url) (ref, date)`
 2. The triage table from Step 3
+
+If the write is denied, skip silently — the table is already in the response above.
