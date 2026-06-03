@@ -1,8 +1,20 @@
 ---
-description: Triage failed jobs in a GitLab CI pipeline — classify each failure and match it to known issues in the ocudu group. Use when given a GitLab pipeline, job, or schedule URL.
+name: ci-triage
+description: >
+  Triage failed jobs in a GitLab CI pipeline — classify each failure and match it
+  to known issues in the ocudu group. Use when given a GitLab pipeline, job, or
+  schedule URL. Trigger phrases include: "triage this pipeline", "triage this job",
+  "why did this CI job fail", "what failed in this pipeline", "investigate this
+  CI failure", "check this run", or any GitLab URL containing /pipelines/ or
+  /-/jobs/ under gitlab.com/ocudu.
 argument-hint: <gitlab-pipeline-or-job-url>
 arguments: [url]
-allowed-tools: Bash, Read
+version: 0.1.0
+user-invocable: true
+context: inline
+license: BSD-3-Clause-Open-MPI
+compatibility: Requires python3 (stdlib only), glab (GitLab CLI), and jq. glab must be authenticated to gitlab.com/ocudu.
+allowed-tools: Bash(python3 *ci-triage*), Bash(glab *), Bash(jq *), Bash(awk *), Bash(grep *), Bash(tail *), Read(/tmp/triage/*), Write(/tmp/triage/*)
 ---
 
 # CI Job Failure Triage
@@ -11,7 +23,9 @@ allowed-tools: Bash, Read
 
 Triage all failed jobs in a GitLab CI pipeline. For each failure, classify it and find the best matching issue in the `gitlab.com/ocudu` group. Output is a single summary table.
 
-> **Tool constraint:** Use the fetch script for pipeline and job data. Use `glab` CLI for issue queries. Never use `curl`, `wget`, or direct HTTP calls.
+> **Prerequisites:** `python3` (stdlib), `glab` (authenticated to gitlab.com/ocudu), `jq`.
+
+> **Tool constraint:** Use the fetch script for pipeline and job data. Use `glab` CLI for issue queries. Never use `curl`, `wget`, or direct HTTP calls. Never use inline `python3 -c` for data processing — use `jq` instead.
 
 ---
 
@@ -21,8 +35,8 @@ Run both simultaneously — they are independent:
 
 **Fetch pipeline data:**
 
-```!
-python3 ~/.claude/commands/ci-triage/scripts/fetch_pipeline.py --quiet "$url"
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/fetch_pipeline.py --quiet "$url"
 ```
 
 The script accepts job URLs, pipeline URLs, and schedule API URLs. It resolves everything to a pipeline, downloads traces and matching artifact logs for all failed jobs, and returns a JSON with this shape:
@@ -149,4 +163,7 @@ Print a single table. Before rendering, **group rows that share the same High-co
 
 ## Step 4 — Generate MD
 
-Copy the generated table into a markdown file. Add a h2 item with format: `## [pipeline_id](url) (ref, date)`
+Write the output to `/tmp/triage/<pipeline_id>.md`. The file should contain:
+
+1. A h2 header: `## [pipeline_id](url) (ref, date)`
+2. The triage table from Step 3
