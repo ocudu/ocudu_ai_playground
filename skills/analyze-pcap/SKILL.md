@@ -13,7 +13,7 @@ description: >
   knowledge.
 version: 0.1.0
 user-invocable: true
-allowed-tools: Bash(ls:*), Bash(grep:*), Bash(capinfos:*), Bash(tshark:*), Bash(python3:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(realpath:*), Bash(sha256sum:*), Bash(find:*), Edit, Write
+allowed-tools: Bash(python3 *analyze-pcap/references*), Bash(ls:*), Bash(grep:*), Bash(capinfos:*), Bash(tshark:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(realpath:*), Bash(sha256sum:*), Bash(find:*), Edit, Write
 ---
 
 # Analyze OCUDU pcap files
@@ -28,7 +28,7 @@ sharing wall-clock epoch timestamps.
 ## What this skill provides
 
 This is a **knowledge module**, not a task driver. It gives the calling agent
- the context needed to analyze OCUDU pcaps:
+the context needed to analyze OCUDU pcaps:
 
 - `references/pcap-format.md` — the Upper-PDU capture format and dissector quirks.
 - `references/protocols/` and `references/procedures/` — per-protocol field/filter
@@ -42,8 +42,9 @@ This is a **knowledge module**, not a task driver. It gives the calling agent
 ## How to use it
 
 1. **Resolve the input** (§ Step 1) and **preflight** the file (§ Step 2).
-2. Follow `references/analysis-guide.md` for the activity at hand, leaning on the
-   helper scripts and the protocol/procedure references.
+2. Follow `references/analysis-guide.md` for the activity at hand — *Producing an
+   overview*, *Answering a targeted question*, or *Investigating a failure* —
+   leaning on the helper scripts and the protocol/procedure references.
 3. Apply the § Efficiency rules throughout.
 4. If analysis surfaces a generalisable learning, persist it per § Memory &
    self-maintenance.
@@ -73,10 +74,11 @@ scoped to the file at hand.
 
 ## Step 2 — Preflight
 
-Run once per session (cache in conversation memory; no need to repeat):
+Confirm `tshark` is available once and reuse the result — skip if a prior step
+already verified it this run:
 
 ```bash
-tshark -v 2>/dev/null | head -1     # confirm tshark is available (target: 4.4.7)
+tshark -v 2>/dev/null | head -1     # target: 4.4.7
 ```
 
 For every input file:
@@ -101,16 +103,6 @@ If the protocol name in the first frame's `wireshark-upper-pdu` field does not
 match the expected dissector (`ngap`, `f1ap`, `e1ap`, `mac-nr`, `rlc-nr`), fall
 back to `-d user_dlt 252,...` and document the case in
 `references/pcap-format.md`.
-
----
-
-## Step 3 — Follow the analysis guide
-
-Load `references/analysis-guide.md` and follow the section that matches the
-activity at hand — *Producing an overview*, *Answering a targeted question*, or
-*Investigating a failure*. All three lean on the helper scripts in
-`references/scripts/` and the protocol/procedure reference files in
-`references/protocols/` and `references/procedures/`.
 
 ---
 
@@ -145,57 +137,34 @@ activity at hand — *Producing an overview*, *Answering a targeted question*, o
 
 ## Memory & self-maintenance
 
-This skill improves itself over time. When analysis surfaces a generalisable
-learning — or reveals that the skill's own docs or scripts are wrong — propose the
-change and, **only after the user approves**, apply it with `Edit` (or `Write` for
-a brand-new reference file).
+When analysis surfaces a generalisable learning — or reveals a doc/script is
+wrong — propose the change and apply it **only after the user approves**, editing
+**only files inside this skill's `references/` tree**. Never touch files
+elsewhere, and never git/commit — edits are left as diffs.
 
-**Only ever edit files inside this skill's own `references/` tree.** Never touch
-files elsewhere in the repo, and never run git/commit — edits are left as diffs
-for the user to review and commit.
+**Where things go** (match the surrounding format; no dates/timestamps):
+- new/changed tshark filter or field/procedure code → `protocols/<proto>.md`
+  § Key tshark filters / § Common procedures and codes (or `tshark-recipes.md`
+  if cross-cutting)
+- Upper-PDU framing or dissector quirk → `pcap-format.md`
+- failure signature → `procedures/<proc>.md` § Failure markers
+- cross-protocol correlation pattern → `cross-pcap-correlation.md`
+- a new `procedures/<name>.md` → also add a row to `analysis-guide.md`
+  § Investigating a failure; a new `scripts/<name>.py` → document it in
+  `analysis-guide.md`, the procedure file, and `protocols/<proto>.md` § Parsing script
+- a script bug → fix it in `scripts/*.py`
 
-Three kinds of edit:
+**For every edit**: propose the path + section + exact diff → confirm via
+`AskUserQuestion` (**Apply** / **Edit wording** / **Skip**) → apply on approval →
+for a `.py` change run `python3 -m py_compile` (re-run on the input when practical)
+→ report what changed.
 
-1. **Add a learning** — put it where a reader would naturally look, matching the
-   surrounding format (extend a table row, add a line to a code block, add a bullet
-   to an existing list). **Do not prepend dates/timestamps.** Natural homes:
-   - new tshark filter → `references/protocols/<proto>.md` § Key tshark filters
-     (or `references/tshark-recipes.md` if cross-cutting)
-   - corrected field name / procedure code → the canonical row in that protocol's
-     § Key tshark filters / § Common procedures and codes
-   - Upper-PDU framing or dissector-binding quirk → `references/pcap-format.md`
-     (the relevant section, e.g. § AppArmor on Ubuntu/Debian)
-   - failure signature → `references/procedures/<proc>.md` § Failure markers
-   - cross-protocol correlation pattern → `references/cross-pcap-correlation.md`
-   If a learning is substantial and distinct, create a **new file** following the
-   template of its siblings and wire it in:
-   - new `procedures/<name>.md` → add a row to the dispatch table in
-     `references/analysis-guide.md` § Investigating a failure
-   - new `scripts/<name>.py` → document its invocation in
-     `references/analysis-guide.md`, the relevant procedure file, and
-     `protocols/<proto>.md` § Parsing script
-2. **Fix existing content** — correct a stale tshark filter, wrong field name, or
-   outdated statement; dedupe/reorganise a reference file.
-3. **Fix a helper script** — when analysis exposes a bug in
-   `references/scripts/*.py`, correct it.
+**Never** save run-specific values (RNTIs, UE-IDs, frame numbers, timestamps,
+KPIs, per-run narratives) — those don't generalise. Operator-/preference-level
+knowledge goes to the project auto-memory under
+`~/.claude/projects/<project-key>/memory/`, not `references/`.
 
-For every edit:
-- **Propose first** — show the file path, the section, and the exact text/diff.
-- **Confirm** via `AskUserQuestion`: **Apply** / **Edit wording** *(open text)* / **Skip**.
-- **Apply** only on approval.
-- **After editing a `.py` script**, run `python3 -m py_compile <script>` to confirm
-  it still compiles (and, when practical, re-run it on the current input to confirm
-  behaviour). If it breaks, fix or revert before finishing.
-- **Report** what changed.
-
-**Never** save specific RNTIs, UE-IDs, frame numbers, run timestamps, KPIs, or
-per-run root-cause narratives — those don't generalise. Operator-/preference-level
-knowledge (user shortcuts, local quirks, named conventions) goes to the project's
-auto-memory directory under `~/.claude/projects/<project-key>/memory/`, not to
-`references/`.
-
-**Maintenance trigger**: if the user says "reorganize pcap knowledge", re-read all
-files under `references/`, dedupe, fix stale tshark syntax, and report a
-one-paragraph summary of what changed — proposing each edit under the same confirm
-flow above.
+**Maintenance trigger**: on "reorganize pcap knowledge", re-read all of
+`references/`, dedupe, fix stale tshark syntax, and report a one-paragraph
+summary — each edit under the confirm flow above.
 

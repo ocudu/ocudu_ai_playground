@@ -11,57 +11,47 @@ that the § Efficiency rules apply throughout.
 ## Producing an overview
 
 Produce a quick factual summary of the capture without diving into individual
-packets.
+packets. The preflight `capinfos` (SKILL.md § Step 2) already gave each file's
+packet count and time span; the helper scripts below add the per-protocol detail
+in one pass.
 
-### capinfos roll-up
-
-For each input pcap:
-
-```bash
-capinfos -aeu <file.pcap>
-```
-
-Collect: packet count, capture duration, earliest and latest packet times.
-If a run directory was provided, run this for all 5 sibling pcaps.
-
-### per-protocol scan
-
-Run the overview helper:
+### single pcap
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py <pcap-or-dir> --top 5
+python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py <file.pcap> --top 5
 ```
 
-This emits, per pcap:
+`pcap_overview.py` emits, for the pcap:
 
-- packet count
-- first and last `frame.time_epoch`
-- distinct UE identifiers (per-protocol fields, see `references/protocols/general.md`)
+- packet count, and first/last `frame.time_epoch`
+- distinct UE identifiers per ID-type (see `references/protocols/general.md`)
 - top procedure codes (NGAP/F1AP/E1AP) or PDU types (MAC/RLC)
-- count of `Failure` / `Reject` / `Release with cause` PDUs
+- count of `Failure` / `Reject` PDUs
 
-### sibling roll-up (run directory only)
+### run directory
 
-If the input was a run dir, additionally produce:
+Run the one-shot summary — it calls `pcap_overview.py` across every sibling pcap,
+then appends the per-protocol UE-ID tables (F1AP/NGAP/E1AP):
 
-- NGAP procedures observed, with counts (e.g. `InitialContextSetup x N`,
-  `PDUSessionResourceSetup x M`, `UEContextRelease x K`).
-- F1AP UE contexts created and released.
-- E1AP bearer contexts created and released.
-- Time-aligned headline: first NGAP packet, first F1AP packet, last release,
-  capture span.
+```bash
+python3 ${CLAUDE_SKILL_DIR}/references/scripts/summary.py <run-dir> --top 5
+```
+
+(`python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py <run-dir>` alone
+also iterates every sibling pcap, if you only need the per-pcap overview without
+the UE-ID tables.)
 
 ### summary block
 
-Present the collected output as one block:
+Present the script output as one block:
 
 - Input path (single pcap or run directory).
-- One line per pcap: packets, time range, top procedure codes, failure count
-  (i.e. the `pcap_overview.py` output verbatim — don't paraphrase).
-- For a run dir: a one-line activity headline (UE counts per protocol, total
-  setup/release procedures observed) drawn from the sibling roll-up.
-- Anomalies bulleted last, one bullet each — non-zero failure counts,
-  unbalanced setup/release, sibling pcaps with non-overlapping time ranges.
+- One line per pcap: packets, time range, top procedure codes, failure count —
+  the script output verbatim, don't paraphrase.
+- Where it aids readability, map the top procedure-code numbers to names via
+  `references/protocols/<proto>.md` (e.g. `InitialContextSetup`, `UEContextRelease`).
+- Anomalies bulleted last, one each — non-zero failure counts, unbalanced
+  setup/release procedure tallies, sibling pcaps with non-overlapping time ranges.
 
 ---
 
@@ -78,17 +68,18 @@ caller should clarify scope before running broad queries.
 
 ### execute
 
-Use the helper scripts first when one fits the question:
+Use the helper scripts first when one fits the question. They live in
+`${CLAUDE_SKILL_DIR}/references/scripts/` and are run with `python3 <full path>`:
 
 - "what NGAP procedures did UE X go through?" →
-  `ngap_procedures.py <ngap.pcap> --ue <ran_ue_id>`
+  `python3 ${CLAUDE_SKILL_DIR}/references/scripts/ngap_procedures.py <ngap.pcap> --ue <ran_ue_id>`
 - "how many F1AP / NGAP / E1AP messages of each type?" →
-  `extract_proc_codes.py <pcap> --proto <ngap|f1ap|e1ap>`
+  `python3 ${CLAUDE_SKILL_DIR}/references/scripts/extract_proc_codes.py <pcap> --proto <ngap|f1ap|e1ap>`
 - "what happened around epoch T across all 5 pcaps?" →
-  `correlate_run.py <run-dir> --around <epoch> --window-ms 2000`
+  `python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --around <epoch> --window-ms 2000`
 - "which F1AP / NGAP / E1AP UEs are in this capture?" →
-  `f1ap_ue_ids.py <f1ap.pcap>`, `ngap_ue_ids.py <ngap.pcap>`,
-  `e1ap_ue_ids.py <e1ap.pcap>` (each requires the specific protocol pcap)
+  `python3 ${CLAUDE_SKILL_DIR}/references/scripts/f1ap_ue_ids.py <f1ap.pcap>` (likewise
+  `ngap_ue_ids.py` / `e1ap_ue_ids.py`, run the same way, each on its own protocol pcap)
 
 Otherwise, hand-craft a minimal `tshark` filter:
 
