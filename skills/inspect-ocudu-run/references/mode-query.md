@@ -8,14 +8,15 @@ investigation loop unless asked.
 
 Restate the question in one sentence. Decide:
 
-- **Single-artifact** — the answer lives entirely in one artifact type. Delegate
-  to the owning sub-skill via the `Skill` tool, passing the resolved path and the
-  question:
-  | Question example | Delegate to |
+- **Single-artifact** — the answer lives entirely in one artifact type. Pull in
+  the owning sub-skill's knowledge via the `Skill` tool, then answer here using
+  its search script (follow its `references/analysis-guide.md` § Answering a
+  targeted question):
+  | Question example | Knowledge module |
   |---|---|
-  | "How many handovers did the gNB do?" | `analyze-ocudu-gnb-log` (query) |
-  | "What was the UE's final NAS state?" | `analyze-amari-ue-log` (query) |
-  | "How many NGAP UEContextRelease in the pcap?" | `analyze-pcap` (query) |
+  | "How many handovers did the gNB do?" | `analyze-ocudu-gnb-log` |
+  | "What was the UE's final NAS state?" | `analyze-amari-ue-log` |
+  | "How many NGAP UEContextRelease in the pcap?" | `analyze-pcap` |
 
 - **Cross-artifact** — the answer requires lining up ≥2 sources. Run this skill's
   correlation scripts:

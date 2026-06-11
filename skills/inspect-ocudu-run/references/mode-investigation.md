@@ -1,9 +1,10 @@
 # Investigation mode
 
 Drive a root-cause investigation **at the cross-artifact level**. Single-artifact
-deep dives are delegated to the sub-skills; this skill's job is to pick the next
-lead, correlate across sources, and converge. After every meaningful finding,
-share clues + next step + why, then ask the user to confirm or redirect.
+deep dives run here using the relevant sub-skill's knowledge; this skill's job is
+to pick the next lead, correlate across sources, and converge. After every
+meaningful finding, share clues + next step + why, then ask the user to confirm
+or redirect.
 
 ## Phase A — symptom
 
@@ -33,7 +34,8 @@ Repeat until diagnosis or the user stops:
 
 1. Pick the **next smallest cross-source check** that confirms or refutes the
    current hypothesis — usually one correlation-script run, one `map_ue_ids.py`
-   pass, or one delegated sub-skill query. Don't read raw logs.
+   pass, or one single-artifact query run here with a sub-skill's knowledge.
+   Don't read raw logs.
 2. Run it. Apply the efficiency + clock/slot rules.
 3. Decide if the result is **meaningful** (locates a failure in time+source,
    confirms/refutes the hypothesis, or opens a lead in another source).
@@ -51,9 +53,9 @@ Repeat until diagnosis or the user stops:
 
 5. Immediately follow with `AskUserQuestion` offering:
    - **Continue** — proceed with the planned **Next**.
-   - **Delegate to sub-skill X** — hand the current artifact to
-     `analyze-ocudu-gnb-log` / `analyze-amari-ue-log` / `analyze-pcap` for a deep
-     single-artifact dive, then resume here with its result.
+   - **Pull in sub-skill X's knowledge** — load
+     `analyze-ocudu-gnb-log` / `analyze-amari-ue-log` / `analyze-pcap` and run a
+     deep single-artifact dive on the current artifact here, then continue.
    - **Different angle** *(open text)* — another source, UE, or time window.
    - **Skip to diagnosis** — produce the final diagnosis now.
    - **Clarify** *(open text)* — supply missing context.

@@ -1,21 +1,18 @@
 ---
 name: analyze-pcap
 description: >
-  Use this skill when the user asks to analyze, summarize, query, or investigate
-  a packet capture produced by an OCUDU application (`gnb`, `du`, `cu`, `cu_cp`,
-  `cu_up`). Trigger phrases include: "analyze this pcap", "look at the pcap",
-  "give me an overview of this pcap", "what's in this capture", "why did X
-  happen in this pcap", "investigate this run", "root-cause this failure",
-  "what went wrong with", "debug this test", "why did this test fail", or
-  a path ending in `.pcap` / `.pcapng`, or a path under `.../ocudu-gnb-*/`,
-  or a retina test log path (e.g. `retina/log/tests/*/test_gnb[...]`).
-  The skill operates in three explicit modes — `overview`, `query`,
-  `investigation` — and uses `tshark` plus helper scripts to keep analysis
-  cheap. When in doubt about scope or intent, the skill asks the user via
-  AskUserQuestion rather than assuming.
+  Knowledge module for analyzing packet captures produced by an OCUDU
+  application (`gnb`, `du`, `cu`, `cu_cp`, `cu_up`) — reference material on the
+  Upper-PDU capture format, the NGAP/F1AP/E1AP/MAC-NR/RLC-NR protocols and
+  procedures, `tshark` recipes, and helper scripts. Invoked by a higher-level
+  inspect/run orchestrator skill when it needs to analyze pcap artifacts, or
+  directly by a user to load pcap-analysis context (trigger phrases: "analyze this pcap",
+  "look at the pcap", "what's in this capture", or a path ending in `.pcap` /
+  `.pcapng`). It provides context and methodology; it does not drive an
+  interactive analysis task — the calling agent does the work using this
+  knowledge.
 version: 0.1.0
 user-invocable: true
-context: fork
 allowed-tools: Bash(ls:*), Bash(grep:*), Bash(capinfos:*), Bash(tshark:*), Bash(python3:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(realpath:*), Bash(sha256sum:*), Bash(find:*), Edit, Write
 ---
 
@@ -28,15 +25,28 @@ per file. A single test run typically produces five sibling pcaps in the same
 directory: `mac.pcap`, `rlc.pcap`, `f1ap.pcap`, `e1ap.pcap`, `ngap.pcap` — all
 sharing wall-clock epoch timestamps.
 
-## Overall flow
+## What this skill provides
 
-1. **Input resolution** — determine whether the user gave a single pcap or a
-   run directory, and confirm the file format.
-2. **Mode dispatch** — pick one of `overview`, `query`, `investigation` from
-   the user's wording; ask if ambiguous.
-3. **Mode branch** — load and follow `references/mode-{overview,query,investigation}.md`.
-4. **Persist learnings** — weave any generalisable findings into the natural place
-   in `references/` (see § Memory & self-maintenance).
+This is a **knowledge module**, not a task driver. It gives the calling agent
+ the context needed to analyze OCUDU pcaps:
+
+- `references/pcap-format.md` — the Upper-PDU capture format and dissector quirks.
+- `references/protocols/` and `references/procedures/` — per-protocol field/filter
+  references and per-procedure expected-sequence/failure-marker templates.
+- `references/tshark-recipes.md` and `references/cross-pcap-correlation.md` —
+  cross-cutting filter and correlation patterns.
+- `references/scripts/` — pre-vetted helper scripts that emit compact summaries.
+- `references/analysis-guide.md` — methodology for the three common activities
+  (producing an overview, answering a targeted question, investigating a failure).
+
+## How to use it
+
+1. **Resolve the input** (§ Step 1) and **preflight** the file (§ Step 2).
+2. Follow `references/analysis-guide.md` for the activity at hand, leaning on the
+   helper scripts and the protocol/procedure references.
+3. Apply the § Efficiency rules throughout.
+4. If analysis surfaces a generalisable learning, persist it per § Memory &
+   self-maintenance.
 
 ---
 
@@ -53,33 +63,15 @@ ls -lh <user-path>         # always
 one logical capture; cross-correlate by epoch timestamp.
 
 **Single pcap** — a path to one `.pcap` / `.pcapng`. List sibling pcaps in the
-same directory. If the user picked `investigation` mode and siblings exist,
-ask via `AskUserQuestion`:
-- **Stay scoped** — analyse only the file the user pointed at.
-- **Widen to run** — include the sibling pcaps for cross-protocol correlation.
+same directory. For a deep investigation the caller may widen scope to include
+the sibling pcaps for cross-protocol correlation; for a narrow question, stay
+scoped to the file at hand.
 
-**Neither** — ask the user to provide a path.
-
----
-
-## Step 2 — Mode dispatch
-
-Match the user's wording against this table. If multiple modes plausibly match,
-ask via `AskUserQuestion` with the three modes as options.
-
-| User wording | Mode |
-|---|---|
-| "overview", "summary", "what's in this pcap", "describe this capture", no specific question | `overview` |
-| explicit question form ("why", "when", "how many", "which", "did X happen") | `query` |
-| "investigate", "root cause", "debug", "why did this fail", "find the bug" | `investigation` |
-
-When the user passed multiple  instructions (e.g. "give me an overview and then
-investigate why the handover failed"), do them in order — overview first,
-then ask before entering investigation.
+**Neither** — the caller needs to supply a path.
 
 ---
 
-## Step 3 — Preflight
+## Step 2 — Preflight
 
 Run once per session (cache in conversation memory; no need to repeat):
 
@@ -112,17 +104,13 @@ back to `-d user_dlt 252,...` and document the case in
 
 ---
 
-## Step 4 — Mode branch
+## Step 3 — Follow the analysis guide
 
-Load the matching file and follow it:
-
-- `references/mode-overview.md`
-- `references/mode-query.md`
-- `references/mode-investigation.md`
-
-All three modes share the helper scripts in `references/scripts/` and the
-protocol/procedure reference files in `references/protocols/` and
-`references/procedures/`.
+Load `references/analysis-guide.md` and follow the section that matches the
+activity at hand — *Producing an overview*, *Answering a targeted question*, or
+*Investigating a failure*. All three lean on the helper scripts in
+`references/scripts/` and the protocol/procedure reference files in
+`references/protocols/` and `references/procedures/`.
 
 ---
 
@@ -181,10 +169,11 @@ Three kinds of edit:
    - cross-protocol correlation pattern → `references/cross-pcap-correlation.md`
    If a learning is substantial and distinct, create a **new file** following the
    template of its siblings and wire it in:
-   - new `procedures/<name>.md` → add a row to the dispatch list in
-     `references/mode-investigation.md` § Phase B
-   - new `scripts/<name>.py` → document its invocation in the relevant `mode-*.md`,
-     procedure file, and `protocols/<proto>.md` § Parsing script
+   - new `procedures/<name>.md` → add a row to the dispatch table in
+     `references/analysis-guide.md` § Investigating a failure
+   - new `scripts/<name>.py` → document its invocation in
+     `references/analysis-guide.md`, the relevant procedure file, and
+     `protocols/<proto>.md` § Parsing script
 2. **Fix existing content** — correct a stale tshark filter, wrong field name, or
    outdated statement; dedupe/reorganise a reference file.
 3. **Fix a helper script** — when analysis exposes a bug in

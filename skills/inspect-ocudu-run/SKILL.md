@@ -109,10 +109,12 @@ model), `references/ue-identity-map.md`, `references/components.md`,
 
 ---
 
-## Delegating to sub-skills (the Skill tool)
+## Pulling in sub-skill knowledge (the Skill tool)
 
-This skill invokes the per-artifact sub-skills with the `Skill` tool and lets
-them do the single-artifact work:
+The per-artifact sub-skills are **knowledge modules**, not task runners. Invoke
+one with the `Skill` tool to load its analysis methodology, format references, and
+helper-script catalogue into context, then **run the single-artifact analysis
+here yourself** using that knowledge:
 
 - OCUDU app logs / configs / metrics → `analyze-ocudu-gnb-log`
 - Amarisoft UE log → `analyze-amari-ue-log`
@@ -121,10 +123,13 @@ them do the single-artifact work:
   (registration / PDU-session / NGAP / `[E]` lines) and note the future
   `analyze-amari-5gc-log` hook.
 
-When delegating, pass the **resolved artifact path and the desired mode** in the
-Skill arguments (e.g. "overview of `<gnb.log path>`"). If a sub-skill cannot be
-invoked in the current environment, fall back to recommending the user run it,
-or run that sub-skill's summary script directly via its documented path.
+Once a sub-skill's knowledge is loaded, follow its `references/analysis-guide.md`
+for the activity at hand and run its summary/search scripts via that sub-skill's
+own dir, e.g. `python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py`
+(for `analyze-pcap`), `ocudu_log_summary.py` (gNB), `ue_log_summary.py` (UE) —
+`${CLAUDE_SKILL_DIR}` resolves to the invoked sub-skill's directory while its
+guidance is active. This skill's own `allowed-tools` already include `tshark`,
+`capinfos`, and `python3`, so the per-artifact scripts run here directly.
 
 **Do the cross-correlation yourself** — that is this skill's job and its scripts
 read the raw artifacts directly:
@@ -146,9 +151,9 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/map_ue_ids.py <ngap|f1ap|e1ap>.pc
   `utils.cache_path`). **Reuse** the sub-skills' cached outputs when present
   (`gnb-`, `amari-`, `pcap-`) instead of recomputing. The OS reaps `/tmp` on
   reboot.
-- **Never** read raw `gnb.log` / `ue.log` / pcaps into context — delegate to the
-  sub-skills (which summarise) and run the correlation scripts (which emit
-  compact tables). Cap any ad-hoc grep at 200 lines.
+- **Never** read raw `gnb.log` / `ue.log` / pcaps into context — use the
+  sub-skills' summary/search scripts (which emit compact summaries) and the
+  correlation scripts (which emit compact tables). Cap any ad-hoc grep at 200 lines.
 - **Clocks/slots**: all logs and pcap `frame.time_epoch` share **UTC**; never
   compare a `capinfos`/`tshark` human time (local-TZ display) to a log string —
   use raw `frame.time_epoch`. The exact cross-source radio key is

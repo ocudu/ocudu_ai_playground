@@ -1,24 +1,19 @@
 ---
 name: analyze-ocudu-gnb-log
 description: >
-  Use this skill when the user asks to analyze, summarize, query, or investigate
-  OCUDU gNB / DU / CU run artifacts — `gnb.log` (the per-layer log), `stdout.log`
-  (console output: cell config + metrics table), `ocudu_gnb.yml` (the YAML
-  config), or `metrics.json`. Trigger phrases include: "analyze this gnb log",
-  "look at the ocudu log", "give me an overview of this gnb run",
-  "why did the UE fail to attach", "why did the handover fail",
-  "debug this gnb test", "investigate this gnb failure",
-  "what happened in this run", "root-cause this gnb issue",
-  or a path ending in `gnb.log`, `ocudu_gnb.yml`, `stdout.log`,
-  or a path containing `ocudu-gnb-*/` or a retina test path like
-  `retina/log/tests/*/test_gnb[...]`.
-  The skill operates in three explicit modes — `overview`, `query`,
-  `investigation` — and uses grep + python3 helper scripts to keep analysis
-  cheap and token-efficient. When in doubt about scope or intent, the skill
-  asks the user via AskUserQuestion rather than assuming.
+  Knowledge module for analyzing OCUDU gNB / DU / CU run artifacts — `gnb.log`
+  (the per-layer log), `stdout.log` (console: cell config + metrics table),
+  `ocudu_gnb.yml` (the YAML config), and `metrics.json`. Provides the log/config
+  format references, per-procedure templates, grep recipes, and helper scripts.
+  Invoked by a higher-level inspect/run orchestrator skill when it needs to
+  analyze OCUDU app logs, or directly by a user to load gNB-log analysis context
+  (trigger phrases: "analyze
+  this gnb log", "look at the ocudu log", or a path ending in `gnb.log`,
+  `ocudu_gnb.yml`, `stdout.log`, or under `ocudu-gnb-*/`). It provides context
+  and methodology; it does not drive an interactive analysis task — the calling
+  agent does the work using this knowledge.
 version: 0.1.0
 user-invocable: true
-context: fork
 allowed-tools: Bash(ls:*), Bash(grep:*), Bash(python3:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sed:*), Bash(sort:*), Bash(comm:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
 ---
 
@@ -44,13 +39,29 @@ and core logs. When OCUDU symptoms point at the UE side, hand off to
 
 ---
 
-## Overall flow
+## What this skill provides
 
-1. **Input resolution** — resolve the user's path to a run directory.
-2. **Mode dispatch** — pick `overview`, `query`, or `investigation`; ask if ambiguous.
-3. **Mode branch** — load and follow `references/mode-{overview,query,investigation}.md`.
-4. **Persist learnings** — after analysis, weave any generalisable findings into
-   the natural place in `references/` (see § Memory & self-maintenance).
+This is a **knowledge module**, not a task driver. It gives the calling agent
+(usually a higher-level inspect/run orchestrator skill, sometimes a direct user
+session) the context needed to analyze OCUDU gNB/DU/CU logs:
+
+- `references/log-format.md` and `references/config-format.md` — the log layout,
+  grep recipes, and YAML/config quirks.
+- `references/procedures/` — per-procedure expected-sequence / failure-marker /
+  investigation-checklist templates.
+- `references/scripts/` — pre-vetted helper scripts (`ocudu_log_summary.py`,
+  `ocudu_log_search.py`) that emit compact summaries.
+- `references/analysis-guide.md` — methodology for the three common activities
+  (producing an overview, answering a targeted question, investigating a failure).
+
+## How to use it
+
+1. **Resolve the input** to a run directory (§ Step 1).
+2. Follow `references/analysis-guide.md` for the activity at hand, leaning on the
+   helper scripts and the format/procedure references.
+3. Apply the § Efficiency rules throughout.
+4. If analysis surfaces a generalisable learning, persist it per § Memory &
+   self-maintenance.
 
 ---
 
@@ -67,12 +78,12 @@ ls -lh <user-path>
 | Direct `ocudu_gnb.yml` / `stdout.log` | Run dir = parent directory |
 | Directory containing `gnb.log` directly | That directory is the run dir |
 | `ocudu-gnb-N-M/` component dir | Find the latest `YYYY-MM-DD_HH-MM-SS/` subdirectory containing `gnb.log` |
-| Retina test dir `test_gnb[...]` | Look for `ocudu-gnb-*/` subdirectories — if more than one, ask which |
+| Retina test dir `test_gnb[...]` | Look for `ocudu-gnb-*/` subdirectories — if more than one, the caller picks which |
 
 **Multiple OCUDU components in one test** (e.g. `ocudu-gnb-1-1`, `ocudu-gnb-1-2`,
-or a CU/DU split with `ocudu-cu-cp-*`, `ocudu-cu-up-*`, `ocudu-du-*`):
-ask via `AskUserQuestion` which component to focus on, unless the user already
-specified.
+or a CU/DU split with `ocudu-cu-cp-*`, `ocudu-cu-up-*`, `ocudu-du-*`): the
+calling agent should scope to one component before invoking this knowledge; if
+the target is unclear, it clarifies with the user.
 
 **Run dir contents check:**
 
@@ -85,30 +96,13 @@ Bail with a clear message if `gnb.log` is missing or 0 bytes.
 
 ---
 
-## Step 2 — Mode dispatch
+## Step 2 — Follow the analysis guide
 
-| User wording | Mode |
-|---|---|
-| "overview", "summary", "what happened", "describe this run", no specific question | `overview` |
-| explicit question ("why", "when", "how many", "did X happen", "which UE") | `query` |
-| "investigate", "root cause", "debug", "why did this fail", "find the bug" | `investigation` |
-
-When the user passes multiple instructions ("give me an overview then investigate
-why the HO failed"), do them in order and ask before switching modes.
-
----
-
-## Step 3 — Mode branch
-
-Load and follow the matching file:
-
-- `references/mode-overview.md`
-- `references/mode-query.md`
-- `references/mode-investigation.md`
-
-All three modes share the helper scripts in `references/scripts/`, the
-per-procedure files in `references/procedures/`, and the format reference
-`references/log-format.md` / `references/config-format.md`.
+Load `references/analysis-guide.md` and follow the section that matches the
+activity at hand — *Producing an overview*, *Answering a targeted question*, or
+*Investigating a failure*. All three lean on the helper scripts in
+`references/scripts/`, the per-procedure files in `references/procedures/`, and
+the format references `references/log-format.md` / `references/config-format.md`.
 
 ---
 
@@ -179,9 +173,9 @@ Three kinds of edit:
    If a learning is substantial and distinct, create a **new file** following the
    template of its siblings and wire it in:
    - new `procedures/<name>.md` → add a row to the dispatch table in
-     `references/mode-investigation.md` § Phase B
-   - new `scripts/<name>.py` → document its invocation in the relevant `mode-*.md`
-     and/or procedure file
+     `references/analysis-guide.md` § Investigating a failure
+   - new `scripts/<name>.py` → document its invocation in
+     `references/analysis-guide.md` and/or the relevant procedure file
 2. **Fix existing content** — correct a stale recipe, wrong field name, or
    outdated statement; dedupe/reorganise a reference file.
 3. **Fix a helper script** — when analysis exposes a parsing or logic bug in

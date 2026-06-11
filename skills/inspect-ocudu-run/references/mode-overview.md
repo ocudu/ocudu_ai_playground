@@ -13,19 +13,21 @@ python3 ${CLAUDE_SKILL_DIR}/references/scripts/run_inventory.py <run-dir>
 Note which components and artifacts are present and their clock anchors. This
 drives everything below.
 
-## Phase B — per-artifact summaries (delegate)
+## Phase B — per-artifact summaries
 
-For each component present, invoke its sub-skill in **overview mode** via the
-`Skill` tool and collect the returned summary:
+For each component present, pull in its sub-skill's knowledge via the `Skill`
+tool, then produce the per-artifact overview here using that skill's summary
+script (follow its `references/analysis-guide.md` § Producing an overview):
 
-- OCUDU app component → `analyze-ocudu-gnb-log` (overview of the `gnb.log`/run dir)
-- `amarisoft-ue-*` → `analyze-amari-ue-log` (overview)
-- `*.pcap` present → `analyze-pcap` (overview of the run dir's pcaps)
+- OCUDU app component → `analyze-ocudu-gnb-log` (run `ocudu_log_summary.py` on the
+  `gnb.log`/run dir)
+- `amarisoft-ue-*` → `analyze-amari-ue-log` (run `ue_log_summary.py`)
+- `*.pcap` present → `analyze-pcap` (run `pcap_overview.py` on the run dir's pcaps)
 - `amarisoft-5gc-*` → light-touch here: grep `mme.log` for registration /
   PDU-session / NGAP / `[E]` lines (cap at 200 lines); note the future
   `analyze-amari-5gc-log` hook.
 
-Keep each sub-skill's output as-is; don't re-derive per-artifact detail.
+Capture one headline per component; don't dump raw per-artifact detail.
 
 ## Phase C — cross-source alignment
 
