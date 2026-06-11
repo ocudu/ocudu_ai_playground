@@ -127,53 +127,33 @@ activity at hand — *Producing an overview*, *Answering a targeted question*, o
 
 ## Memory & self-maintenance
 
-This skill improves itself over time. When analysis surfaces a generalisable
-learning — or reveals that the skill's own docs or scripts are wrong — propose the
-change and, **only after the user approves**, apply it with `Edit` (or `Write` for
-a brand-new reference file).
+When analysis surfaces a generalisable learning — or reveals a doc/script is
+wrong — propose the change and apply it **only after the user approves**, editing
+**only files inside this skill's `references/` tree**. Never touch files
+elsewhere, and never git/commit — edits are left as diffs.
 
-**Only ever edit files inside this skill's own `references/` tree.** Never touch
-files elsewhere in the repo, and never run git/commit — edits are left as diffs
-for the user to review and commit.
+**Where things go** (match the surrounding format; no dates/timestamps):
+- new grep recipe → `log-format.md` § Key grep recipes
+- new field / keyword / state / event → the matching table in `log-format.md`
+  (§ Per-layer format, § NAS state values, § Key PHY channel keywords,
+  § RRC channel keywords, § Key RRC message types, § PROD sim event types)
+- failure signature / diagnostic step → `procedures/<proc>.md`
+  (§ Investigation checklist or § Expected sequence)
+- a new `procedures/<name>.md` → also add a row to `analysis-guide.md`
+  § Investigating a failure; a new `scripts/<name>.py` → document it in
+  `analysis-guide.md` and/or the procedure file
+- a script bug → fix it in `scripts/*.py`
 
-Three kinds of edit:
+**For every edit**: propose the path + section + exact diff → confirm via
+`AskUserQuestion` (**Apply** / **Edit wording** / **Skip**) → apply on approval →
+for a `.py` change run `python3 -m py_compile` (re-run on the input when practical)
+→ report what changed.
 
-1. **Add a learning** — put it where a reader would naturally look, matching the
-   surrounding format (extend a table row, add a line to a code block, add a bullet
-   to an existing list). **Do not prepend dates/timestamps.** Natural homes:
-   - new grep recipe → `references/log-format.md` § Key grep recipes
-   - new field / keyword / state / event → the matching table in
-     `references/log-format.md` (§ Per-layer format, § NAS state values, § Key PHY
-     channel keywords, § RRC channel keywords, § Key RRC message types,
-     § PROD sim event types)
-   - new failure signature / diagnostic step → the relevant
-     `references/procedures/<proc>.md` (§ Investigation checklist or § Expected sequence)
-   If a learning is substantial and distinct, create a **new file** following the
-   template of its siblings and wire it in:
-   - new `procedures/<name>.md` → add a row to the dispatch table in
-     `references/analysis-guide.md` § Investigating a failure
-   - new `scripts/<name>.py` → document its invocation in
-     `references/analysis-guide.md` and/or the relevant procedure file
-2. **Fix existing content** — correct a stale recipe, wrong field name, or
-   outdated statement; dedupe/reorganise a reference file.
-3. **Fix a helper script** — when analysis exposes a parsing or logic bug in
-   `references/scripts/*.py`, correct it.
+**Never** save run-specific values (RNTIs, UE IDs, timestamps, KPIs, per-run
+narratives) — those don't generalise. Operator-/preference-level knowledge goes
+to the project auto-memory under `~/.claude/projects/<project-key>/memory/`, not
+`references/`.
 
-For every edit:
-- **Propose first** — show the file path, the section, and the exact text/diff.
-- **Confirm** via `AskUserQuestion`: **Apply** / **Edit wording** *(open text)* / **Skip**.
-- **Apply** only on approval.
-- **After editing a `.py` script**, run `python3 -m py_compile <script>` to confirm
-  it still compiles (and, when practical, re-run it on the current input to confirm
-  behaviour). If it breaks, fix or revert before finishing.
-- **Report** what changed.
-
-**Never** save specific RNTIs, UE IDs, timestamps, KPIs, or per-run root-cause
-narratives — those do not generalise. Operator-/preference-level knowledge (user
-shortcuts, local quirks, named conventions) goes to the project's auto-memory
-directory under `~/.claude/projects/<project-key>/memory/`, not `references/`.
-
-**Maintenance trigger**: if the user says "reorganize amari-ue knowledge", re-read
-all files under `references/`, dedupe, fix stale grep patterns, and report a
-one-paragraph summary of what changed — proposing each edit under the same confirm
-flow above.
+**Maintenance trigger**: on "reorganize amari-ue knowledge", re-read all of
+`references/`, dedupe, fix stale grep patterns, and report a one-paragraph
+summary — each edit under the confirm flow above.
