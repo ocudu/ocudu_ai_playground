@@ -3,7 +3,7 @@
 Methodology for the three common UE-log analysis activities. This is reference
 knowledge for whoever holds the context (a higher-level inspect/run orchestrator
 skill or a direct user session) — pick the section that matches the task. It assumes the
-input has already been resolved to a run directory (see `SKILL.md` § Step 1) and
+input has already been resolved to a run directory (see `SKILL.md` § Resolve) and
 that the § Efficiency rules apply throughout.
 
 ---
@@ -14,13 +14,9 @@ Produce a factual summary of the UE run without diving into individual log lines
 
 ### inventory
 
-```bash
-ls -lh <run-dir>
-wc -l <run-dir>/ue.log
-```
-
-Check which files are present: `ue.log`, `stdout.log`, `amarisoft_ue.cfg`,
-`metrics.json`.
+The § Resolve step already reported the run dir and which of `ue.log`,
+`stdout.log`, `amarisoft_ue.cfg` are present. (Ignore `metrics.json` — it is empty
+in UE runs.)
 
 ### run summary script
 

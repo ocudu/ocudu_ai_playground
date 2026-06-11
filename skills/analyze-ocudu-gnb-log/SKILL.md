@@ -56,53 +56,36 @@ session) the context needed to analyze OCUDU gNB/DU/CU logs:
 
 ## How to use it
 
-1. **Resolve the input** to a run directory (§ Step 1).
-2. Follow `references/analysis-guide.md` for the activity at hand, leaning on the
-   helper scripts and the format/procedure references.
+1. **Resolve** the input to a run directory (§ Resolve).
+2. Follow `references/analysis-guide.md` for the activity at hand — *Producing an
+   overview*, *Answering a targeted question*, or *Investigating a failure* —
+   leaning on the helper scripts and the format/procedure references.
 3. Apply the § Efficiency rules throughout.
 4. If analysis surfaces a generalisable learning, persist it per § Memory &
    self-maintenance.
 
 ---
 
-## Step 1 — Input resolution
+## Resolve
+
+One script resolves the input and inventories the run:
 
 ```bash
-realpath <user-path>
-ls -lh <user-path>
+python3 ${CLAUDE_SKILL_DIR}/references/scripts/resolve.py <path>
 ```
 
-| Input | Resolution |
-|---|---|
-| Direct `gnb.log` file | Run dir = parent directory |
-| Direct `ocudu_gnb.yml` / `stdout.log` | Run dir = parent directory |
-| Directory containing `gnb.log` directly | That directory is the run dir |
-| `ocudu-gnb-N-M/` component dir | Find the latest `YYYY-MM-DD_HH-MM-SS/` subdirectory containing `gnb.log` |
-| Retina test dir `test_gnb[...]` | Look for `ocudu-gnb-*/` subdirectories — if more than one, the caller picks which |
+It accepts a `gnb.log` file, a run directory, an `ocudu-gnb-N-M/` component dir,
+or a Retina `test_gnb[...]` dir, and resolves to the latest run directory holding
+a `gnb.log`. It prints the resolved run dir, the analysis artifacts present
+(`gnb.log`, `stdout.log`, `ocudu_gnb.yml`, `metrics.json`), and a `verdict:`
+line; it exits non-zero (`BAIL`) if no `gnb.log` is found or it is empty.
+**Bail if the verdict is not OK.** (gNB logs are plain text — there is nothing to
+validate beyond presence, so this is resolution + inventory, not a preflight.)
 
-**Multiple OCUDU components in one test** (e.g. `ocudu-gnb-1-1`, `ocudu-gnb-1-2`,
-or a CU/DU split with `ocudu-cu-cp-*`, `ocudu-cu-up-*`, `ocudu-du-*`): the
-calling agent should scope to one component before invoking this knowledge; if
-the target is unclear, it clarifies with the user.
-
-**Run dir contents check:**
-
-```bash
-ls -lh <run-dir>
-wc -l <run-dir>/gnb.log
-```
-
-Bail with a clear message if `gnb.log` is missing or 0 bytes.
-
----
-
-## Step 2 — Follow the analysis guide
-
-Load `references/analysis-guide.md` and follow the section that matches the
-activity at hand — *Producing an overview*, *Answering a targeted question*, or
-*Investigating a failure*. All three lean on the helper scripts in
-`references/scripts/`, the per-procedure files in `references/procedures/`, and
-the format references `references/log-format.md` / `references/config-format.md`.
+**Scope** — when a `test_gnb[...]` dir holds more than one OCUDU app component
+(e.g. `ocudu-gnb-1-1` + `ocudu-gnb-1-2`, or a CU/DU split), `resolve.py` reports
+them and notes which one it resolved to; scope explicitly to the component you
+mean before going further.
 
 ---
 

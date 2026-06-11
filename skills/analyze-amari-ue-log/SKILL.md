@@ -50,51 +50,35 @@ session) the context needed to analyze Amarisoft UE logs:
 
 ## How to use it
 
-1. **Resolve the input** to a run directory (§ Step 1).
-2. Follow `references/analysis-guide.md` for the activity at hand, leaning on the
-   helper scripts and the format/procedure references.
+1. **Resolve** the input to a run directory (§ Resolve).
+2. Follow `references/analysis-guide.md` for the activity at hand — *Producing an
+   overview*, *Answering a targeted question*, or *Investigating a failure* —
+   leaning on the helper scripts and the format/procedure references.
 3. Apply the § Efficiency rules throughout.
 4. If analysis surfaces a generalisable learning, persist it per § Memory &
    self-maintenance.
 
 ---
 
-## Step 1 — Input resolution
+## Resolve
+
+One script resolves the input and inventories the run:
 
 ```bash
-realpath <user-path>
-ls -lh <user-path>
+python3 ${CLAUDE_SKILL_DIR}/references/scripts/resolve.py <path>
 ```
 
-| Input | Resolution |
-|---|---|
-| Direct `ue.log` file | Run dir = parent directory |
-| Directory containing `ue.log` directly | That directory is the run dir |
-| `amarisoft-ue-N/` component dir | Find the latest `YYYY-MM-DD_HH-MM-SS/` subdirectory |
-| Retina test dir `test_gnb[...]` | Look for `amarisoft-ue-*/` subdirectories |
+It accepts a `ue.log` file, a run directory, an `amarisoft-ue-N/` component dir,
+or a Retina `test_gnb[...]` dir, and resolves to the latest run directory holding
+a `ue.log`. It prints the resolved run dir, the analysis artifacts present
+(`ue.log`, `stdout.log`, `amarisoft_ue.cfg`), and a `verdict:` line; it exits
+non-zero (`BAIL`) if no `ue.log` is found or it is empty. **Bail if the verdict is
+not OK.** (UE logs are plain text — there is nothing to validate beyond presence,
+so this is resolution + inventory, not a preflight.)
 
-**Multiple UE components in one test** (e.g. `amarisoft-ue-1`, `amarisoft-ue-2`):
-the calling agent should scope to one UE component before invoking this
-knowledge; if the target is unclear, it clarifies with the user.
-
-**Run dir contents check:**
-
-```bash
-ls -lh <run-dir>
-wc -l <run-dir>/ue.log
-```
-
-Bail with a clear message if `ue.log` is missing or 0 bytes.
-
----
-
-## Step 2 — Follow the analysis guide
-
-Load `references/analysis-guide.md` and follow the section that matches the
-activity at hand — *Producing an overview*, *Answering a targeted question*, or
-*Investigating a failure*. All three lean on the helper scripts in
-`references/scripts/` and the procedure/format reference files in
-`references/procedures/` and `references/log-format.md`.
+**Scope** — when a `test_gnb[...]` dir holds more than one UE component (e.g.
+`amarisoft-ue-1` + `amarisoft-ue-2`), `resolve.py` reports them and notes which
+one it resolved to; scope explicitly to the UE you mean before going further.
 
 ---
 
@@ -110,8 +94,8 @@ activity at hand — *Producing an overview*, *Answering a targeted question*, o
   `amari-` prefix on files you write here (e.g. `amari-summary-<sha>.txt`,
   `amari-search-<sha>.txt`). The OS reaps `/tmp` on reboot — no manual
   cleanup needed.
-- **Never** read raw `ue.log` into context — it can be 90k–200k+ lines.
-  Always grep for specific patterns or use the summary script.
+- **Never** read raw `ue.log` into context — it can be more than 100k lines.
+  Always grep for specific patterns or use a helper script.
 - **Cap** any grep output at 200 lines with `| head -n 200`; for larger results
   write to `<cache-dir>/amari-<purpose>-<sha>.txt` and report the path.
 - **Prefer** the helper scripts in `references/scripts/` over hand-crafted
