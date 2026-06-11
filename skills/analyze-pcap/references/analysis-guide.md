@@ -3,7 +3,7 @@
 Methodology for the three common pcap-analysis activities. This is reference
 knowledge for whoever holds the context (a higher-level inspect/run orchestrator
 skill or a direct user session) — pick the section that matches the task. It assumes the
-input has already been resolved and preflighted (see `SKILL.md` §§ Step 1–2) and
+input has already been resolved and preflighted (see `SKILL.md` § Step 1) and
 that the § Efficiency rules apply throughout.
 
 ---
@@ -11,8 +11,8 @@ that the § Efficiency rules apply throughout.
 ## Producing an overview
 
 Produce a quick factual summary of the capture without diving into individual
-packets. The preflight `capinfos` (SKILL.md § Step 2) already gave each file's
-packet count and time span; the helper scripts below add the per-protocol detail
+packets. Preflight (SKILL.md § Step 1) already confirmed each file's format; the
+helper scripts below give the packet counts, time spans, and per-protocol detail
 in one pass.
 
 ### single pcap

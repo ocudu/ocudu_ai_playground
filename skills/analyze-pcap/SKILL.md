@@ -41,7 +41,7 @@ the context needed to analyze OCUDU pcaps:
 
 ## How to use it
 
-1. **Resolve the input** (§ Step 1) and **preflight** the file (§ Step 2).
+1. **Resolve & preflight** the input (§ Step 1).
 2. Follow `references/analysis-guide.md` for the activity at hand — *Producing an
    overview*, *Answering a targeted question*, or *Investigating a failure* —
    leaning on the helper scripts and the protocol/procedure references.
@@ -51,58 +51,28 @@ the context needed to analyze OCUDU pcaps:
 
 ---
 
-## Step 1 — Input resolution
+## Step 1 — Resolve & preflight
+
+One script resolves the input and validates it:
 
 ```bash
-realpath <user-path>
-file <user-path>           # if a file
-ls -lh <user-path>         # always
+python3 ${CLAUDE_SKILL_DIR}/references/scripts/preflight.py <pcap-or-run-dir>
 ```
 
-**Run directory** — a directory containing at least two of
-`{mac.pcap, rlc.pcap, f1ap.pcap, e1ap.pcap, ngap.pcap}`. Treat all five as
-one logical capture; cross-correlate by epoch timestamp.
+It classifies the input (single pcap / run directory / neither), confirms
+`tshark` is available, and per target pcap checks it is non-empty, uses the
+Wireshark **Upper-PDU** (DLT 252) framing, and binds a known 3GPP dissector
+(`ngap`/`f1ap`/`e1ap`/`mac-nr`/`rlc-nr`) on the first frame. It prints the
+resolved kind, the sibling pcaps present, the tshark version, and a per-file
+`OK`/`FAIL` line, ending in `verdict: OK` or `verdict: BAIL` (non-zero exit).
+**Bail if the verdict is not OK** — a `FAIL` with an unexpected/missing dissector
+usually means the Upper-PDU dispatcher needs `-d user_dlt 252,...`; document such
+a case in `references/pcap-format.md`.
 
-**Single pcap** — a path to one `.pcap` / `.pcapng`. List sibling pcaps in the
-same directory. For a deep investigation the caller may widen scope to include
-the sibling pcaps for cross-protocol correlation; for a narrow question, stay
-scoped to the file at hand.
-
-**Neither** — the caller needs to supply a path.
-
----
-
-## Step 2 — Preflight
-
-Confirm `tshark` is available once and reuse the result — skip if a prior step
-already verified it this run:
-
-```bash
-tshark -v 2>/dev/null | head -1     # target: 4.4.7
-```
-
-For every input file:
-
-```bash
-capinfos -aeucz <file.pcap>
-```
-
-Bail with a clear message if:
-- File size is 0.
-- `capinfos` reports a link layer other than `Wireshark Upper PDU` (DLT 252).
-- The file does not exist.
-
-On the first pcap of the session, confirm the Upper-PDU dispatcher binds to a
-3GPP dissector by inspecting one frame:
-
-```bash
-tshark -r <file.pcap> -V -c 1 2>/dev/null | head -40
-```
-
-If the protocol name in the first frame's `wireshark-upper-pdu` field does not
-match the expected dissector (`ngap`, `f1ap`, `e1ap`, `mac-nr`, `rlc-nr`), fall
-back to `-d user_dlt 252,...` and document the case in
-`references/pcap-format.md`.
+**Scope** — a run directory's five pcaps (`mac`, `rlc`, `f1ap`, `e1ap`, `ngap`)
+are one logical capture, cross-correlated by epoch timestamp. For a single pcap:
+for a deep investigation, widen to the reported run-dir siblings for
+cross-protocol correlation; for a narrow question, stay scoped to the file at hand.
 
 ---
 
