@@ -30,6 +30,63 @@ from typing import Iterable, Iterator, Sequence
 
 PCAP_NAMES = ("mac.pcap", "rlc.pcap", "f1ap.pcap", "e1ap.pcap", "ngap.pcap")
 
+# procedureCode -> human name, per protocol. Canonical source is each protocol's
+# reference doc § Common procedures and codes (references/protocols/<proto>.md);
+# keep this mirror in sync when a code/name there changes. Unknown codes fall
+# back to the bare number via proc_name().
+PROC_CODE_NAMES: dict[str, dict[int, str]] = {
+    "ngap": {
+        0: "AMFConfigurationUpdate",
+        1: "RANConfigurationUpdate",
+        4: "DownlinkNASTransport",
+        14: "InitialContextSetup",
+        15: "InitialUEMessage",
+        16: "NASNonDeliveryIndication",
+        21: "NGSetup",
+        27: "Paging",
+        29: "PDUSessionResourceSetup",
+        36: "UEContextModification",
+        41: "UEContextRelease",
+        44: "UERadioCapabilityInfoIndication",
+        46: "UplinkNASTransport",
+    },
+    "f1ap": {
+        1: "F1Setup",
+        5: "UEContextSetup",
+        6: "UEContextRelease",
+        7: "UEContextModification",
+        11: "InitialULRRCMessageTransfer",
+        12: "DLRRCMessageTransfer",
+        13: "ULRRCMessageTransfer",
+    },
+    "e1ap": {
+        3: "gNB-CU-UP-E1Setup",
+        4: "gNB-CU-CP-E1Setup",
+        5: "gNB-CU-UP-ConfigurationUpdate",
+        6: "gNB-CU-CP-ConfigurationUpdate",
+        7: "E1Release",
+        8: "bearerContextSetup",
+        9: "bearerContextModification",
+        10: "bearerContextModificationRequired",
+        11: "bearerContextRelease",
+        12: "bearerContextReleaseRequest",
+    },
+}
+
+
+def proc_name(proto: str, code: str | int) -> str:
+    """Render a procedureCode as 'Name(code)', or the bare code if unknown.
+
+    `proto` is one of ngap/f1ap/e1ap; `code` may be a string (as tshark emits) or
+    an int. Unknown protocols/codes return the code unchanged so nothing is lost.
+    """
+    try:
+        c = int(code)
+    except (TypeError, ValueError):
+        return str(code)
+    name = PROC_CODE_NAMES.get(proto, {}).get(c)
+    return f"{name}({c})" if name else str(c)
+
 # Per-session cache root, shared with the analyze-amari-ue-log and
 # analyze-ocudu-gnb-log skills.
 # CLAUDE_CODE_TMPDIR (e.g. /tmp/claude-1000) is the per-user tmpdir Claude Code

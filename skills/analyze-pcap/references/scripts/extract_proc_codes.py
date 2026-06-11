@@ -80,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
         print("  (no matching rows)")
         return 0
     for code, count in counts.most_common():
-        print(f"  {code:<5} {count}")
+        print(f"  {utils.proc_name(proto, code):<32} {count}")
     return 0
 
 

@@ -3,7 +3,8 @@
 Methodology for the three common pcap-analysis activities. This is reference
 knowledge for whoever holds the context (a higher-level inspect/run orchestrator
 skill or a direct user session) — pick the section that matches the task. It assumes the
-input has already been resolved and preflighted (see `SKILL.md` § Step 1) and
+input has already been resolved and preflighted (see `SKILL.md` § Resolve &
+preflight) and
 that the § Efficiency rules apply throughout.
 
 ---
@@ -11,7 +12,7 @@ that the § Efficiency rules apply throughout.
 ## Producing an overview
 
 Produce a quick factual summary of the capture without diving into individual
-packets. Preflight (SKILL.md § Step 1) already confirmed each file's format; the
+packets. Preflight (SKILL.md § Resolve & preflight) already confirmed each file's format; the
 helper scripts below give the packet counts, time spans, and per-protocol detail
 in one pass.
 
@@ -46,10 +47,11 @@ the UE-ID tables.)
 Present the script output as one block:
 
 - Input path (single pcap or run directory).
-- One line per pcap: packets, time range, top procedure codes, failure count —
-  the script output verbatim, don't paraphrase.
-- Where it aids readability, map the top procedure-code numbers to names via
-  `references/protocols/<proto>.md` (e.g. `InitialContextSetup`, `UEContextRelease`).
+- One line per pcap: packets, time range, top procedures, failure count —
+  the script output verbatim, don't paraphrase. The scripts already print
+  procedures as `Name(code)` (e.g. `InitialContextSetup(14)`); for any bare code
+  not yet in the map, look it up in `references/protocols/<proto>.md`
+  § Common procedures and codes.
 - Anomalies bulleted last, one each — non-zero failure counts, unbalanced
   setup/release procedure tallies, sibling pcaps with non-overlapping time ranges.
 

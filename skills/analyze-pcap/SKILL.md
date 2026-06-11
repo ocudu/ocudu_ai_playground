@@ -41,7 +41,7 @@ the context needed to analyze OCUDU pcaps:
 
 ## How to use it
 
-1. **Resolve & preflight** the input (§ Step 1).
+1. **Resolve & preflight** the input (§ Resolve & preflight).
 2. Follow `references/analysis-guide.md` for the activity at hand — *Producing an
    overview*, *Answering a targeted question*, or *Investigating a failure* —
    leaning on the helper scripts and the protocol/procedure references.
@@ -51,7 +51,7 @@ the context needed to analyze OCUDU pcaps:
 
 ---
 
-## Step 1 — Resolve & preflight
+## Resolve & preflight
 
 One script resolves the input and validates it:
 
@@ -115,7 +115,9 @@ elsewhere, and never git/commit — edits are left as diffs.
 **Where things go** (match the surrounding format; no dates/timestamps):
 - new/changed tshark filter or field/procedure code → `protocols/<proto>.md`
   § Key tshark filters / § Common procedures and codes (or `tshark-recipes.md`
-  if cross-cutting)
+  if cross-cutting). A changed procedure code/name must also be mirrored in
+  `scripts/utils.py` `PROC_CODE_NAMES`, which the overview/proc-code scripts use
+  to print names.
 - Upper-PDU framing or dissector quirk → `pcap-format.md`
 - failure signature → `procedures/<proc>.md` § Failure markers
 - cross-protocol correlation pattern → `cross-pcap-correlation.md`

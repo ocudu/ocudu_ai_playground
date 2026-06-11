@@ -139,7 +139,10 @@ def render_text(summaries: list[dict]) -> str:
             if parts:
                 lines.append(f"  ues:     {'  '.join(parts)}")
         if "top_procedures" in s and s["top_procedures"]:
-            top = ", ".join(f"{code}×{count}" for code, count in s["top_procedures"])
+            top = ", ".join(
+                f"{utils.proc_name(s['proto'], code)}×{count}"
+                for code, count in s["top_procedures"]
+            )
             lines.append(f"  top:     {top}")
         if s.get("failures") is not None:
             lines.append(f"  failures: {s['failures']}")
