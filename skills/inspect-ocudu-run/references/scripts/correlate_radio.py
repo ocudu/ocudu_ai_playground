@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+
+# SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
+# SPDX-License-Identifier: BSD-3-Clause-Open-MPI
+
 """
 correlate_radio.py — Cross-correlate PHY radio events between the Amarisoft UE
 log and the OCUDU gNB log for one run.

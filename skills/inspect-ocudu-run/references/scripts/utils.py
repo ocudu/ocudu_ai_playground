@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
+# SPDX-License-Identifier: BSD-3-Clause-Open-MPI
+
 """Shared helpers for the inspect-ocudu-run cross-correlation scripts.
 
 This skill orchestrates the per-artifact sub-skills (analyze-ocudu-gnb-log,
