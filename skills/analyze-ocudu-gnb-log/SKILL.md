@@ -8,7 +8,7 @@ description: >
   the caller analyzes.
 version: 0.1.0
 user-invocable: true
-allowed-tools: Bash(python3 *analyze-ocudu-gnb-log/references*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sed:*), Bash(sort:*), Bash(comm:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
+allowed-tools: Bash(python3 *analyze-ocudu-gnb-log/scripts*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sed:*), Bash(sort:*), Bash(comm:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
 ---
 
 # Analyze OCUDU gNB logs
@@ -43,7 +43,7 @@ session) the context needed to analyze OCUDU gNB/DU/CU logs:
   grep recipes, and YAML/config quirks.
 - `references/procedures/` — per-procedure expected-sequence / failure-marker /
   investigation-checklist templates.
-- `references/scripts/` — pre-vetted helper scripts (`ocudu_log_summary.py`,
+- `scripts/` — pre-vetted helper scripts (`ocudu_log_summary.py`,
   `ocudu_log_search.py`) that emit compact summaries.
 - `references/analysis-guide.md` — methodology for the three common activities
   (producing an overview, answering a targeted question, investigating a failure).
@@ -65,7 +65,7 @@ session) the context needed to analyze OCUDU gNB/DU/CU logs:
 One script resolves the input and inventories the run:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/resolve.py <path>
+python3 ${CLAUDE_SKILL_DIR}/scripts/resolve.py <path>
 ```
 
 It accepts a `gnb.log` file, a run directory, an `ocudu-gnb-N-M/` component dir,
@@ -99,7 +99,7 @@ mean before going further.
   echoed CONFIG dump, which adds no signal beyond what's in `ocudu_gnb.yml`.
 - **Cap** any grep output at 200 lines with `| head -n 200`; for larger results
   write to `<cache-dir>/gnb-<purpose>-<sha>.txt` and report the path.
-- **Prefer** the helper scripts in `references/scripts/` over hand-crafted
+- **Prefer** the helper scripts in `scripts/` over hand-crafted
   grep chains — they emit compact, token-efficient summaries.
 - **Reuse** cached output: if a file you'd produce already exists in the cache
   dir for the same input, **post-filter** it (grep, head) instead of re-running
@@ -126,7 +126,7 @@ mean before going further.
 
 When analysis surfaces a generalisable learning — or reveals a doc/script is
 wrong — propose the change and apply it **only after the user approves**, editing
-**only files inside this skill's `references/` tree**. Never touch files
+**only files inside this skill's own `references/` and `scripts/` trees**. Never touch files
 elsewhere, and never git/commit — edits are left as diffs.
 
 **Where things go** (match the surrounding format; no dates/timestamps):

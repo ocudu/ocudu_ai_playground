@@ -45,7 +45,7 @@ tshark -r ngap.pcap \
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 5'
 
 # Use the unified timeline for one UE
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --ue <ngap-ran-ue-id>
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_run.py <run-dir> --ue <ngap-ran-ue-id>
 ```
 
 ## Cross-references

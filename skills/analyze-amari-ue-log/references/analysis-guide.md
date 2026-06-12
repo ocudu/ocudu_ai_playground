@@ -20,7 +20,7 @@ The § Resolve step already reported the run dir and which of `ue.log`,
 ### run summary script
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ue_log_summary.py <run-dir>
+python3 ${CLAUDE_SKILL_DIR}/scripts/ue_log_summary.py <run-dir>
 ```
 
 The script emits, in one pass:
@@ -107,7 +107,7 @@ searches. List candidate UE IDs (hex) with
 Use the search script first when it fits:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ue_log_search.py <ue.log> \
+python3 ${CLAUDE_SKILL_DIR}/scripts/ue_log_search.py <ue.log> \
   [--layer <NAS|RRC|PHY|MAC|PROD>] \
   [--ue <ue_id>] \
   [--cell <cell_id>] \
@@ -165,7 +165,7 @@ Establish the symptom in one short paragraph:
 If the summary script has not been run yet for this input, run it now:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ue_log_summary.py <run-dir>
+python3 ${CLAUDE_SKILL_DIR}/scripts/ue_log_summary.py <run-dir>
 ```
 
 Treat anomalies it flagged (packet loss, unexpected final NAS state, PHY errors,

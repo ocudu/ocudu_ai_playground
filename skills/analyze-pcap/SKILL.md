@@ -7,7 +7,7 @@ description: >
   inspect/run orchestrator. Provides context, not a task — the caller analyzes.
 version: 0.1.0
 user-invocable: true
-allowed-tools: Bash(python3 *analyze-pcap/references*), Bash(ls:*), Bash(grep:*), Bash(capinfos:*), Bash(tshark:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(realpath:*), Bash(sha256sum:*), Bash(find:*), Edit, Write
+allowed-tools: Bash(python3 *analyze-pcap/scripts*), Bash(ls:*), Bash(grep:*), Bash(capinfos:*), Bash(tshark:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(realpath:*), Bash(sha256sum:*), Bash(find:*), Edit, Write
 ---
 
 # Analyze OCUDU pcap files
@@ -29,7 +29,7 @@ the context needed to analyze OCUDU pcaps:
   references and per-procedure expected-sequence/failure-marker templates.
 - `references/tshark-recipes.md` and `references/cross-pcap-correlation.md` —
   cross-cutting filter and correlation patterns.
-- `references/scripts/` — pre-vetted helper scripts that emit compact summaries.
+- `scripts/` — pre-vetted helper scripts that emit compact summaries.
 - `references/analysis-guide.md` — methodology for the three common activities
   (producing an overview, answering a targeted question, investigating a failure).
 
@@ -50,7 +50,7 @@ the context needed to analyze OCUDU pcaps:
 One script resolves the input and validates it:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/preflight.py <pcap-or-run-dir>
+python3 ${CLAUDE_SKILL_DIR}/scripts/preflight.py <pcap-or-run-dir>
 ```
 
 It classifies the input (single pcap / run directory / neither), confirms
@@ -77,7 +77,7 @@ cross-protocol correlation; for a narrow question, stay scoped to the file at ha
   `${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/`.
   It is shared with the `analyze-amari-ue-log` and `analyze-ocudu-gnb-log`
   skills so all three can cross-reference cached outputs in one run. Helper scripts resolve it automatically (see
-  `references/scripts/utils.py::_CACHE_ROOT`); when spilling output yourself,
+  `scripts/utils.py::_CACHE_ROOT`); when spilling output yourself,
   write under that path with a descriptive prefix (`pcap-…`). The OS reaps
   `/tmp` on reboot — no manual cleanup needed.
 - **Never** run `tshark -V` without `-c 1` or a single-frame filter
@@ -85,7 +85,7 @@ cross-protocol correlation; for a narrow question, stay scoped to the file at ha
 - **Never** pipe an unbounded `tshark -T fields` result into context. Cap at
   200 rows with `head -n 200`; spill the rest into the cache dir as
   `pcap-cache-<sha>.tsv` and report the path.
-- **Prefer** the helper scripts in `references/scripts/` over hand-crafted
+- **Prefer** the helper scripts in `scripts/` over hand-crafted
   filter chains — they are pre-vetted, cache their tshark output, and emit
   compact summaries instead of raw frames.
 - **Reuse** the cache: if `pcap-cache-<sha>.tsv` already exists in the cache
@@ -103,7 +103,7 @@ cross-protocol correlation; for a narrow question, stay scoped to the file at ha
 
 When analysis surfaces a generalisable learning — or reveals a doc/script is
 wrong — propose the change and apply it **only after the user approves**, editing
-**only files inside this skill's `references/` tree**. Never touch files
+**only files inside this skill's own `references/` and `scripts/` trees**. Never touch files
 elsewhere, and never git/commit — edits are left as diffs.
 
 **Where things go** (match the surrounding format; no dates/timestamps):

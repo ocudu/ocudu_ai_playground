@@ -62,5 +62,5 @@ tshark -r mac.pcap --enable-heuristic mac_nr_udp -T fields -e mac-nr.rnti -e mac
     awk -F'\t' '{print $1"\t"$2}' | sort | uniq -c | sort -rn
 
 # Use the overview helper for top-level counts
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py <mac.pcap>
+python3 ${CLAUDE_SKILL_DIR}/scripts/pcap_overview.py <mac.pcap>
 ```

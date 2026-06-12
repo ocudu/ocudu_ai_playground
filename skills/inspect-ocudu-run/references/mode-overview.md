@@ -7,7 +7,7 @@ the investigation loop. Ask `AskUserQuestion` only at the end (escalation).
 ## Phase A — inventory
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/run_inventory.py <run-dir>
+python3 ${CLAUDE_SKILL_DIR}/scripts/run_inventory.py <run-dir>
 ```
 
 Note which components and artifacts are present and their clock anchors. This
@@ -32,7 +32,7 @@ Capture one headline per component; don't dump raw per-artifact detail.
 ## Phase C — cross-source alignment
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/align_clocks.py <run-dir>
+python3 ${CLAUDE_SKILL_DIR}/scripts/align_clocks.py <run-dir>
 ```
 
 Confirm the sources share UTC (log↔pcap Δ≈0) and that UE↔gNB PHY slots align.

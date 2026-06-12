@@ -107,12 +107,12 @@ grep -n "crc=FAIL" ue.log | head -20
    ```
 2. Check reconfiguration complete was sent (expected: ~10–30 ms later on target cell):
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ue_log_search.py ue.log \
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ue_log_search.py ue.log \
      --layer RRC --pattern "reconfiguration complete" --after <HO-time>
    ```
 3. Check PRACH on target cell (CFRA/CBRA RA needed for HO):
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ue_log_search.py ue.log \
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ue_log_search.py ue.log \
      --layer PHY --pattern "PRACH:" --after <HO-time>
    ```
 4. If PRACH retried many times → RA failure; if no PRACH → the UE likely used a

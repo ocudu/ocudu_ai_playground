@@ -36,7 +36,7 @@ missing.
    ```
 2. Look for `[E]` / `[C]` log lines just before the end:
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --level "E|C" --max-lines 20
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --level "E|C" --max-lines 20
    ```
 3. Check `agent-log-*.log` in the parent of the run dir — Retina records
    the SUT lifecycle:
@@ -49,8 +49,8 @@ missing.
    ```
 5. Look for hung worker hints right before the cut-off:
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "Stopping workers" --max-lines 5
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "Task worker .* finished" --max-lines 10
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --pattern "Stopping workers" --max-lines 5
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --pattern "Task worker .* finished" --max-lines 10
    ```
    If `Stopping workers...` appears but no workers report `finished`, a
    worker is wedged.

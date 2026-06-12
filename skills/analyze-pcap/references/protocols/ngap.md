@@ -72,9 +72,9 @@ tshark -r ngap.pcap -Y 'ngap.procedureCode ==  0'   # AMFConfigurationUpdate
 ## Parsing script
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ngap_procedures.py <ngap.pcap>
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ngap_procedures.py <ngap.pcap> --ue <N>
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ngap_procedures.py <ngap.pcap> --failures-only
+python3 ${CLAUDE_SKILL_DIR}/scripts/ngap_procedures.py <ngap.pcap>
+python3 ${CLAUDE_SKILL_DIR}/scripts/ngap_procedures.py <ngap.pcap> --ue <N>
+python3 ${CLAUDE_SKILL_DIR}/scripts/ngap_procedures.py <ngap.pcap> --failures-only
 
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/extract_proc_codes.py <ngap.pcap> --proto ngap
+python3 ${CLAUDE_SKILL_DIR}/scripts/extract_proc_codes.py <ngap.pcap> --proto ngap
 ```

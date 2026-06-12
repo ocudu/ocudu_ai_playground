@@ -98,7 +98,7 @@ etc. fail with `tshark: You don't have permission to read the file ...` even
 though Unix permissions allow it. `cat` on the same file works — that's the
 giveaway.
 
-The helper scripts in `references/scripts/` handle this transparently:
+The helper scripts in `scripts/` handle this transparently:
 `utils.stage_for_tshark()` hard-links (or copies on a different filesystem)
 the source pcap into the per-session cache dir's `pcap-stage/` subfolder
 (`${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/pcap-stage/<sha>-<basename>.pcap`)

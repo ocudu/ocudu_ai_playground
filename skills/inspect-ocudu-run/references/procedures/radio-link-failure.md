@@ -14,7 +14,7 @@ RLF cause (e.g. `RLF detected. Cause: 100 consecutive HARQ-ACK KOs`).
 ## Step 2 — classify the UL failure across sources
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_radio.py <run-dir> --kind pusch --rnti 0x<RNTI>
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind pusch --rnti 0x<RNTI>
 ```
 
 Read the status of the slots leading into the failure:
@@ -36,7 +36,7 @@ A UE goes silent when it stops receiving DL grants (PDCCH). Delegate to
 `analyze-ocudu-gnb-log` for the DL scheduling the gNB believed it sent. Correlate
 PDCCH/PDSCH on `(SFN.slot, RNTI)`:
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_radio.py <run-dir> --kind pdcch --rnti 0x<RNTI>
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind pdcch --rnti 0x<RNTI>
 ```
 
 ## Step 4 — reestablishment outcome

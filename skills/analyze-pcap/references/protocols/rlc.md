@@ -75,5 +75,5 @@ tshark -r rlc.pcap --enable-heuristic rlc_nr_udp \
     -e rlc-nr.ueid -e rlc-nr.bearer-type -e rlc-nr.bearer-id -e rlc-nr.mode \
     | sort | uniq -c | sort -rn
 
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py <rlc.pcap>
+python3 ${CLAUDE_SKILL_DIR}/scripts/pcap_overview.py <rlc.pcap>
 ```

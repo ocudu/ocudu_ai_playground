@@ -46,9 +46,9 @@ grep -E "ue=.*du_ue=<N>|c-rnti=0x<RNTI>.*du_ue=<N>" gnb.log
 ## Joining via pcaps
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/map_ue_ids.py f1ap.pcap   # du_ue ↔ cu_ue ↔ c_rnti
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/map_ue_ids.py ngap.pcap   # ran_ue ↔ amf_ue
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/map_ue_ids.py e1ap.pcap   # cu_cp_ue ↔ cu_up_ue
+python3 ${CLAUDE_SKILL_DIR}/scripts/map_ue_ids.py f1ap.pcap   # du_ue ↔ cu_ue ↔ c_rnti
+python3 ${CLAUDE_SKILL_DIR}/scripts/map_ue_ids.py ngap.pcap   # ran_ue ↔ amf_ue
+python3 ${CLAUDE_SKILL_DIR}/scripts/map_ue_ids.py e1ap.pcap   # cu_cp_ue ↔ cu_up_ue
 ```
 
 Protocol is auto-detected from the filename. Each prints one line per

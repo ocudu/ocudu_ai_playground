@@ -61,23 +61,23 @@ After step 31 the UE is fully attached and DRBs are operational. The gNB's
 
 1. Did PRACH happen?
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --layer SCHED --pattern "prach\(" --count
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --layer SCHED --pattern "prach\(" --count
    ```
 2. Did the UE get a C-RNTI?
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "UE created" --max-lines 20
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --pattern "UE created" --max-lines 20
    ```
 3. Did rrcSetupComplete arrive?
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "rrcSetupComplete" --max-lines 10
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --pattern "rrcSetupComplete" --max-lines 10
    ```
 4. Was Initial Context Setup acknowledged?
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern '"Initial Context Setup Routine"' --max-lines 20
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --pattern '"Initial Context Setup Routine"' --max-lines 20
    ```
 5. If a specific UE failed, scope everything by `c-rnti` and look at the gap:
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --rnti <hex> --max-lines 200
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --rnti <hex> --max-lines 200
    ```
 6. Cross-correlate with the Amarisoft UE log via `analyze-amari-ue-log` — the
    UE log shows whether the UE actually decoded MSG4, whether it sent
@@ -95,9 +95,9 @@ When `Initial Context Setup OK : K/N` shows K < N, the gap is the most
 useful single signal. Find which UEs missed it:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "UE created" \
+python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --pattern "UE created" \
     | grep -oE "ue=[0-9]+" | sort -u > /tmp/created.txt
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern '"Initial Context Setup Routine" finished' \
+python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --pattern '"Initial Context Setup Routine" finished' \
     | grep -oE "ue=[0-9]+" | sort -u > /tmp/done.txt
 comm -23 /tmp/created.txt /tmp/done.txt
 ```

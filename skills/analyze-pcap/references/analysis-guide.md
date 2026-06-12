@@ -19,7 +19,7 @@ in one pass.
 ### single pcap
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py <file.pcap> --top 5
+python3 ${CLAUDE_SKILL_DIR}/scripts/pcap_overview.py <file.pcap> --top 5
 ```
 
 `pcap_overview.py` emits, for the pcap:
@@ -35,10 +35,10 @@ Run the one-shot summary — it calls `pcap_overview.py` across every sibling pc
 then appends the per-protocol UE-ID tables (F1AP/NGAP/E1AP):
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/summary.py <run-dir> --top 5
+python3 ${CLAUDE_SKILL_DIR}/scripts/summary.py <run-dir> --top 5
 ```
 
-(`python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py <run-dir>` alone
+(`python3 ${CLAUDE_SKILL_DIR}/scripts/pcap_overview.py <run-dir>` alone
 also iterates every sibling pcap, if you only need the per-pcap overview without
 the UE-ID tables.)
 
@@ -71,16 +71,16 @@ caller should clarify scope before running broad queries.
 ### execute
 
 Use the helper scripts first when one fits the question. They live in
-`${CLAUDE_SKILL_DIR}/references/scripts/` and are run with `python3 <full path>`:
+`${CLAUDE_SKILL_DIR}/scripts/` and are run with `python3 <full path>`:
 
 - "what NGAP procedures did UE X go through?" →
-  `python3 ${CLAUDE_SKILL_DIR}/references/scripts/ngap_procedures.py <ngap.pcap> --ue <ran_ue_id>`
+  `python3 ${CLAUDE_SKILL_DIR}/scripts/ngap_procedures.py <ngap.pcap> --ue <ran_ue_id>`
 - "how many F1AP / NGAP / E1AP messages of each type?" →
-  `python3 ${CLAUDE_SKILL_DIR}/references/scripts/extract_proc_codes.py <pcap> --proto <ngap|f1ap|e1ap>`
+  `python3 ${CLAUDE_SKILL_DIR}/scripts/extract_proc_codes.py <pcap> --proto <ngap|f1ap|e1ap>`
 - "what happened around epoch T across all 5 pcaps?" →
-  `python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --around <epoch> --window-ms 2000`
+  `python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_run.py <run-dir> --around <epoch> --window-ms 2000`
 - "which F1AP / NGAP / E1AP UEs are in this capture?" →
-  `python3 ${CLAUDE_SKILL_DIR}/references/scripts/f1ap_ue_ids.py <f1ap.pcap>` (likewise
+  `python3 ${CLAUDE_SKILL_DIR}/scripts/f1ap_ue_ids.py <f1ap.pcap>` (likewise
   `ngap_ue_ids.py` / `e1ap_ue_ids.py`, run the same way, each on its own protocol pcap)
 
 Otherwise, hand-craft a minimal `tshark` filter:

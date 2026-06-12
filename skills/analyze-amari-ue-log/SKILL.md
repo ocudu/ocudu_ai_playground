@@ -7,7 +7,7 @@ description: >
   inspect/run orchestrator. Provides context, not a task — the caller analyzes.
 version: 0.1.0
 user-invocable: true
-allowed-tools: Bash(python3 *analyze-amari-ue-log/references*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sort:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
+allowed-tools: Bash(python3 *analyze-amari-ue-log/scripts*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sort:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
 ---
 
 # Analyze Amarisoft UE logs
@@ -36,7 +36,7 @@ session) the context needed to analyze Amarisoft UE logs:
 - `references/log-format.md` — the per-layer log layout and grep recipes.
 - `references/procedures/` — per-procedure expected-sequence / failure-marker /
   investigation-checklist templates.
-- `references/scripts/` — pre-vetted helper scripts (`resolve.py`,
+- `scripts/` — pre-vetted helper scripts (`resolve.py`,
   `ue_log_summary.py`, `ue_log_search.py`) that emit compact summaries.
 - `references/analysis-guide.md` — methodology for the three common activities
   (producing an overview, answering a targeted question, investigating a failure).
@@ -58,7 +58,7 @@ session) the context needed to analyze Amarisoft UE logs:
 One script resolves the input and inventories the run:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/resolve.py <path>
+python3 ${CLAUDE_SKILL_DIR}/scripts/resolve.py <path>
 ```
 
 It accepts a `ue.log` file, a run directory, an `amarisoft-ue-N/` component dir,
@@ -91,7 +91,7 @@ one it resolved to; scope explicitly to the UE you mean before going further.
   Always grep for specific patterns or use a helper script.
 - **Cap** any grep output at 200 lines with `| head -n 200`; for larger results
   write to `<cache-dir>/amari-<purpose>-<sha>.txt` and report the path.
-- **Prefer** the helper scripts in `references/scripts/` over hand-crafted
+- **Prefer** the helper scripts in `scripts/` over hand-crafted
   grep chains — they emit compact, token-efficient summaries.
 - **Reuse** cached output: if a file you'd produce already exists in the cache
   dir for the same input, **post-filter** it (grep, head) instead of re-running
@@ -106,7 +106,7 @@ one it resolved to; scope explicitly to the UE you mean before going further.
 
 When analysis surfaces a generalisable learning — or reveals a doc/script is
 wrong — propose the change and apply it **only after the user approves**, editing
-**only files inside this skill's `references/` tree**. Never touch files
+**only files inside this skill's own `references/` and `scripts/` trees**. Never touch files
 elsewhere, and never git/commit — edits are left as diffs.
 
 **Where things go** (match the surrounding format; no dates/timestamps):

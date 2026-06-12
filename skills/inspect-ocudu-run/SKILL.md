@@ -67,7 +67,7 @@ realpath <user-path>
 Then inventory the run (the dispatch backbone for every mode):
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/run_inventory.py <path>
+python3 ${CLAUDE_SKILL_DIR}/scripts/run_inventory.py <path>
 ```
 
 This lists the components present, each component's latest run subdir, the
@@ -105,7 +105,7 @@ Load and follow the matching file:
 Shared references: `references/cross-correlation.md` (the master clock/slot/ID
 model), `references/ue-identity-map.md`, `references/components.md`,
 `references/ci-retrieval.md`, the cross-artifact traces in
-`references/procedures/`, and the scripts in `references/scripts/`.
+`references/procedures/`, and the scripts in `scripts/`.
 
 ---
 
@@ -125,7 +125,7 @@ here yourself** using that knowledge:
 
 Once a sub-skill's knowledge is loaded, follow its `references/analysis-guide.md`
 for the activity at hand and run its summary/search scripts via that sub-skill's
-own dir, e.g. `python3 ${CLAUDE_SKILL_DIR}/references/scripts/pcap_overview.py`
+own dir, e.g. `python3 ${CLAUDE_SKILL_DIR}/scripts/pcap_overview.py`
 (for `analyze-pcap`), `ocudu_log_summary.py` (gNB), `ue_log_summary.py` (UE) —
 `${CLAUDE_SKILL_DIR}` resolves to the invoked sub-skill's directory while its
 guidance is active. This skill's own `allowed-tools` already include `tshark`,
@@ -135,9 +135,9 @@ guidance is active. This skill's own `allowed-tools` already include `tshark`,
 read the raw artifacts directly:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/align_clocks.py <run-dir>
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_radio.py <run-dir> --kind pusch
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/map_ue_ids.py <ngap|f1ap|e1ap>.pcap
+python3 ${CLAUDE_SKILL_DIR}/scripts/align_clocks.py <run-dir>
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind pusch
+python3 ${CLAUDE_SKILL_DIR}/scripts/map_ue_ids.py <ngap|f1ap|e1ap>.pcap
 ```
 
 ---
@@ -175,8 +175,8 @@ and, **only after the user approves**, apply it with `Edit`/`Write`.
   `references/` tree (`analyze-ocudu-gnb-log`, `analyze-amari-ue-log`,
   `analyze-pcap`). This skill may write there on approval, per the user's intent.
 - A learning about **cross-correlation** (clock/slot alignment, identifier
-  joining, a multi-source procedure trace, a correlation-script fix) → keep it in
-  **this** skill's `references/`.
+  joining, a multi-source procedure trace) → keep it in **this** skill's
+  `references/`; a correlation-script fix goes in **this** skill's `scripts/`.
 
 For every edit: **propose first** (path, section, exact diff) → **confirm** via
 `AskUserQuestion` (**Apply** / **Edit wording** *(open)* / **Skip**) → **apply**

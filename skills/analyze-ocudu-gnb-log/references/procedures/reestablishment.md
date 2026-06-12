@@ -43,7 +43,7 @@ gNB ID), it falls back to a full RRC Setup:
 
 1. Find every reestablishment attempt:
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "rrcReestablishment" --max-lines 30
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --pattern "rrcReestablishment" --max-lines 30
    ```
 2. For each, capture the cause carried in the request body. The cause
    appears as a continuation line under `rrcReestablishmentRequest`:
@@ -53,11 +53,11 @@ gNB ID), it falls back to a full RRC Setup:
 3. Match old → new c-rnti via `CU-CP` log lines, then trace the original UE
    to see what happened just before:
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --rnti <old_hex> --before <reest_ts> --max-lines 80
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --rnti <old_hex> --before <reest_ts> --max-lines 80
    ```
 4. PHY/MAC view of the radio link in the seconds before the reestablishment:
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --layer PHY --rnti <old_hex> \
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --layer PHY --rnti <old_hex> \
        --after <T-2s> --before <reest_ts> --pattern "crc=KO|sr=yes" --max-lines 30
    ```
 5. Cross-correlate with the Amarisoft UE log — the UE log emits

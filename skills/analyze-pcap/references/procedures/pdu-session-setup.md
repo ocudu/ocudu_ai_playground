@@ -44,7 +44,7 @@ tshark -r ngap.pcap \
 tshark -r e1ap.pcap -Y 'e1ap.procedureCode == 8 || e1ap.procedureCode == 9 || e1ap.procedureCode == 10 || e1ap.procedureCode == 11 || e1ap.procedureCode == 12'
 
 # Unified timeline around the request
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --around <T0> --window-ms 5000
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_run.py <run-dir> --around <T0> --window-ms 5000
 ```
 
 ## Cross-references

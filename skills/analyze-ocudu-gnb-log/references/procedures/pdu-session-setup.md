@@ -44,19 +44,19 @@ as `[GTPU] [I] ue=N DL teid=0x...: RX SDU. sdu_len=N qos_flow=QFI=N`.
 
 1. Did the bearer context come up?
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "BearerContext(Setup|Modification)(Request|Response)" --max-lines 40
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --pattern "BearerContext(Setup|Modification)(Request|Response)" --max-lines 40
    ```
 2. Did the F1-U tunnel attach?
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "Attaching dl_teid|F1-U tunnel" --max-lines 20
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --pattern "Attaching dl_teid|F1-U tunnel" --max-lines 20
    ```
 3. Is the user-plane flowing?
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --layer GTPU --max-lines 30
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --layer GTPU --max-lines 30
    ```
 4. Did the reconfiguration land?
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "rrcReconfiguration(Complete)?" --max-lines 30
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --pattern "rrcReconfiguration(Complete)?" --max-lines 30
    ```
 5. If E1AP layer is at warning, enable `e1ap_level: info` in `ocudu_gnb.yml`
    for the next run, or analyse the `e1ap.pcap` via `analyze-pcap`.

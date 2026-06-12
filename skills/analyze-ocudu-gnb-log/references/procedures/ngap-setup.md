@@ -31,11 +31,11 @@ completed` followed by `==== gNB started ===`.
 
 1. Confirm SCTP layer:
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --layer SCTP-GW --max-lines 20
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --layer SCTP-GW --max-lines 20
    ```
 2. Confirm NGAP layer is enabled and what it logged:
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --layer NGAP --max-lines 20
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py gnb.log --layer NGAP --max-lines 20
    ```
 3. Cross-check the AMF endpoint in `ocudu_gnb.yml`:
    ```bash

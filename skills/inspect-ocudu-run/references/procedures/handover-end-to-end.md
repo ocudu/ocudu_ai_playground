@@ -38,9 +38,9 @@ from `gnb.log`. In that case:
 #   delegate to analyze-amari-ue-log (CC change, PRACH on target)
 # gNB side: HO command + target scheduling
 #   delegate to analyze-ocudu-gnb-log; if RRC at warning, use the F1AP pcap:
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/map_ue_ids.py f1ap.pcap | grep -E "UEContextModification|Handover"
+python3 ${CLAUDE_SKILL_DIR}/scripts/map_ue_ids.py f1ap.pcap | grep -E "UEContextModification|Handover"
 # Radio on the target cell for the new C-RNTI:
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_radio.py <run-dir> --kind pusch --rnti 0x<T2>
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind pusch --rnti 0x<T2>
 ```
 
 ## Failure attribution

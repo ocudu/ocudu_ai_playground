@@ -66,7 +66,7 @@ f1ap.pcap (src)     UEContextReleaseComplete                   (T0 + ~200 ms)
 tshark -r ngap.pcap -Y 'ngap.procedureCode == 12 || ngap.procedureCode == 13'
 
 # Source/target context lifecycle in one timeline
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> \
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_run.py <run-dir> \
     --ue <ngap-ran-ue-id> --window-ms 1000
 ```
 

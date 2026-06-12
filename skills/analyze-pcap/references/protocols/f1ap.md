@@ -87,6 +87,6 @@ Verified against an OCUDU `f1ap.pcap` capture:
 ## Parsing script
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/extract_proc_codes.py <f1ap.pcap> --proto f1ap
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> --protocols f1ap
+python3 ${CLAUDE_SKILL_DIR}/scripts/extract_proc_codes.py <f1ap.pcap> --proto f1ap
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_run.py <run-dir> --protocols f1ap
 ```

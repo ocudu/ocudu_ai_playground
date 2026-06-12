@@ -23,7 +23,7 @@ only — don't try to merge them in an overview).
 ### run summary script
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_summary.py <run-dir>
+python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_summary.py <run-dir>
 ```
 
 The script emits, in one pass:
@@ -128,7 +128,7 @@ clarify scope before running broad searches. Helpers for listing candidates:
 Use the search script first when it fits:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py <gnb.log> \
+python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_search.py <gnb.log> \
   [--layer <RRC|NGAP|F1AP|E1AP|MAC|SCHED|PHY|PDCP|CU-CP|CU-UP|DU|...>] \
   [--ue <N>] \
   [--rnti <hex>] \
@@ -213,7 +213,7 @@ Establish the symptom in one short paragraph:
 If the summary script has not been run yet for this input, run it now:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_summary.py <run-dir>
+python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu_log_summary.py <run-dir>
 ```
 
 Treat anomalies it flagged (warnings/errors, late HARQs, NGAP setup failure,

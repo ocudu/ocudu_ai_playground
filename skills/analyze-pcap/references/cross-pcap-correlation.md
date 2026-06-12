@@ -53,9 +53,9 @@ For per-protocol UE lists, run the three protocol-specific scripts against
 each pcap individually:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/f1ap_ue_ids.py <run-dir>/f1ap.pcap
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/ngap_ue_ids.py <run-dir>/ngap.pcap
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/e1ap_ue_ids.py <run-dir>/e1ap.pcap
+python3 ${CLAUDE_SKILL_DIR}/scripts/f1ap_ue_ids.py <run-dir>/f1ap.pcap
+python3 ${CLAUDE_SKILL_DIR}/scripts/ngap_ue_ids.py <run-dir>/ngap.pcap
+python3 ${CLAUDE_SKILL_DIR}/scripts/e1ap_ue_ids.py <run-dir>/e1ap.pcap
 ```
 
 To join them, eyeball the timestamps (first sightings should align within
@@ -67,7 +67,7 @@ To join them, eyeball the timestamps (first sightings should align within
 For investigation drilling around a known failure event at epoch `T_fail`:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> \
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_run.py <run-dir> \
     --around <T_fail> --window-ms 2000
 ```
 
