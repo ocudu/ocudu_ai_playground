@@ -6,14 +6,13 @@ or by the gNB (RLF detected). The cause IE distinguishes the two.
 ## Trigger events
 
 Codes 41 (NGAP UEContextRelease) and 6 (F1AP UEContextRelease) are verified
-against an OCUDU capture. Code 40 (NGAP UEContextReleaseRequest) is from the
-3GPP standard, not yet verified locally — check via `tshark -V` if a run
-exhibits it.
+against an OCUDU capture. Code 42 (NGAP UEContextReleaseRequest) is per TS 38.413
+(not present in the sample capture) — check via `tshark -V` if a run exhibits it.
 
 | Initiator | Trigger PDU | File |
 |---|---|---|
 | AMF | `UEContextReleaseCommand` (procedureCode 41) | `ngap.pcap` |
-| gNB | `UEContextReleaseRequest` (procedureCode 40) followed by AMF-side Command | `ngap.pcap` |
+| gNB | `UEContextReleaseRequest` (procedureCode 42) followed by AMF-side Command | `ngap.pcap` |
 | CU (F1) | `UEContextReleaseCommand` (procedureCode 6) on the DU | `f1ap.pcap` |
 
 ## Expected sequence — gNB-initiated release on RLF
@@ -61,7 +60,7 @@ f1ap.pcap   UEContextReleaseComplete
 ```bash
 # All NGAP releases with cause
 tshark -r ngap.pcap \
-    -Y 'ngap.procedureCode == 40 || ngap.procedureCode == 41' \
+    -Y 'ngap.procedureCode == 42 || ngap.procedureCode == 41' \
     -T fields -e frame.number -e frame.time_epoch \
     -e ngap.RAN_UE_NGAP_ID -e ngap.cause
 

@@ -97,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
             cause = f"  cause={e['cause']}" if e["cause"] else ""
             print(
                 f"  {marker} frame={e['frame']:>5} {e['iso']}  "
-                f"procCode={e['procedureCode']:<3}"
+                f"{utils.proc_name('ngap', e['procedureCode']):<32}"
                 f"  amfUeId={e['amfUeId'] or '-'}{cause}"
             )
     return 0

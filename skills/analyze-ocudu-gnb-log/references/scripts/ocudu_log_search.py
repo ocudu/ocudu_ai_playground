@@ -175,7 +175,7 @@ def block_matches(header_line: str, body_lines: list[str], args) -> bool:
 
 def _is_config_echo_header(line: str) -> bool:
     """The `[CONFIG  ] [D] Input configuration (all values):` line, whose body is
-    the ~440-line effective-config dump echoed at the top of every gnb.log."""
+    the effective-config dump echoed at the top of every gnb.log."""
     m = HEADER_RE.match(line)
     return bool(m) and m.group("layer").strip() == "CONFIG" and \
         m.group("lvl") == "D" and "Input configuration" in line

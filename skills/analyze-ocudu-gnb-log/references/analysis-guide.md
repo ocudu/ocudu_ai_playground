@@ -153,7 +153,7 @@ Examples for common questions:
 | "Bearer setups?" | `--pattern "BearerContextSetupResponse" --count` |
 | "Which band/BW used?" | read `ocudu_gnb.yml` or `grep "^Cell pci=" stdout.log` |
 | "How long did the run last?" | `--pattern "Built in\|Workers stopped successfully"` |
-| "Any errors or warnings?" | `--level "E\|W\|C"` |
+| "Any errors or warnings?" | `--level "E|W|C"` |
 | "Did the UE complete attach?" | `--layer CU-CP --pattern '"Initial Context Setup Routine" finished'` |
 | "Reestablishment seen?" | `--pattern "rrcReestablishment"` |
 

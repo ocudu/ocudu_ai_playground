@@ -2,7 +2,7 @@
 
 ## File: gnb.log
 
-### Header (first ~440 lines)
+### Header (the CONFIG echo)
 
 ```
 2026-05-18T18:18:27.405677 [GNB     ] [I] Built in RelWithDebInfo mode using commit <sha> on branch <branch>
@@ -86,7 +86,7 @@ YYYY-MM-DDTHH:MM:SS.uuuuuu [LAYER   ] [LVL] MESSAGE
 | `[zmq:*]` | ZMQ radio driver | TX/RX bind, "Waiting for data" idle messages after stop |
 
 The exact set of tags present depends on which layers are enabled — see
-`config-format.md` § Log knobs.
+`config-format.md` § Common overrides and what they enable.
 
 ### Procedure markers
 

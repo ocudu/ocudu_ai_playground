@@ -74,11 +74,11 @@ Scheduler-only visibility (when RRC/CU layers are at warning):
    won't show the HO command body.
 2. Count handovers:
    ```bash
-   python3 ocudu_log_search.py gnb.log --pattern "reconfigurationWithSync \{" --count
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "reconfigurationWithSync \{" --count
    ```
 3. Per-UE HO timeline (info-level only):
    ```bash
-   python3 ocudu_log_search.py gnb.log --pattern "Handover Routine" --max-lines 30
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "Handover Routine" --max-lines 30
    ```
 4. Use the F1AP/NGAP PCAP for the HO command body — handoff to `analyze-pcap`:
    - F1AP HO trace: UEContextModificationRequest with `reconfigurationWithSync`.
@@ -86,7 +86,7 @@ Scheduler-only visibility (when RRC/CU layers are at warning):
 5. If scheduler events show ue_reconf without RRC trace, infer the HO from the
    target cell's PRACH on a new pci:
    ```bash
-   python3 ocudu_log_search.py gnb.log --layer SCHED --pattern "prach\(" --max-lines 30
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --layer SCHED --pattern "prach\(" --max-lines 30
    ```
 6. Cross-correlate with the Amarisoft UE log (`analyze-amari-ue-log`) — the
    UE log makes it obvious whether the UE acquired the target cell, sent the

@@ -34,24 +34,6 @@ FIELDS = [
     "f1ap.C_RNTI",
 ]
 
-# Procedure-code → human name, verified against an OCUDU f1ap.pcap.
-PROC_NAMES: dict[str, str] = {
-    "1":  "F1Setup",
-    "5":  "UEContextSetup",
-    "6":  "UEContextRelease",
-    "7":  "UEContextModification",
-    "11": "InitialULRRCMessageTransfer",
-    "12": "DLRRCMessageTransfer",
-    "13": "ULRRCMessageTransfer",
-}
-
-
-def proc_name(code: str | None) -> str:
-    if code is None or code == "":
-        return "?"
-    return PROC_NAMES.get(code, f"proc-{code}")
-
-
 def build_clusters(rows: list[dict]) -> list[dict]:
     clusters: list[dict] = []
     by_cu: dict[str, dict] = {}
@@ -133,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
         {
             "frame": c["frame"],
             "first_iso": utils.epoch_to_iso(c["first_epoch"]),
-            "message": proc_name(c["first_code"]),
+            "message": utils.proc_name("f1ap", c["first_code"], with_code=False),
             "cu_ue_f1ap_id": c["cu_ue_f1ap_id"],
             "du_ue_f1ap_ids": sorted(c["du_ue_f1ap_ids"]),
             "crntis": sorted(c["crntis"]),

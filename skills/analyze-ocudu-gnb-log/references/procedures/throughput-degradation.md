@@ -35,7 +35,7 @@ In `gnb.log` the `[METRICS]` rows are the per-period summary. The
    `error_indications` are non-zero, find the timestamp window where they
    spiked:
    ```bash
-   python3 ocudu_log_search.py gnb.log --layer METRICS \
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --layer METRICS \
        --pattern "late_dl_harqs=[^0]|failed_pdcch=[^0]" --max-lines 20
    ```
 3. Compare MCS to channel quality. With high SNR (`pusch_snr_db > 25`) the

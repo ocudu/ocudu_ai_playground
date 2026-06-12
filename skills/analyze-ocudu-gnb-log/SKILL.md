@@ -1,17 +1,11 @@
 ---
 name: analyze-ocudu-gnb-log
 description: >
-  Knowledge module for analyzing OCUDU gNB / DU / CU run artifacts — `gnb.log`
-  (the per-layer log), `stdout.log` (console: cell config + metrics table),
-  `ocudu_gnb.yml` (the YAML config), and `metrics.json`. Provides the log/config
-  format references, per-procedure templates, grep recipes, and helper scripts.
-  Invoked by a higher-level inspect/run orchestrator skill when it needs to
-  analyze OCUDU app logs, or directly by a user to load gNB-log analysis context
-  (trigger phrases: "analyze
-  this gnb log", "look at the ocudu log", or a path ending in `gnb.log`,
-  `ocudu_gnb.yml`, `stdout.log`, or under `ocudu-gnb-*/`). It provides context
-  and methodology; it does not drive an interactive analysis task — the calling
-  agent does the work using this knowledge.
+  Knowledge module for analyzing OCUDU gNB/DU/CU artifacts — `gnb.log`,
+  `stdout.log`, `ocudu_gnb.yml`, `metrics.json`: log/config-format refs, procedure
+  templates, grep recipes, helper scripts. Use for such a run or an `ocudu-gnb-*/`
+  dir, directly or via an inspect/run orchestrator. Provides context, not a task —
+  the caller analyzes.
 version: 0.1.0
 user-invocable: true
 allowed-tools: Bash(python3 *analyze-ocudu-gnb-log/references*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sed:*), Bash(sort:*), Bash(comm:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
@@ -101,8 +95,8 @@ mean before going further.
   write here (e.g. `gnb-summary-<sha>.txt`, `gnb-search-<sha>.txt`). The OS
   reaps `/tmp` on reboot — no manual cleanup needed.
 - **Never** read raw `gnb.log` into context — it can be 75k–500k+ lines, and
-  the first ~440 lines are the echoed CONFIG dump which adds no signal beyond
-  what's in `ocudu_gnb.yml`.
+  the header (everything up to the first `[CONFIG  ] [I] Worker pool` line) is the
+  echoed CONFIG dump, which adds no signal beyond what's in `ocudu_gnb.yml`.
 - **Cap** any grep output at 200 lines with `| head -n 200`; for larger results
   write to `<cache-dir>/gnb-<purpose>-<sha>.txt` and report the path.
 - **Prefer** the helper scripts in `references/scripts/` over hand-crafted
@@ -118,7 +112,7 @@ mean before going further.
   separators; later keys override earlier ones (e.g. `all_level: info` then
   `all_level: warning`). See `references/config-format.md`.
 - The CONFIG echo at the top of `gnb.log` (everything between line 2 and the
-  first `[CONFIG  ] [I] Worker pool` line, typically ~line 440) is verbose and
+  first `[CONFIG  ] [I] Worker pool` line — several hundred lines) is verbose and
   redundant with `ocudu_gnb.yml` — skip it unless the user explicitly asks
   about an effective-config value.
 - `metrics.json` is a standard JSON array of per-period records — parse it with
@@ -138,7 +132,7 @@ elsewhere, and never git/commit — edits are left as diffs.
 **Where things go** (match the surrounding format; no dates/timestamps):
 - new grep recipe → `log-format.md` § Key grep recipes
 - new layer / message / keyword → the matching table in `log-format.md`
-  (§ Layer tags, § Procedure markers, § Key RRC/NGAP/F1AP/E1AP messages)
+  (§ Layer tags, § Procedure markers, § Common structured fields)
 - new YAML field / quirk → `config-format.md` (§ Sections, § Common overrides,
   § Field reference)
 - failure signature / diagnostic step → `procedures/<proc>.md`

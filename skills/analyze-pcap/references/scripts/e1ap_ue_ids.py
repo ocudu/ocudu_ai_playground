@@ -32,27 +32,6 @@ FIELDS = [
     "e1ap.GNB_CU_UP_UE_E1AP_ID",
 ]
 
-# Procedure-code → human name, verified against an OCUDU e1ap.pcap.
-PROC_NAMES: dict[str, str] = {
-    "3":  "gNB-CU-UP-E1Setup",
-    "4":  "gNB-CU-CP-E1Setup",
-    "5":  "gNB-CU-UP-ConfigurationUpdate",
-    "6":  "gNB-CU-CP-ConfigurationUpdate",
-    "7":  "E1Release",
-    "8":  "bearerContextSetup",
-    "9":  "bearerContextModification",
-    "10": "bearerContextModificationRequired",
-    "11": "bearerContextRelease",
-    "12": "bearerContextReleaseRequest",
-}
-
-
-def proc_name(code: str | None) -> str:
-    if code is None or code == "":
-        return "?"
-    return PROC_NAMES.get(code, f"proc-{code}")
-
-
 def build_clusters(rows: list[dict]) -> list[dict]:
     clusters: list[dict] = []
     by_cp: dict[str, dict] = {}
@@ -126,7 +105,7 @@ def main(argv: list[str] | None = None) -> int:
         {
             "frame": c["frame"],
             "first_iso": utils.epoch_to_iso(c["first_epoch"]),
-            "message": proc_name(c["first_code"]),
+            "message": utils.proc_name("e1ap", c["first_code"], with_code=False),
             "e1_cp_ue_id": c["e1_cp_ue_id"],
             "e1_up_ue_id": c["e1_up_ue_id"],
             "first_epoch": c["first_epoch"],

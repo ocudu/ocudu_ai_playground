@@ -46,19 +46,19 @@ no longer exists; if the same UE re-attaches it will get a new `ue=N` index.
 
 1. Find release triggers:
    ```bash
-   python3 ocudu_log_search.py gnb.log --pattern "UEContextReleaseCommand" --max-lines 20
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "UEContextReleaseCommand" --max-lines 20
    ```
 2. Match each command to its completion:
    ```bash
-   python3 ocudu_log_search.py gnb.log --pattern "UE Removal Routine.*finished" --count
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "UE Removal Routine.*finished" --count
    ```
 3. Was the cause IE in the command an error? The cause is carried in the
    NGAP body — visible in `ngap.pcap` (handoff to `analyze-pcap`), or in
    `gnb.log` only when `ngap_level: info` and `hex_max_size > 0`.
 4. For UEs that never released (creations > releases), find the missing UE:
    ```bash
-   python3 ocudu_log_search.py gnb.log --pattern "UE created" --max-lines 50
-   python3 ocudu_log_search.py gnb.log --pattern '"UE Removal Routine" finished' --max-lines 50
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "UE created" --max-lines 50
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern '"UE Removal Routine" finished' --max-lines 50
    ```
 
 ## Cross-references

@@ -37,15 +37,15 @@ PCAP_NAMES = ("mac.pcap", "rlc.pcap", "f1ap.pcap", "e1ap.pcap", "ngap.pcap")
 PROC_CODE_NAMES: dict[str, dict[int, str]] = {
     "ngap": {
         0: "AMFConfigurationUpdate",
-        1: "RANConfigurationUpdate",
         4: "DownlinkNASTransport",
         14: "InitialContextSetup",
         15: "InitialUEMessage",
-        16: "NASNonDeliveryIndication",
+        19: "NASNonDeliveryIndication",
         21: "NGSetup",
-        27: "Paging",
+        24: "Paging",
         29: "PDUSessionResourceSetup",
-        36: "UEContextModification",
+        35: "RANConfigurationUpdate",
+        40: "UEContextModification",
         41: "UEContextRelease",
         44: "UERadioCapabilityInfoIndication",
         46: "UplinkNASTransport",
@@ -74,18 +74,26 @@ PROC_CODE_NAMES: dict[str, dict[int, str]] = {
 }
 
 
-def proc_name(proto: str, code: str | int) -> str:
-    """Render a procedureCode as 'Name(code)', or the bare code if unknown.
+def proc_name(proto: str, code: str | int | None, *, with_code: bool = True) -> str:
+    """Render a procedureCode as 'Name(code)' (or just 'Name' when with_code=False).
 
-    `proto` is one of ngap/f1ap/e1ap; `code` may be a string (as tshark emits) or
-    an int. Unknown protocols/codes return the code unchanged so nothing is lost.
+    `proto` is one of ngap/f1ap/e1ap; `code` may be a string (as tshark emits), an
+    int, or None/''. With `with_code` (the default) an unknown code renders as the
+    bare number, matching the overview/proc-code output; with `with_code=False`
+    (used by the per-protocol UE-ID tables) an unknown code renders as 'proc-<n>'
+    and an empty code as '?'. This is the single source of procedureCode names —
+    keep `PROC_CODE_NAMES` in sync with the protocol reference docs.
     """
+    if code is None or code == "":
+        return str(code) if with_code else "?"
     try:
         c = int(code)
     except (TypeError, ValueError):
         return str(code)
     name = PROC_CODE_NAMES.get(proto, {}).get(c)
-    return f"{name}({c})" if name else str(c)
+    if name is None:
+        return str(c) if with_code else f"proc-{c}"
+    return f"{name}({c})" if with_code else name
 
 # Per-session cache root, shared with the analyze-amari-ue-log and
 # analyze-ocudu-gnb-log skills.

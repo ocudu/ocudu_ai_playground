@@ -33,30 +33,6 @@ FIELDS = [
     "ngap.AMF_UE_NGAP_ID",
 ]
 
-# Procedure-code → human name, verified against an OCUDU ngap.pcap.
-PROC_NAMES: dict[str, str] = {
-    "0":  "AMFConfigurationUpdate",
-    "1":  "RANConfigurationUpdate",
-    "4":  "DownlinkNASTransport",
-    "14": "InitialContextSetup",
-    "15": "InitialUEMessage",
-    "16": "NASNonDeliveryIndication",
-    "21": "NGSetup",
-    "27": "Paging",
-    "29": "PDUSessionResourceSetup",
-    "36": "UEContextModification",
-    "41": "UEContextRelease",
-    "44": "UERadioCapabilityInfoIndication",
-    "46": "UplinkNASTransport",
-}
-
-
-def proc_name(code: str | None) -> str:
-    if code is None or code == "":
-        return "?"
-    return PROC_NAMES.get(code, f"proc-{code}")
-
-
 def build_clusters(rows: list[dict]) -> list[dict]:
     clusters: list[dict] = []
     by_ran: dict[str, dict] = {}
@@ -130,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
         {
             "frame": c["frame"],
             "first_iso": utils.epoch_to_iso(c["first_epoch"]),
-            "message": proc_name(c["first_code"]),
+            "message": utils.proc_name("ngap", c["first_code"], with_code=False),
             "ran_ue_ngap_id": c["ran_ue_ngap_id"],
             "amf_ue_ngap_id": c["amf_ue_ngap_id"],
             "first_epoch": c["first_epoch"],

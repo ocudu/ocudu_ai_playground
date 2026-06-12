@@ -42,15 +42,15 @@ tshark -r ngap.pcap -Y 'ngap.procedureCode ==  0'   # AMFConfigurationUpdate
 | Code | Procedure | Initiator | Notes |
 |---:|---|---|---|
 |  0 | AMFConfigurationUpdate | AMF | infrastructure |
-|  1 | RANConfigurationUpdate | gNB | infrastructure |
 |  4 | DownlinkNASTransport | AMF | NAS to UE |
 | 14 | InitialContextSetup | AMF | UE registration completion |
 | 15 | InitialUEMessage | gNB | First NGAP for a UE |
-| 16 | NASNonDeliveryIndication | gNB | NAS not delivered |
+| 19 | NASNonDeliveryIndication | gNB | NAS not delivered |
 | 21 | NGSetup | gNB | NG-C setup at startup |
-| 27 | Paging | AMF | DL idle-mode paging |
+| 24 | Paging | AMF | DL idle-mode paging |
 | 29 | PDUSessionResourceSetup | AMF | establish PDU session |
-| 36 | UEContextModification | AMF | |
+| 35 | RANConfigurationUpdate | gNB | infrastructure |
+| 40 | UEContextModification | AMF | |
 | 41 | UEContextRelease | AMF or gNB | end of UE in NG |
 | 44 | UERadioCapabilityInfoIndication | gNB | UE radio capabilities |
 | 46 | UplinkNASTransport | gNB | NAS to AMF |

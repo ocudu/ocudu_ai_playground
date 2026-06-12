@@ -22,14 +22,14 @@ persistent `crc=KO` on PUSCH, late HARQs, ZMQ "Waiting for data" stalls
 
 1. Are PRACH events progressing to UE creations?
    ```bash
-   python3 ocudu_log_search.py gnb.log --layer SCHED --pattern "prach\(" --count
-   python3 ocudu_log_search.py gnb.log --pattern "UE created" --count
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --layer SCHED --pattern "prach\(" --count
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "UE created" --count
    ```
    If PRACH count > UE creations by a lot, MSG3 / MSG4 are failing — check
    `crc=KO` and `msg3_nok` in the metrics rows.
 2. CRC failure timeline (cap at 100):
    ```bash
-   python3 ocudu_log_search.py gnb.log --layer PHY --pattern "crc=KO" --max-lines 100
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --layer PHY --pattern "crc=KO" --max-lines 100
    ```
 3. Late HARQs from metrics:
    ```bash
@@ -45,7 +45,7 @@ persistent `crc=KO` on PUSCH, late HARQs, ZMQ "Waiting for data" stalls
    ```
 4. ZMQ stall (simulator only):
    ```bash
-   python3 ocudu_log_search.py gnb.log --pattern "Waiting for data" --max-lines 5
+   python3 ${CLAUDE_SKILL_DIR}/references/scripts/ocudu_log_search.py gnb.log --pattern "Waiting for data" --max-lines 5
    ```
    If this appears before any UE attached and persists, the simulator's UE
    side is not producing samples — check the `amarisoft-ue-*` component.

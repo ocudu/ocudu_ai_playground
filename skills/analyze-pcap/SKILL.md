@@ -1,16 +1,10 @@
 ---
 name: analyze-pcap
 description: >
-  Knowledge module for analyzing packet captures produced by an OCUDU
-  application (`gnb`, `du`, `cu`, `cu_cp`, `cu_up`) — reference material on the
-  Upper-PDU capture format, the NGAP/F1AP/E1AP/MAC-NR/RLC-NR protocols and
-  procedures, `tshark` recipes, and helper scripts. Invoked by a higher-level
-  inspect/run orchestrator skill when it needs to analyze pcap artifacts, or
-  directly by a user to load pcap-analysis context (trigger phrases: "analyze this pcap",
-  "look at the pcap", "what's in this capture", or a path ending in `.pcap` /
-  `.pcapng`). It provides context and methodology; it does not drive an
-  interactive analysis task — the calling agent does the work using this
-  knowledge.
+  Knowledge module for analyzing OCUDU Upper-PDU packet captures
+  (NGAP/F1AP/E1AP/MAC-NR/RLC-NR): format notes, protocol/procedure references,
+  tshark recipes, helper scripts. Use for a `.pcap`/`.pcapng`, directly or via an
+  inspect/run orchestrator. Provides context, not a task — the caller analyzes.
 version: 0.1.0
 user-invocable: true
 allowed-tools: Bash(python3 *analyze-pcap/references*), Bash(ls:*), Bash(grep:*), Bash(capinfos:*), Bash(tshark:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(realpath:*), Bash(sha256sum:*), Bash(find:*), Edit, Write

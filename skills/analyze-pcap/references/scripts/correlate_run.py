@@ -7,7 +7,7 @@
 
 Usage:
     correlate_run.py <run-dir>
-    correlate_run.py <run-dir> --around 1747300050 --window-ms 2000
+    correlate_run.py <run-dir> --around <epoch> --window-ms 2000
     correlate_run.py <run-dir> --ue 42
     correlate_run.py <run-dir> --protocols ngap,f1ap
     correlate_run.py <run-dir> --json

@@ -7,7 +7,7 @@
 
 Usage:
     extract_proc_codes.py <pcap> --proto ngap
-    extract_proc_codes.py <pcap> --proto f1ap --time-range 1747300000,1747300300
+    extract_proc_codes.py <pcap> --proto f1ap --time-range <start-epoch>,<end-epoch>
     extract_proc_codes.py <pcap> --proto ngap --initiating-only
     extract_proc_codes.py <pcap> --proto e1ap --json
 """

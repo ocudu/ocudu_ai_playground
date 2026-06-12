@@ -16,7 +16,7 @@ clearest indicator (`intra_ru_ho`, `inter_ru_ho`).
 |---|---|---|
 | Intra-CU intra-DU | `UEContextModificationRequest` carrying RRC reconfiguration | `f1ap.pcap` |
 | Intra-CU inter-DU | `UEContextSetupRequest` on the target DU | `f1ap.pcap` |
-| Inter-CU | `HandoverRequired` (procedureCode 0) | `ngap.pcap` |
+| Inter-CU | `HandoverRequired` (HandoverPreparation, procedureCode 12) | `ngap.pcap` |
 
 ## First F1AP message ≠ attach indicator
 
@@ -62,8 +62,8 @@ f1ap.pcap (src)     UEContextReleaseComplete                   (T0 + ~200 ms)
 ## tshark filters
 
 ```bash
-# Inter-CU HO triggers
-tshark -r ngap.pcap -Y 'ngap.procedureCode == 0 || ngap.procedureCode == 2'
+# Inter-CU HO triggers (HandoverPreparation / HandoverResourceAllocation)
+tshark -r ngap.pcap -Y 'ngap.procedureCode == 12 || ngap.procedureCode == 13'
 
 # Source/target context lifecycle in one timeline
 python3 ${CLAUDE_SKILL_DIR}/references/scripts/correlate_run.py <run-dir> \

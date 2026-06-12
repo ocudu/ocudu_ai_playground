@@ -15,8 +15,7 @@ Produce a factual summary of the UE run without diving into individual log lines
 ### inventory
 
 The § Resolve step already reported the run dir and which of `ue.log`,
-`stdout.log`, `amarisoft_ue.cfg` are present. (Ignore `metrics.json` — it is empty
-in UE runs.)
+`stdout.log`, `amarisoft_ue.cfg` are present.
 
 ### run summary script
 
@@ -124,14 +123,14 @@ Examples for common questions:
 | Question | Command |
 |---|---|
 | "How many handovers?" | `--pattern reconfigurationWithSync --count` |
-| "When did UE attach?" | `--layer NAS --pattern "REGISTERED CM-CONNECTED"` |
+| "When did UE attach?" | `--layer NAS --pattern "REGISTERED\s+CM-CONNECTED"` |
 | "All PRACH attempts" | `--layer PHY --pattern "PRACH:"` |
 | "What cells did the UE see?" | `--layer PHY --pattern "PSS:"` |
 | "Was there packet loss?" | grep `CBR_RECV\|CBR_SEND` in `stdout.log` |
 | "What was the final NAS state?" | `--layer NAS` then tail |
 | "Did the UE reestablish?" | `--pattern "reestablishment" --layer RRC` |
 | "What band/BW was used?" | read `amarisoft_ue.cfg` or `grep "^RF" stdout.log` |
-| "How long did the run last?" | `grep "^# (Started\|Ended)" ue.log` |
+| "How long did the run last?" | `grep -E "^# (Started|Ended)" ue.log` |
 
 Otherwise, use targeted grep with the canonical recipes in
 `references/log-format.md` § Key grep recipes. Always cap with `| head -n 200`;

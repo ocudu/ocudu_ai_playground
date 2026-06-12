@@ -92,7 +92,6 @@ Key columns:
 3. Check PHY errors:
    ```bash
    grep -n "crc=FAIL" ue.log | wc -l
-   grep -n "rxfail" ue.log   # not useful — that's in stdout
    ```
 
 4. Check HARQ iteration count in stdout stats:

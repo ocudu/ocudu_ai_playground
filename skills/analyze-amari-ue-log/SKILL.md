@@ -1,17 +1,10 @@
 ---
 name: analyze-amari-ue-log
 description: >
-  Knowledge module for analyzing Amarisoft UE log files and run directories
-  produced by Retina test runs — `ue.log` (the per-layer NAS/RRC/PHY/MAC trace),
-  `stdout.log` (UE stats + CBR traffic), and `amarisoft_ue.cfg`. Provides the log
-  format reference, per-procedure templates, grep recipes, and helper scripts.
-  Invoked by a higher-level inspect/run orchestrator skill when it needs to
-  analyze the UE-side log, or directly by a user to load UE-log analysis context
-  (trigger phrases: "analyze
-  this UE log", "look at the amarisoft log", or a path ending in `ue.log`,
-  `amarisoft_ue.cfg`, or under `amarisoft-ue-*/`). It provides context and
-  methodology; it does not drive an interactive analysis task — the calling agent
-  does the work using this knowledge.
+  Knowledge module for analyzing Amarisoft UE logs — `ue.log`, `stdout.log`,
+  `amarisoft_ue.cfg`: log-format ref, procedure templates, grep recipes, helper
+  scripts. Use for such a run or an `amarisoft-ue-*/` dir, directly or via an
+  inspect/run orchestrator. Provides context, not a task — the caller analyzes.
 version: 0.1.0
 user-invocable: true
 allowed-tools: Bash(python3 *analyze-amari-ue-log/references*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sort:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
@@ -43,8 +36,8 @@ session) the context needed to analyze Amarisoft UE logs:
 - `references/log-format.md` — the per-layer log layout and grep recipes.
 - `references/procedures/` — per-procedure expected-sequence / failure-marker /
   investigation-checklist templates.
-- `references/scripts/` — pre-vetted helper scripts (`ue_log_summary.py`,
-  `ue_log_search.py`) that emit compact summaries.
+- `references/scripts/` — pre-vetted helper scripts (`resolve.py`,
+  `ue_log_summary.py`, `ue_log_search.py`) that emit compact summaries.
 - `references/analysis-guide.md` — methodology for the three common activities
   (producing an overview, answering a targeted question, investigating a failure).
 
