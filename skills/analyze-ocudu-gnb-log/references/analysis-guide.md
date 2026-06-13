@@ -45,6 +45,11 @@ The script emits, in one pass:
 If the script is not present or fails, fall back to the grep recipes in
 `references/log-format.md` § Key grep recipes to collect the same info manually.
 
+For UE-lifecycle latency questions (creation/configuration/removal per-stage and
+end-to-end timings), load `references/latency-profiling.md` — it documents the
+`scripts/ocudu_ue_proc_latency.py` profiler. Not needed for ordinary
+overviews/failures.
+
 ### stdout quick-scan
 
 `stdout.log` is short for single-UE runs — read it in full to capture:
