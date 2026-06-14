@@ -1,15 +1,14 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
-"""Shared helpers for the inspect-ocudu-run cross-correlation scripts.
+"""Shared helpers for the ran-log-reference `correlate` scripts.
 
-This skill orchestrates the analyze-ran-log knowledge module (its pcap /
-ocudu / amari-ue type subtrees); these helpers exist only for the
-*cross-correlation* work that spans artifact sources. Per-artifact parsing
-detail belongs in those type subtrees, not here.
+These helpers exist only for the *cross-correlation* work that spans artifact
+sources. Per-artifact parsing detail belongs in the per-type subtrees
+(`../pcap/`, `../ocudu/`, `../amari-ue/`), not here.
 
 Provides:
-- the per-session shared cache root (prefix files written here with `run-`)
+- the per-session shared cache root (prefix files written here with `correlate-`)
 - UTC-aware timestamp parsing for the three log clocks (gnb.log ISO,
   ue.log / mme.log HH:MM:SS.mmm + `# Started on` date anchor, pcap epoch)
 - SFN.slot parsing and the regexes that join PHY radio events across sources
@@ -33,9 +32,9 @@ import re
 from pathlib import Path
 
 # --------------------------------------------------------------------------
-# Per-session shared cache root (shared with the analyze-ran-log type
-# scripts). Write cross-correlation spills here with a `run-` prefix. The OS
-# reaps /tmp on reboot — no manual cleanup.
+# Per-session shared cache root (shared across the ran-log-reference type
+# scripts). Write cross-correlation spills here with a `correlate-` prefix. The
+# OS reaps /tmp on reboot — no manual cleanup.
 # --------------------------------------------------------------------------
 
 CACHE_ROOT = (
@@ -45,11 +44,11 @@ CACHE_ROOT = (
 
 
 def cache_path(input_path, tag: str, suffix: str = "txt") -> Path:
-    """Deterministic cache path: run-<sha>.<suffix> under CACHE_ROOT."""
+    """Deterministic cache path: correlate-<sha>.<suffix> under CACHE_ROOT."""
     canonical = str(Path(input_path).resolve())
     digest = hashlib.sha256(f"{canonical}\0{tag}".encode()).hexdigest()[:16]
     CACHE_ROOT.mkdir(parents=True, exist_ok=True)
-    return CACHE_ROOT / f"run-{digest}.{suffix}"
+    return CACHE_ROOT / f"correlate-{digest}.{suffix}"
 
 
 # --------------------------------------------------------------------------

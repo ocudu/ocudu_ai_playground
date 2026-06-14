@@ -42,6 +42,7 @@ find /tmp/run_artifacts -maxdepth 4 -name testbed.json
 
 ## Step 4 — Continue as a local run
 
-Point `run_inventory.py` at the selected test's directory under
-`/tmp/run_artifacts/...` and proceed with the chosen mode. The downloaded layout
-matches the local layout in `components.md`.
+Point `ran-log-reference`'s `scripts/correlate/resolve.py` at the selected test's
+directory under `/tmp/run_artifacts/...` and proceed with the chosen mode. The
+downloaded layout matches the local layout in `ran-log-reference` ›
+`references/correlate/components.md`.

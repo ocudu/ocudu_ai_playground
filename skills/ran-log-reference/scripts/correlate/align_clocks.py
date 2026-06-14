@@ -30,7 +30,6 @@ import sys
 from pathlib import Path
 
 import utils
-import run_inventory
 import correlate_radio
 
 

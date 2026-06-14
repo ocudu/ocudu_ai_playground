@@ -1,8 +1,8 @@
 # Attach, end to end (cross-artifact trace)
 
 Follow one UE's initial attach across the UE log, the gNB log, and the pcaps,
-naming the join key at each hop. Per-side detail lives in the sub-skills; this is
-the correlation spine.
+naming the join key at each hop. Per-side detail lives in the per-type subtrees
+(`../../pcap/`, `../../ocudu/`, `../../amari-ue/`); this is the correlation spine.
 
 ## Sequence and join keys
 

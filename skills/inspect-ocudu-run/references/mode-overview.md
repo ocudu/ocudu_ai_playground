@@ -1,13 +1,15 @@
 # Overview mode
 
 Produce one consolidated, factual overview of the whole run by delegating each
-artifact to its sub-skill and adding the cross-source layer on top. Do not enter
-the investigation loop. Ask `AskUserQuestion` only at the end (escalation).
+artifact to its `ran-log-reference` type and adding the cross-source (`correlate`)
+layer on top. Do not enter the investigation loop. Ask `AskUserQuestion` only at
+the end (escalation). Load `ran-log-reference` once via the `Skill` tool;
+`${RAN_LOG_REF_DIR}` below is that skill's directory.
 
 ## Phase A — inventory
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/run_inventory.py <run-dir>
+python3 ${RAN_LOG_REF_DIR}/scripts/correlate/resolve.py <run-dir>
 ```
 
 Note which components and artifacts are present and their clock anchors. This
@@ -15,24 +17,24 @@ drives everything below.
 
 ## Phase B — per-artifact summaries
 
-For each component present, pull in its sub-skill's knowledge via the `Skill`
-tool, then produce the per-artifact overview here using that skill's summary
-script (follow its `references/analysis-guide.md` § Producing an overview):
+For each component present, use the matching `ran-log-reference` type, then produce
+the per-artifact overview here using that type's summary script (follow its
+`references/<type>/analysis-guide.md` § Producing an overview):
 
-- OCUDU app component → `ocudu` (run `scripts/ocudu/ocudu_log_summary.py` on the
-  `gnb.log`/run dir)
-- `amarisoft-ue-*` → `amari-ue` (run `scripts/amari-ue/ue_log_summary.py`)
-- `*.pcap` present → `pcap` (run `scripts/pcap/pcap_overview.py` on the run dir's pcaps)
+- OCUDU app component → `ocudu` (run
+  `${RAN_LOG_REF_DIR}/scripts/ocudu/ocudu_log_summary.py` on the `gnb.log`/run dir)
+- `amarisoft-ue-*` → `amari-ue` (run `${RAN_LOG_REF_DIR}/scripts/amari-ue/ue_log_summary.py`)
+- `*.pcap` present → `pcap` (run `${RAN_LOG_REF_DIR}/scripts/pcap/pcap_overview.py` on the run dir's pcaps)
 - `amarisoft-5gc-*` → light-touch here: grep `mme.log` for registration /
   PDU-session / NGAP / `[E]` lines (cap at 200 lines); note the future
-  `analyze-amari-5gc-log` hook.
+  `amari-5gc` type.
 
 Capture one headline per component; don't dump raw per-artifact detail.
 
 ## Phase C — cross-source alignment
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/align_clocks.py <run-dir>
+python3 ${RAN_LOG_REF_DIR}/scripts/correlate/align_clocks.py <run-dir>
 ```
 
 Confirm the sources share UTC (log↔pcap Δ≈0) and that UE↔gNB PHY slots align.
@@ -50,7 +52,7 @@ Present one block:
 **Components:** gNB (<build>), UE (<n> UEs), 5GC (<type>), pcaps: <list>
 **Clocks:** all UTC; log↔pcap Δ <x> ms; UE↔gNB PHY slots aligned
 
-### Per-component (from sub-skills)
+### Per-component (from ran-log-reference)
 - gNB:  <one-line headline from ocudu>
 - UE:   <one-line headline from amari-ue>
 - pcap: <one-line headline from pcap>
@@ -65,7 +67,7 @@ Present one block:
 - <bullet per anomaly, or "None">
 ```
 
-Cross-source anomalies are the value-add — things no single sub-skill can see:
+Cross-source anomalies are the value-add — things no single artifact type can see:
 - UE reached REGISTERED but the gNB has no matching UE context (or vice-versa).
 - pcap shows a release/cause the logs don't, or counts disagree.
 - gNB PUSCH `crc=KO` where the UE logged a transmission (real decode issue, not DTX).

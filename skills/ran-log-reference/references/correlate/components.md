@@ -1,7 +1,7 @@
 # Components & routing
 
-How a Retina `test_gnb[...]` directory is laid out, which sub-skill owns each
-artifact, and how `testbed.json` maps components to the network.
+How a Retina `test_gnb[...]` directory is laid out, which ran-log-reference type
+analyses each artifact, and how `testbed.json` maps components to the network.
 
 ## Directory layout
 
@@ -20,12 +20,12 @@ test_gnb[<params>]/
     └── YYYY-MM-DD_HH-MM-SS/ {mme.log, amarisoft_mme.cfg, ps_info_ltemme.txt}
 ```
 
-`run_inventory.py` resolves all of this (latest run subdir per component, flat
-fallback, artifact list, clock anchors).
+`scripts/correlate/resolve.py` resolves all of this (latest run subdir per
+component, flat fallback, artifact list, clock anchors).
 
 ## Routing table
 
-| Component dir prefix | Role | Sub-skill |
+| Component dir prefix | Role | Type |
 |---|---|---|
 | `ocudu-gnb-*` | integrated gNB | `ocudu` |
 | `ocudu-du-*` | DU (split) | `ocudu` |
@@ -33,7 +33,7 @@ fallback, artifact list, clock anchors).
 | `ocudu-odu-*`, `ocudu-ocu-*` | O-DU / O-CU variants | `ocudu` |
 | (any of the above) `*.pcap` | NGAP/F1AP/E1AP/MAC/RLC captures | `pcap` |
 | `amarisoft-ue-*` | UE simulator | `amari-ue` |
-| `amarisoft-5gc-*` / `amarisoft-mme-*` | 5GC / MME | light-touch here (future `analyze-amari-5gc-log`) |
+| `amarisoft-5gc-*` / `amarisoft-mme-*` | 5GC / MME | light-touch (future `amari-5gc` type) |
 
 All OCUDU app logs share the same log format, so `ocudu` handles
 `gnb.log`, `du.log`, `cu*.log` alike.
@@ -48,10 +48,10 @@ valid JSON, so it cannot be `json.load`ed. `utils.parse_testbed()` extracts
 - confirm which gNB a UE/5GC was wired to in multi-gNB tests.
 
 Multi-UE tests list every UE (`amarisoft-ue-1 … -64`) on one IP with incrementing
-ports — they are virtual UEs inside one `lteue` process. `run_inventory.py`
-collapses them to a range line.
+ports — they are virtual UEs inside one `lteue` process.
+`scripts/correlate/resolve.py` collapses them to a range line.
 
-## 5GC light-touch (until a sub-skill exists)
+## 5GC light-touch (until an `amari-5gc` type exists)
 
 `mme.log` uses the Amarisoft format (`HH:MM:SS.mmm [LAYER] ...`, UTC, with a
 `# Started on` anchor). Useful greps:
@@ -61,4 +61,4 @@ grep -nE "\[NGAP\]|\[GTPC\]|\[E\]" mme.log | head -50
 ```
 The 5GC NAS UEID (e.g. `[NAS] UL 0064`) maps to the gNB `amf_ue=` (0x0064 = 100).
 Keep 5GC findings light here; deep 5GC log knowledge belongs in a future
-`analyze-amari-5gc-log` sub-skill, not in this orchestrator.
+`amari-5gc` type.

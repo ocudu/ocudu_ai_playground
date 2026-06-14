@@ -5,25 +5,27 @@
 
 """Classify a RAN test artifact and delegate to its per-type resolve/preflight.
 
-This is the single entrypoint for the analyze-ran-log skill. It classifies
-the input into one of three artifact kinds and then runs that kind's resolve
-script as a subprocess, so each per-type script keeps its own directory on
-sys.path for its sibling imports (e.g. resolve.py importing ocudu_log_summary):
+This is the single entrypoint for the ran-log-reference skill. It classifies
+the input into a kind and then runs that kind's resolve script as a subprocess,
+so each per-type script keeps its own directory on sys.path for its sibling
+imports (e.g. resolve.py importing ocudu_log_summary):
 
-    kind        marker                              delegate
-    ----------  ----------------------------------  -------------------------------
-    pcap        *.pcap/*.pcapng, or a dir of them   scripts/pcap/resolve.py
-    ocudu   gnb.log / OCUDU component or run     scripts/ocudu/resolve.py
-    amari-ue    ue.log / Amarisoft UE component/run  scripts/amari-ue/resolve.py
+    kind        marker                                  delegate
+    ----------  --------------------------------------  ----------------------------
+    pcap        *.pcap/*.pcapng, or a dir of them       scripts/pcap/resolve.py
+    ocudu       gnb.log / OCUDU component or run        scripts/ocudu/resolve.py
+    amari-ue    ue.log / Amarisoft UE component/run     scripts/amari-ue/resolve.py
+    correlate   a run dir spanning ≥2 RAN components     scripts/correlate/resolve.py
 
 The kind line and a `-> read references/<type>/` pointer are printed first, then
 the delegate's own output (inventory/validation + its `verdict:` line). The exit
-code is the delegate's. A directory that mixes a gNB log and a UE log (a whole
-`test_gnb[...]` run) is ambiguous for a single-artifact skill — it bails and asks
-for a single artifact; pass `--type` to force a kind.
+code is the delegate's. A whole `test_gnb[...]` run that spans several RAN
+application components (gNB + UE + 5GC) resolves to `correlate` for cross-artifact
+work; a single artifact or single-component dir resolves to its own type. Pass
+`--type` to force a kind.
 
 Usage:
-    resolve.py <artifact-or-dir> [--type pcap|ocudu|amari-ue] [passthrough args...]
+    resolve.py <artifact-or-dir> [--type pcap|ocudu|amari-ue|correlate] [passthrough args...]
 """
 
 from __future__ import annotations
@@ -40,6 +42,7 @@ DELEGATE = {
     "pcap": ("pcap", "resolve.py"),
     "ocudu": ("ocudu", "resolve.py"),
     "amari-ue": ("amari-ue", "resolve.py"),
+    "correlate": ("correlate", "resolve.py"),
 }
 KINDS = tuple(DELEGATE)
 
@@ -47,6 +50,8 @@ PCAP_NAMES = ("mac.pcap", "rlc.pcap", "f1ap.pcap", "e1ap.pcap", "ngap.pcap")
 # OCUDU app log basenames that mark an ocudu artifact.
 GNB_LOGS = ("gnb.log", "du.log", "cu.log", "cu_cp.log", "cu_up.log")
 UE_LOG = "ue.log"
+# 5GC/MME log basenames (Amarisoft core).
+CORE_LOGS = ("mme.log", "amf.log")
 
 
 def _has_under(root: Path, name: str) -> bool:
@@ -86,13 +91,14 @@ def classify(path: Path) -> tuple[str | None, str]:
     # Component / test directory: detect by what lives beneath it.
     has_gnb = _has_any_under(path, GNB_LOGS)
     has_ue = _has_under(path, UE_LOG)
+    has_core = _has_any_under(path, CORE_LOGS)
     has_pcap = _has_any_under(path, PCAP_NAMES)
-    if has_gnb and has_ue:
-        return None, (
-            "directory mixes an OCUDU app log and an Amarisoft UE log — this is a "
-            "whole-run directory. Point at a single artifact (or component dir), "
-            "or pass --type pcap|ocudu|amari-ue to force one."
-        )
+    # A directory spanning ≥2 RAN application components (gNB / UE / 5GC) is a
+    # whole-run directory → cross-artifact correlation.
+    apps = [("OCUDU app", has_gnb), ("Amarisoft UE", has_ue), ("5GC", has_core)]
+    present = [name for name, ok in apps if ok]
+    if len(present) >= 2:
+        return "correlate", f"directory spans multiple RAN components ({', '.join(present)})"
     if has_gnb:
         return "ocudu", "OCUDU app log found below the directory"
     if has_ue:
@@ -120,7 +126,7 @@ def main(argv: list[str]) -> int:
     if not args:
         print(
             "usage: resolve.py <artifact-or-dir> "
-            "[--type pcap|ocudu|amari-ue] [passthrough args...]",
+            "[--type pcap|ocudu|amari-ue|correlate] [passthrough args...]",
             file=sys.stderr,
         )
         return 2
@@ -140,7 +146,11 @@ def main(argv: list[str]) -> int:
 
     print(f"kind: {kind} ({reason})")
     print(f"-> read references/{kind}/")
-    print(f"-> conventions: references/{kind}/conventions.md")
+    if kind == "correlate":
+        # The correlate subtree has no conventions.md; point at its entry doc.
+        print("-> start at: references/correlate/cross-correlation.md")
+    else:
+        print(f"-> conventions: references/{kind}/conventions.md")
     print()
     sys.stdout.flush()  # ensure the headline precedes the delegate's output when piped
 

@@ -1,8 +1,9 @@
 # Cross-correlation reference (the master model)
 
 How to line up the *same* event across the Amarisoft UE log, the OCUDU gNB log,
-and the packet captures. Per-artifact parsing detail lives in the sub-skills;
-this file is only about joining sources.
+and the packet captures. Per-artifact parsing detail lives in the per-type
+subtrees (`../pcap/`, `../ocudu/`, `../amari-ue/`); this file is only about
+joining sources.
 
 ## Timestamp formats per source
 
@@ -89,7 +90,7 @@ Notes and caveats:
 
 | Script | Purpose |
 |---|---|
-| `run_inventory.py` | Components, artifacts, testbed map, clock anchors (dispatch backbone) |
+| `resolve.py` | Components, artifacts, testbed map, clock anchors (the `correlate` resolver) |
 | `align_clocks.py` | Confirm log↔pcap UTC sameness + UE↔gNB PHY slot alignment; report decode latency / any offset |
 | `correlate_radio.py` | Join UE↔gNB PHY events on `(SFN.slot, RNTI)`; flag rx-ko/missing/contention; DTX vs degradation |
 | `map_ue_ids.py` | Per-pcap UE-identifier lifecycle (f1ap/ngap/e1ap); feeds `ue-identity-map.md` |

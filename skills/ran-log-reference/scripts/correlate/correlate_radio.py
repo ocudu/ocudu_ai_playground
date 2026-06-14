@@ -52,7 +52,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import utils
-import run_inventory
+import resolve
 
 # SFN wraps every 1024 frames (~10.24 s), so an "SFN.slot" string recurs over a
 # run. Sources share UTC, so we disambiguate same-(slot,rnti) events by pairing
@@ -70,11 +70,11 @@ def resolve_logs(path_str, gnb_arg, ue_arg):
     ue = Path(ue_arg) if ue_arg else None
     if gnb and ue:
         return gnb, ue
-    inv = run_inventory.build_inventory(path_str)
+    inv = resolve.build_inventory(path_str)
     for c in inv["components"]:
         rd = Path(c["run_dir"])
         if gnb is None and c["role"] in ("gnb", "du", "cu", "cu-cp", "cu-up", "odu", "ocu"):
-            for n in run_inventory.OCUDU_LOG_NAMES:
+            for n in resolve.OCUDU_LOG_NAMES:
                 if (rd / n).is_file():
                     gnb = rd / n
                     break
