@@ -70,6 +70,7 @@ Verified against an OCUDU `f1ap.pcap` capture:
 | 11 | InitialULRRCMessageTransfer | DU | first RRC message from UE |
 | 12 | DLRRCMessageTransfer | CU | CU RRC → UE |
 | 13 | ULRRCMessageTransfer | DU | UE RRC → CU |
+| 26 | F1Removal | DU or CU | tear down the F1 interface |
 
 ## Common failure signatures
 

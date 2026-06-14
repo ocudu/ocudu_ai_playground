@@ -74,7 +74,8 @@ from pathlib import Path
 HEADER_RE = re.compile(
     r"^(?P<ts>\d{4}-\d{2}-\d{2}T(?P<time>\d{2}:\d{2}:\d{2}\.\d{6}))\s+"
     r"\[(?P<layer>[A-Z][A-Z0-9_ -]*?)\s*\]\s+"
-    r"\[(?P<lvl>[A-Z])\]\s+"
+    # The level token is absent on some layers (e.g. [METRICS ]); keep it optional.
+    r"(?:\[(?P<lvl>[A-Z])\]\s+)?"
 )
 
 
@@ -135,7 +136,7 @@ def block_matches(header_line: str, body_lines: list[str], args) -> bool:
     ts = m.group("ts")
     time_only = m.group("time")
     layer = m.group("layer").strip()
-    lvl = m.group("lvl")
+    lvl = m.group("lvl") or ""  # absent on level-less layers (e.g. METRICS)
 
     if args.after and not ts_matches_after(ts, time_only, args.after):
         return False

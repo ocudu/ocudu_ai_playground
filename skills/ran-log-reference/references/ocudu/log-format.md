@@ -98,7 +98,8 @@ state transitions:
 | `Built in .* mode using commit` | Binary build identity (top of file) |
 | `Closing PCAP files...` | Shutdown handler entered (often follows SIGTERM) |
 | `Workers stopped successfully` | Clean process termination |
-| `N2: SCTP connection to AMF established` | NGAP transport up |
+| `[SCTP-GW ] N2: SCTP connection to AMF established` | NGAP transport (SCTP) up |
+| `[CU-CP ] N2: Connection to AMF on <ip>:<port> was established` | AMF connection up (the marker the summary keys on) |
 | `Tx PDU: NGSetupRequest` / `Rx PDU: NGSetupResponse` | gNB ↔ AMF NG setup |
 | `"E1AP CU-UP Setup Procedure" finalized` | Internal E1 between CU-CP and CU-UP up |
 | `DU created successfully` / `O-DU created successfully` | DU-High initialised |

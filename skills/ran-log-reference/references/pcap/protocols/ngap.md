@@ -48,6 +48,7 @@ tshark -r ngap.pcap -Y 'ngap.procedureCode ==  0'   # AMFConfigurationUpdate
 | 19 | NASNonDeliveryIndication | gNB | NAS not delivered |
 | 21 | NGSetup | gNB | NG-C setup at startup |
 | 24 | Paging | AMF | DL idle-mode paging |
+| 28 | PDUSessionResourceRelease | AMF | release PDU session (carries `cause`, not a failure) |
 | 29 | PDUSessionResourceSetup | AMF | establish PDU session |
 | 35 | RANConfigurationUpdate | gNB | infrastructure |
 | 40 | UEContextModification | AMF | |

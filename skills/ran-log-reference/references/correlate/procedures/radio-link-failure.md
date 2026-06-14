@@ -8,13 +8,17 @@ this — `gnb.log` alone cannot tell a UE DTX from a gNB decode miss.
 ## Step 1 — locate the failure window
 
 Get the RNTI and the approximate time from the symptom (or from
-`ocudu` flagging an RLF / reestablishment). The gNB MAC logs the
-RLF cause (e.g. `RLF detected. Cause: 100 consecutive HARQ-ACK KOs`).
+`ocudu` flagging a reestablishment). In these builds the gNB does **not** print an
+explicit "RLF detected" line — the failure is inferred from the reestablishment it
+triggers: the UE logs `CCCH UL rrcReestablishmentRequest` and the gNB logs
+`"RRC Reestablishment Procedure" for old c-rnti=0x<RNTI> ... started`. The
+HARQ-KO threshold that drives this is the `max_consecutive_kos` config value
+(commonly 100), not a logged event.
 
 ## Step 2 — classify the UL failure across sources
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind pusch --rnti 0x<RNTI>
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/correlate_radio.py <run-dir> --kind pusch --rnti 0x<RNTI>
 ```
 
 Read the status of the slots leading into the failure:
@@ -36,7 +40,7 @@ A UE goes silent when it stops receiving DL grants (PDCCH). Delegate to
 `ocudu` for the DL scheduling the gNB believed it sent. Correlate
 PDCCH/PDSCH on `(SFN.slot, RNTI)`:
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind pdcch --rnti 0x<RNTI>
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/correlate_radio.py <run-dir> --kind pdcch --rnti 0x<RNTI>
 ```
 
 ## Step 4 — reestablishment outcome

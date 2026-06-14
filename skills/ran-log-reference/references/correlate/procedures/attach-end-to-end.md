@@ -22,8 +22,8 @@ naming the join key at each hop. Per-side detail lives in the per-type subtrees
    get the rest of the chain (`map_ue_ids.py` on the pcaps).
 2. Confirm Msg3 reached the gNB:
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind prach
-   python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind pusch --rnti 0x<tc-rnti>
+   python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/correlate_radio.py <run-dir> --kind prach
+   python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/correlate_radio.py <run-dir> --kind pusch --rnti 0x<tc-rnti>
    ```
 3. For RRC/NGAP/E1AP detail, delegate to `ocudu` (gNB side) and
    `pcap` (the F1AP/NGAP/E1AP bodies); for the UE's view delegate to

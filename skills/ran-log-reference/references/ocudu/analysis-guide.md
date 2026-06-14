@@ -43,7 +43,7 @@ The script emits, in one pass:
   late HARQs > 0, RRC release without prior `UEContextReleaseCommand`.
 
 If the script is not present or fails, fall back to the grep recipes in
-`references/log-format.md` § Key grep recipes to collect the same info manually.
+`log-format.md` § Key grep recipes to collect the same info manually.
 
 For UE-lifecycle latency questions (creation/configuration/removal per-stage and
 end-to-end timings), load `references/latency-profiling.md` — it documents the
@@ -163,9 +163,9 @@ Examples for common questions:
 | "Reestablishment seen?" | `--pattern "rrcReestablishment"` |
 
 Otherwise, use targeted grep with the canonical recipes in
-`references/log-format.md` § Key grep recipes. Always cap with `| head -n 200`;
+`log-format.md` § Key grep recipes. Always cap with `| head -n 200`;
 if a result is larger, narrow it (time window, UE id, cell) or spill into the
-session cache dir as `gnb-query-<sha>.txt` and report the path (see SKILL.md
+session cache dir as `ocudu-query-<sha>.txt` and report the path (see SKILL.md
 § Efficiency rules).
 
 **YAML/config questions** — look at **both** `ocudu_gnb.yml` (what the user/Retina

@@ -25,7 +25,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/pcap_overview.py <file.pcap> --top 5
 `pcap_overview.py` emits, for the pcap:
 
 - packet count, and first/last `frame.time_epoch`
-- distinct UE identifiers per ID-type (see `references/protocols/general.md`)
+- distinct UE identifiers per ID-type (see `references/pcap/protocols/general.md`)
 - top procedure codes (NGAP/F1AP/E1AP) or PDU types (MAC/RLC)
 - count of `Failure` / `Reject` PDUs
 
@@ -50,7 +50,7 @@ Present the script output as one block:
 - One line per pcap: packets, time range, top procedures, failure count —
   the script output verbatim, don't paraphrase. The scripts already print
   procedures as `Name(code)` (e.g. `InitialContextSetup(14)`); for any bare code
-  not yet in the map, look it up in `references/protocols/<proto>.md`
+  not yet in the map, look it up in `references/pcap/protocols/<proto>.md`
   § Common procedures and codes.
 - Anomalies bulleted last, one each — non-zero failure counts, unbalanced
   setup/release procedure tallies, sibling pcaps with non-overlapping time ranges.
@@ -131,7 +131,7 @@ Rejects, unbalanced setup/release counts) as primary leads.
 
 ### first hypothesis — procedure dispatch
 
-Pick the most likely matching procedure from `references/procedures/`:
+Pick the most likely matching procedure from `procedures/`:
 
 | Symptom | File |
 |---|---|

@@ -32,11 +32,11 @@ The script emits, in one pass:
 - Key RRC messages (setup, reconfigurations, reestablishments)
 - Procedure counts: PRACH attempts, handovers, reestablishments, PHY CRC failures
 - Traffic stats: CBR sent/received with loss percentage
-- Sim events timeline (power_on, cbr_start, power_off, quit)
+- Sim events timeline (power_on, cbr_recv/cbr_send, power_off, quit)
 - Anomalies detected (packet loss > 1%, PHY errors, unexpected final NAS state)
 
 If the script is not yet present or fails, fall back to the grep recipes in
-`references/log-format.md` to collect the same information manually.
+`references/amari-ue/log-format.md` to collect the same information manually.
 
 ### stdout quick-scan
 
@@ -133,7 +133,7 @@ Examples for common questions:
 | "How long did the run last?" | `grep -E "^# (Started|Ended)" ue.log` |
 
 Otherwise, use targeted grep with the canonical recipes in
-`references/log-format.md` § Key grep recipes. Always cap with `| head -n 200`;
+`references/amari-ue/log-format.md` § Key grep recipes. Always cap with `| head -n 200`;
 if a result is larger, narrow it (time window, UE ID) or spill into the session
 cache dir as `amari-query-<sha>.txt` and report the path (see SKILL.md
 § Efficiency rules).
@@ -173,7 +173,7 @@ missing `# Ended on`) as primary leads.
 
 ### first hypothesis — procedure dispatch
 
-Match the symptom to the most likely procedure from `references/procedures/`:
+Match the symptom to the most likely procedure from `references/amari-ue/procedures/`:
 
 | Symptom | File |
 |---|---|

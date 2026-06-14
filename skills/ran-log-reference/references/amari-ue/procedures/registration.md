@@ -28,7 +28,8 @@
 ```
 [PROD]  SIM-Event: power_off
 [NAS]   0001 New state : 5GMM-DEREGISTERED-INITIATED CM-CONNECTED
-[RRC]   UL 0001 00 DCCH-NR: RRC release    ← or network releases first
+# (optional) network-initiated RRC release on DCCH-NR DL may follow — NOT seen in
+# the OCUDU baseline fixtures, where deregistration is NAS-only.
 [NAS]   0001 New state : 5GMM-DEREGISTERED CM-CONNECTED
 [NAS]   0001 New state : 5GMM-NULL CM-CONNECTED
 [NAS]   0001 New state : 5GMM-NULL CM-IDLE

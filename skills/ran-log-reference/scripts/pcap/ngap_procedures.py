@@ -50,7 +50,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.ue:
         display_filter = f"ngap.RAN_UE_NGAP_ID == {args.ue}"
     if args.failures_only:
-        unsuccess = "ngap.unsuccessfulOutcome_element || ngap.cause"
+        # A real failure is an unsuccessfulOutcome. `ngap.cause` also rides on
+        # normal messages (e.g. PDUSessionResourceRelease), so it is NOT a failure
+        # signal — it is surfaced separately in the `cause` field.
+        unsuccess = "ngap.unsuccessfulOutcome_element"
         display_filter = f"({display_filter}) && ({unsuccess})" if display_filter else unsuccess
 
     try:
@@ -77,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
                 "iso": utils.epoch_to_iso(epoch) if epoch else None,
                 "procedureCode": code,
                 "amfUeId": amf_id or None,
-                "failure": bool(unsucc) or bool(cause),
+                "failure": bool(unsucc),
                 "cause": cause or None,
             }
         )

@@ -96,11 +96,13 @@ def parse_cfg(cfg_path: Path) -> dict:
                              text, flags=re.MULTILINE):
             result["raw"][key] = m.group(1).strip().strip('"')
 
-    # PCAPs: any `<name>_enable: true` in pcap context
+    # PCAPs: any `<name>_enable: true` in pcap context. The YAML is a concat of
+    # multiple documents, so a proto can be enabled more than once — dedupe while
+    # preserving first-seen order.
     for m in re.finditer(r"^\s*(\w+)_enable\s*:\s*true\s*$", text, flags=re.MULTILINE):
         proto = m.group(1)
         if proto in {"ngap", "f1ap", "e1ap", "mac", "rlc", "n3", "f1u", "xnap",
-                     "e2ap_cu_cp", "e2ap_cu_up", "e2ap_du"}:
+                     "e2ap_cu_cp", "e2ap_cu_up", "e2ap_du"} and proto not in result["pcaps"]:
             result["pcaps"].append(proto)
 
     # Per-layer log levels — keep only ones explicitly set. cu_level gates the
@@ -141,7 +143,8 @@ def parse_cfg(cfg_path: Path) -> dict:
 LINE_RE = re.compile(
     r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6})\s+"
     r"\[(?P<layer>[A-Z][A-Z0-9_ -]*?)\s*\]\s+"
-    r"\[(?P<lvl>[A-Z])\]\s+"
+    # The level token is absent on some layers (e.g. [METRICS ]); keep it optional.
+    r"(?:\[(?P<lvl>[A-Z])\]\s+)?"
     r"(?P<msg>.*)$"
 )
 
@@ -214,7 +217,7 @@ def parse_gnb_log(gnb_log: Path) -> dict:
 
             ts = m.group("ts")
             layer = m.group("layer").strip()
-            lvl = m.group("lvl")
+            lvl = m.group("lvl") or ""  # absent on level-less layers (e.g. METRICS)
             msg = m.group("msg")
 
             if result["first_ts"] is None:

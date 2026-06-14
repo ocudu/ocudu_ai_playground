@@ -37,10 +37,12 @@ from `gnb.log`. In that case:
 # UE side: did the UE switch cells and RACH on the target?
 #   delegate to amari-ue (CC change, PRACH on target)
 # gNB side: HO command + target scheduling
-#   delegate to ocudu; if RRC at warning, use the F1AP pcap:
-python3 ${CLAUDE_SKILL_DIR}/scripts/map_ue_ids.py f1ap.pcap | grep -E "UEContextModification|Handover"
+#   delegate to ocudu; if RRC at warning, read the F1AP pcap Info column directly
+#   (map_ue_ids.py only prints on an ID change, and the HO UEContextModification
+#   reuses the same DU/CU UE IDs, so it would show nothing):
+tshark -r f1ap.pcap -Y f1ap -T fields -e frame.number -e _ws.col.Info | grep -Ei "ContextModification|Handover|Reconfig"
 # Radio on the target cell for the new C-RNTI:
-python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind pusch --rnti 0x<T2>
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/correlate_radio.py <run-dir> --kind pusch --rnti 0x<T2>
 ```
 
 ## Failure attribution

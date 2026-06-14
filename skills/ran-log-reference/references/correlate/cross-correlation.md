@@ -31,7 +31,7 @@ offset.
 
 Confirm empirically per run with:
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/align_clocks.py <run-dir>
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/align_clocks.py <run-dir>
 ```
 
 ## The exact radio key: PHY (SFN.slot, RNTI)

@@ -19,7 +19,7 @@ context.
 | 3 | CU-CP-F1 | `Rx PDU ... InitialULRRCMessageTransfer` |
 | 4 | RRC  | `CCCH UL rrcReestablishmentRequest` (carries old c-rnti, old pci, reestablishmentCause) |
 | 5 | CU-CP | UE context lookup — old `ue=N_old` matched to new c-rnti |
-| 6 | RRC  | `CCCH DL rrcReestablishment` |
+| 6 | RRC  | `DCCH DL rrcReestablishment` (sent on SRB1/DCCH, not CCCH) |
 | 7 | RRC  | `DCCH UL rrcReestablishmentComplete` |
 | 8 | RRC  | `DCCH DL rrcReconfiguration` (re-applies DRB/SRB config) |
 | 9 | RRC  | `DCCH UL rrcReconfigurationComplete` |

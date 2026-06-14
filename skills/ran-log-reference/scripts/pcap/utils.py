@@ -44,6 +44,7 @@ PROC_CODE_NAMES: dict[str, dict[int, str]] = {
         19: "NASNonDeliveryIndication",
         21: "NGSetup",
         24: "Paging",
+        28: "PDUSessionResourceRelease",
         29: "PDUSessionResourceSetup",
         35: "RANConfigurationUpdate",
         40: "UEContextModification",
@@ -59,6 +60,7 @@ PROC_CODE_NAMES: dict[str, dict[int, str]] = {
         11: "InitialULRRCMessageTransfer",
         12: "DLRRCMessageTransfer",
         13: "ULRRCMessageTransfer",
+        26: "F1Removal",
     },
     "e1ap": {
         3: "gNB-CU-UP-E1Setup",

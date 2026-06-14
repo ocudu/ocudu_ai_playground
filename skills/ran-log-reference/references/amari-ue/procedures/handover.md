@@ -59,7 +59,7 @@ request on any cell it can reach.
 ```
 [PHY]   DL 0001 00 ...   ← radio link failure (e.g. T310 expiry, many CRC FAIL)
 [RRC]   UL 0001 00 CCCH-NR: RRC reestablishment request
-[RRC]   DL 0001 00 CCCH-NR: RRC reestablishment    ← network accepts
+[RRC]   DL 0001 00 DCCH-NR: RRC reestablishment    ← network accepts (DCCH/SRB1, not CCCH)
 [RRC]   UL 0001 00 DCCH-NR: RRC reestablishment complete
 [RRC]   DL 0001 00 DCCH-NR: RRC reconfiguration    ← restore bearers
 [RRC]   UL 0001 00 DCCH-NR: RRC reconfiguration complete

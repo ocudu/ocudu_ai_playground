@@ -72,6 +72,8 @@ up to `ue_count`, so values above `0009` are hex.
 | `cbr_recv` | Start constant-bit-rate DL traffic |
 | `cbr_send` | Start constant-bit-rate UL traffic |
 | `ping` | Send ICMP pings |
+| `pdn_connect` | UE requests an additional PDU session |
+| `pdn_disconnect` | UE releases a PDU session |
 | `rrc_reest` | Trigger an RRC reestablishment (simulated radio link failure) |
 
 ### Key PHY channel keywords

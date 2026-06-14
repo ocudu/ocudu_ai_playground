@@ -1,7 +1,7 @@
 # tshark recipes (cross-cutting)
 
 Recipes that don't fit a single protocol. For per-protocol filters see
-`references/protocols/<proto>.md`.
+`references/pcap/protocols/<proto>.md`.
 
 ## Confirm dissector binding on a pcap
 
