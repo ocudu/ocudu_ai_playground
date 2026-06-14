@@ -8,7 +8,8 @@ run_inventory.py — Inventory an OCUDU Retina test/run directory.
 
 Enumerates the components of a `test_gnb[...]` directory (OCUDU gNB/DU/CU,
 Amarisoft UE, Amarisoft 5GC), resolves each component's latest run subdir,
-lists the artifacts present, maps each to the sub-skill that analyses it,
+lists the artifacts present, maps each to the analyze-ran-log type that
+analyses it,
 parses testbed.json (component -> IP:port), and reports the per-source clock
 anchors needed for cross-correlation. This is the dispatch backbone for all
 three modes of the inspect-ocudu-run skill.
@@ -26,18 +27,18 @@ from pathlib import Path
 
 import utils
 
-# Component dir prefix -> (role, sub-skill that owns its primary log).
+# Component dir prefix -> (role, analyze-ran-log type for its primary log).
 COMPONENT_ROLES = [
-    ("ocudu-cu-cp", "cu-cp", "analyze-ocudu-gnb-log"),
-    ("ocudu-cu-up", "cu-up", "analyze-ocudu-gnb-log"),
-    ("ocudu-cu", "cu", "analyze-ocudu-gnb-log"),
-    ("ocudu-du", "du", "analyze-ocudu-gnb-log"),
-    ("ocudu-gnb", "gnb", "analyze-ocudu-gnb-log"),
-    ("ocudu-odu", "odu", "analyze-ocudu-gnb-log"),
-    ("ocudu-ocu", "ocu", "analyze-ocudu-gnb-log"),
-    ("amarisoft-ue", "ue", "analyze-amari-ue-log"),
-    ("amarisoft-5gc", "5gc", "(light-touch; future analyze-amari-5gc-log)"),
-    ("amarisoft-mme", "5gc", "(light-touch; future analyze-amari-5gc-log)"),
+    ("ocudu-cu-cp", "cu-cp", "ocudu"),
+    ("ocudu-cu-up", "cu-up", "ocudu"),
+    ("ocudu-cu", "cu", "ocudu"),
+    ("ocudu-du", "du", "ocudu"),
+    ("ocudu-gnb", "gnb", "ocudu"),
+    ("ocudu-odu", "odu", "ocudu"),
+    ("ocudu-ocu", "ocu", "ocudu"),
+    ("amarisoft-ue", "ue", "amari-ue"),
+    ("amarisoft-5gc", "5gc", "(light-touch; future amari-5gc type)"),
+    ("amarisoft-mme", "5gc", "(light-touch; future amari-5gc type)"),
 ]
 
 RUN_SUBDIR_RE = __import__("re").compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
@@ -48,9 +49,9 @@ PCAP_NAMES = ("ngap.pcap", "f1ap.pcap", "e1ap.pcap", "mac.pcap", "rlc.pcap")
 
 
 def classify(component_dir_name: str):
-    for prefix, role, subskill in COMPONENT_ROLES:
+    for prefix, role, atype in COMPONENT_ROLES:
         if component_dir_name.startswith(prefix):
-            return role, subskill
+            return role, atype
     return None, None
 
 
@@ -89,12 +90,12 @@ def resolve_test_dir(path: Path) -> tuple[Path, list[Path]]:
 
 
 def inventory_component(comp_dir: Path) -> dict:
-    role, subskill = classify(comp_dir.name)
+    role, atype = classify(comp_dir.name)
     run_dir = latest_run_subdir(comp_dir)
     info: dict = {
         "component": comp_dir.name,
         "role": role,
-        "subskill": subskill,
+        "type": atype,
         "run_dir": str(run_dir),
         "logs": [],
         "pcaps": [],
@@ -155,7 +156,7 @@ def render_text(inv: dict) -> str:
     lines = [f"Test directory : {inv['test_dir']}", ""]
     lines.append("Components:")
     for c in inv["components"]:
-        lines.append(f"  [{c['role']}] {c['component']}  (sub-skill: {c['subskill']})")
+        lines.append(f"  [{c['role']}] {c['component']}  (analyze-ran-log type: {c['type']})")
         rd = Path(c["run_dir"]).name
         lines.append(f"        run subdir : {rd}")
         if c["logs"]:
@@ -163,7 +164,7 @@ def render_text(inv: dict) -> str:
         if c["configs"]:
             lines.append(f"        configs    : {', '.join(c['configs'])}")
         if c["pcaps"]:
-            lines.append(f"        pcaps      : {', '.join(c['pcaps'])}  (sub-skill: analyze-pcap)")
+            lines.append(f"        pcaps      : {', '.join(c['pcaps'])}  (analyze-ran-log type: pcap)")
         if c["metrics"]:
             lines.append("        metrics    : metrics.json")
         ca = c["clock_anchor"]

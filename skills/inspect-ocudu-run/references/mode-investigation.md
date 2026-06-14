@@ -54,7 +54,7 @@ Repeat until diagnosis or the user stops:
 5. Immediately follow with `AskUserQuestion` offering:
    - **Continue** — proceed with the planned **Next**.
    - **Pull in sub-skill X's knowledge** — load
-     `analyze-ocudu-gnb-log` / `analyze-amari-ue-log` / `analyze-pcap` and run a
+     `ocudu` / `amari-ue` / `pcap` and run a
      deep single-artifact dive on the current artifact here, then continue.
    - **Different angle** *(open text)* — another source, UE, or time window.
    - **Skip to diagnosis** — produce the final diagnosis now.

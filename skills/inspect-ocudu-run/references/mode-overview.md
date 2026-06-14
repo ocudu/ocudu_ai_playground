@@ -19,10 +19,10 @@ For each component present, pull in its sub-skill's knowledge via the `Skill`
 tool, then produce the per-artifact overview here using that skill's summary
 script (follow its `references/analysis-guide.md` § Producing an overview):
 
-- OCUDU app component → `analyze-ocudu-gnb-log` (run `ocudu_log_summary.py` on the
+- OCUDU app component → `ocudu` (run `scripts/ocudu/ocudu_log_summary.py` on the
   `gnb.log`/run dir)
-- `amarisoft-ue-*` → `analyze-amari-ue-log` (run `ue_log_summary.py`)
-- `*.pcap` present → `analyze-pcap` (run `pcap_overview.py` on the run dir's pcaps)
+- `amarisoft-ue-*` → `amari-ue` (run `scripts/amari-ue/ue_log_summary.py`)
+- `*.pcap` present → `pcap` (run `scripts/pcap/pcap_overview.py` on the run dir's pcaps)
 - `amarisoft-5gc-*` → light-touch here: grep `mme.log` for registration /
   PDU-session / NGAP / `[E]` lines (cap at 200 lines); note the future
   `analyze-amari-5gc-log` hook.
@@ -51,9 +51,9 @@ Present one block:
 **Clocks:** all UTC; log↔pcap Δ <x> ms; UE↔gNB PHY slots aligned
 
 ### Per-component (from sub-skills)
-- gNB:  <one-line headline from analyze-ocudu-gnb-log>
-- UE:   <one-line headline from analyze-amari-ue-log>
-- pcap: <one-line headline from analyze-pcap>
+- gNB:  <one-line headline from ocudu>
+- UE:   <one-line headline from amari-ue>
+- pcap: <one-line headline from pcap>
 - 5GC:  <registration/PDU-session counts; errors>
 
 ### Cross-source picture

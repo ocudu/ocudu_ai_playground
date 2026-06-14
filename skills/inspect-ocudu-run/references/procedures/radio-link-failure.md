@@ -8,7 +8,7 @@ this — `gnb.log` alone cannot tell a UE DTX from a gNB decode miss.
 ## Step 1 — locate the failure window
 
 Get the RNTI and the approximate time from the symptom (or from
-`analyze-ocudu-gnb-log` flagging an RLF / reestablishment). The gNB MAC logs the
+`ocudu` flagging an RLF / reestablishment). The gNB MAC logs the
 RLF cause (e.g. `RLF detected. Cause: 100 consecutive HARQ-ACK KOs`).
 
 ## Step 2 — classify the UL failure across sources
@@ -31,9 +31,9 @@ This `rx-ko/ue-tx` vs `rx-ko/ue-silent` split is the key cross-source verdict.
 ## Step 3 — if DTX, look at the DL toward the UE
 
 A UE goes silent when it stops receiving DL grants (PDCCH). Delegate to
-`analyze-amari-ue-log` to inspect the UE's PDCCH decoding around the window
+`amari-ue` to inspect the UE's PDCCH decoding around the window
 (e.g. spurious search-space / `ss_id` mismatches in ZMQ), and to
-`analyze-ocudu-gnb-log` for the DL scheduling the gNB believed it sent. Correlate
+`ocudu` for the DL scheduling the gNB believed it sent. Correlate
 PDCCH/PDSCH on `(SFN.slot, RNTI)`:
 ```bash
 python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind pdcch --rnti 0x<RNTI>

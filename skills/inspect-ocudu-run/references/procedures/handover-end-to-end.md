@@ -24,9 +24,9 @@ both the UE PHY lines and the gNB target-cell scheduling.
 Mobility tests frequently run `rrc_level: warning` / `cu_level: warning`, so the
 `reconfigurationWithSync` body and the `Trigger handover` lines are **absent**
 from `gnb.log`. In that case:
-- Read the HO command from the **F1AP pcap** (`analyze-pcap`):
+- Read the HO command from the **F1AP pcap** (`pcap`):
   `UEContextModificationRequest` carrying `reconfigurationWithSync`.
-- Confirm the cell switch from the **UE log** (`analyze-amari-ue-log`): the `CC`
+- Confirm the cell switch from the **UE log** (`amari-ue`): the `CC`
   index change and the target-cell PRACH.
 - Confirm target-cell access in `gnb.log` scheduler events (PRACH on the target
   pci with a new tc-rnti).
@@ -35,9 +35,9 @@ from `gnb.log`. In that case:
 
 ```bash
 # UE side: did the UE switch cells and RACH on the target?
-#   delegate to analyze-amari-ue-log (CC change, PRACH on target)
+#   delegate to amari-ue (CC change, PRACH on target)
 # gNB side: HO command + target scheduling
-#   delegate to analyze-ocudu-gnb-log; if RRC at warning, use the F1AP pcap:
+#   delegate to ocudu; if RRC at warning, use the F1AP pcap:
 python3 ${CLAUDE_SKILL_DIR}/scripts/map_ue_ids.py f1ap.pcap | grep -E "UEContextModification|Handover"
 # Radio on the target cell for the new C-RNTI:
 python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind pusch --rnti 0x<T2>

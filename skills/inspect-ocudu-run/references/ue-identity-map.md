@@ -2,7 +2,7 @@
 
 A single UE wears different identifiers in each artifact. To follow one UE across
 the UE log, the gNB log, and the pcaps, anchor on the **most stable** ID and
-follow the chain. (Per-layer detail on each ID lives in `analyze-ocudu-gnb-log`;
+follow the chain. (Per-layer detail on each ID lives in `ocudu`;
 this file is only the cross-artifact joining.)
 
 ## The chain

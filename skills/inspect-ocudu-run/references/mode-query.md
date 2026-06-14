@@ -14,9 +14,9 @@ Restate the question in one sentence. Decide:
   targeted question):
   | Question example | Knowledge module |
   |---|---|
-  | "How many handovers did the gNB do?" | `analyze-ocudu-gnb-log` |
-  | "What was the UE's final NAS state?" | `analyze-amari-ue-log` |
-  | "How many NGAP UEContextRelease in the pcap?" | `analyze-pcap` |
+  | "How many handovers did the gNB do?" | `ocudu` |
+  | "What was the UE's final NAS state?" | `amari-ue` |
+  | "How many NGAP UEContextRelease in the pcap?" | `pcap` |
 
 - **Cross-artifact** — the answer requires lining up ≥2 sources. Run this skill's
   correlation scripts:

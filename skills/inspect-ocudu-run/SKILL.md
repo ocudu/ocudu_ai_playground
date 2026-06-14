@@ -11,8 +11,8 @@ description: >
   "trace UE X end to end", a path to a `test_gnb[...]` directory or an
   `ocudu-*`/`amarisoft-*` component directory, or a GitLab CI job URL.
   This skill is an ORCHESTRATOR: it routes single-artifact analysis to the
-  per-artifact sub-skills (`analyze-ocudu-gnb-log`, `analyze-amari-ue-log`,
-  `analyze-pcap`) via the Skill tool, and owns the cross-correlation of events
+  `analyze-ran-log` knowledge module (its `pcap` / `ocudu` / `amari-ue`
+  type subtrees) via the Skill tool, and owns the cross-correlation of events
   across those sources (timestamp/slot alignment, UE-identity joining,
   PRACH/PUSCH/PUCCH sent-vs-received matching). When in doubt about scope or
   intent, it asks the user via AskUserQuestion rather than assuming.
@@ -23,20 +23,21 @@ allowed-tools: Skill, Edit, Write, Bash(ls:*), Bash(grep:*), Bash(python3:*), Ba
 
 # Inspect an OCUDU run (orchestrator)
 
-Analyze a complete OCUDU test/run directory by **orchestrating** the per-artifact
-sub-skills and **cross-correlating** their findings. A Retina `test_gnb[...]`
-directory typically contains:
+Analyze a complete OCUDU test/run directory by **orchestrating** the
+`analyze-ran-log` per-type knowledge and **cross-correlating** the findings.
+A Retina `test_gnb[...]` directory typically contains:
 
-| Component dir | Artifacts | Owned by |
+| Component dir | Artifacts | Analyzed with |
 |---|---|---|
-| `ocudu-gnb-*` / `ocudu-du-*` / `ocudu-cu-*` / `ocudu-cu-cp-*` / `ocudu-cu-up-*` | `gnb.log`/`du.log`/`cu*.log`, `stdout.log`, `ocudu_*.yml`, `metrics.json` | `analyze-ocudu-gnb-log` |
-| (the same dirs) | `*.pcap` (`ngap`/`f1ap`/`e1ap`/`mac`/`rlc`) | `analyze-pcap` |
-| `amarisoft-ue-*` | `ue.log`, `stdout.log`, `amarisoft_ue.cfg` | `analyze-amari-ue-log` |
-| `amarisoft-5gc-*` | `mme.log`, `amarisoft_mme.cfg` | light-touch here (future `analyze-amari-5gc-log`) |
+| `ocudu-gnb-*` / `ocudu-du-*` / `ocudu-cu-*` / `ocudu-cu-cp-*` / `ocudu-cu-up-*` | `gnb.log`/`du.log`/`cu*.log`, `stdout.log`, `ocudu_*.yml`, `metrics.json` | `analyze-ran-log` › `ocudu` |
+| (the same dirs) | `*.pcap` (`ngap`/`f1ap`/`e1ap`/`mac`/`rlc`) | `analyze-ran-log` › `pcap` |
+| `amarisoft-ue-*` | `ue.log`, `stdout.log`, `amarisoft_ue.cfg` | `analyze-ran-log` › `amari-ue` |
+| `amarisoft-5gc-*` | `mme.log`, `amarisoft_mme.cfg` | light-touch here (future `amari-5gc` type) |
 | (top level) | `testbed.json`, `test.html`, `agent-log-*.log` | this skill |
 
 **Division of labor (core principle).** Single-artifact detail lives in the
-sub-skills. **This skill's `references/` hold only aggregation and
+`analyze-ran-log` type subtrees. **This skill's `references/` hold only
+aggregation and
 cross-correlation** material — how to line up the same event across the UE log,
 the gNB log, and the pcaps. When analysis surfaces an artifact-specific learning,
 propose it into the relevant **sub-skill**, not here (see § Memory).
@@ -111,25 +112,27 @@ model), `references/ue-identity-map.md`, `references/components.md`,
 
 ## Pulling in sub-skill knowledge (the Skill tool)
 
-The per-artifact sub-skills are **knowledge modules**, not task runners. Invoke
-one with the `Skill` tool to load its analysis methodology, format references, and
-helper-script catalogue into context, then **run the single-artifact analysis
-here yourself** using that knowledge:
+The per-artifact knowledge lives in the single `analyze-ran-log` skill — a
+**knowledge module**, not a task runner. Invoke it **once** with the `Skill`
+tool to load its shared methodology, then for each artifact read that artifact's
+**type subtree** (`references/<type>/`) and run its helper scripts here yourself:
 
-- OCUDU app logs / configs / metrics → `analyze-ocudu-gnb-log`
-- Amarisoft UE log → `analyze-amari-ue-log`
-- `*.pcap` → `analyze-pcap`
-- Amarisoft 5GC `mme.log` → no sub-skill yet; do a light-touch grep here
+- OCUDU app logs / configs / metrics → `ocudu` type (`references/ocudu/`)
+- Amarisoft UE log → `amari-ue` type (`references/amari-ue/`)
+- `*.pcap` → `pcap` type (`references/pcap/`)
+- Amarisoft 5GC `mme.log` → no type yet; do a light-touch grep here
   (registration / PDU-session / NGAP / `[E]` lines) and note the future
-  `analyze-amari-5gc-log` hook.
+  `amari-5gc` hook.
 
-Once a sub-skill's knowledge is loaded, follow its `references/analysis-guide.md`
-for the activity at hand and run its summary/search scripts via that sub-skill's
-own dir, e.g. `python3 ${CLAUDE_SKILL_DIR}/scripts/pcap_overview.py`
-(for `analyze-pcap`), `ocudu_log_summary.py` (gNB), `ue_log_summary.py` (UE) —
-`${CLAUDE_SKILL_DIR}` resolves to the invoked sub-skill's directory while its
-guidance is active. This skill's own `allowed-tools` already include `tshark`,
-`capinfos`, and `python3`, so the per-artifact scripts run here directly.
+Once `analyze-ran-log` is loaded, follow each type's
+`references/<type>/analysis-guide.md` for the activity at hand and run its
+summary/search scripts from that skill's `scripts/<type>/` dir, e.g.
+`python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/pcap_overview.py` (pcap),
+`scripts/ocudu/ocudu_log_summary.py` (gNB),
+`scripts/amari-ue/ue_log_summary.py` (UE) — `${CLAUDE_SKILL_DIR}` resolves to the
+`analyze-ran-log` directory while its guidance is active. This skill's own
+`allowed-tools` already include `tshark`, `capinfos`, and `python3`, so the
+per-artifact scripts run here directly.
 
 **Do the cross-correlation yourself** — that is this skill's job and its scripts
 read the raw artifacts directly:
@@ -149,7 +152,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/map_ue_ids.py <ngap|f1ap|e1ap>.pcap
   `${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/`. Write
   this skill's spills with the **`run-`** prefix (the helper scripts do this via
   `utils.cache_path`). **Reuse** the sub-skills' cached outputs when present
-  (`gnb-`, `amari-`, `pcap-`) instead of recomputing. The OS reaps `/tmp` on
+  (`ocudu-`, `amari-`, `pcap-`) instead of recomputing. The OS reaps `/tmp` on
   reboot.
 - **Never** read raw `gnb.log` / `ue.log` / pcaps into context — use the
   sub-skills' summary/search scripts (which emit compact summaries) and the
@@ -165,15 +168,16 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/map_ue_ids.py <ngap|f1ap|e1ap>.pcap
 
 ## Memory & self-maintenance
 
-This skill and its sub-skills improve over time. When analysis surfaces a
-generalisable learning — or reveals a doc/script is wrong — propose the change
-and, **only after the user approves**, apply it with `Edit`/`Write`.
+This skill and the `analyze-ran-log` module improve over time. When analysis
+surfaces a generalisable learning — or reveals a doc/script is wrong — propose
+the change and, **only after the user approves**, apply it with `Edit`/`Write`.
 
 **Routing rule (important):**
 - A learning that is specific to **one artifact type** (a gNB log field, a UE log
-  pattern, a pcap dissector quirk) → propose it into that **sub-skill's**
-  `references/` tree (`analyze-ocudu-gnb-log`, `analyze-amari-ue-log`,
-  `analyze-pcap`). This skill may write there on approval, per the user's intent.
+  pattern, a pcap dissector quirk) → propose it into that type's subtree in
+  `analyze-ran-log` (`references/ocudu/`, `references/amari-ue/`,
+  `references/pcap/`). This skill may write there on approval, per the user's
+  intent.
 - A learning about **cross-correlation** (clock/slot alignment, identifier
   joining, a multi-source procedure trace) → keep it in **this** skill's
   `references/`; a correlation-script fix goes in **this** skill's `scripts/`.

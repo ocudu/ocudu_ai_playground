@@ -27,15 +27,15 @@ fallback, artifact list, clock anchors).
 
 | Component dir prefix | Role | Sub-skill |
 |---|---|---|
-| `ocudu-gnb-*` | integrated gNB | `analyze-ocudu-gnb-log` |
-| `ocudu-du-*` | DU (split) | `analyze-ocudu-gnb-log` |
-| `ocudu-cu-*`, `ocudu-cu-cp-*`, `ocudu-cu-up-*` | CU / CU-CP / CU-UP (split) | `analyze-ocudu-gnb-log` |
-| `ocudu-odu-*`, `ocudu-ocu-*` | O-DU / O-CU variants | `analyze-ocudu-gnb-log` |
-| (any of the above) `*.pcap` | NGAP/F1AP/E1AP/MAC/RLC captures | `analyze-pcap` |
-| `amarisoft-ue-*` | UE simulator | `analyze-amari-ue-log` |
+| `ocudu-gnb-*` | integrated gNB | `ocudu` |
+| `ocudu-du-*` | DU (split) | `ocudu` |
+| `ocudu-cu-*`, `ocudu-cu-cp-*`, `ocudu-cu-up-*` | CU / CU-CP / CU-UP (split) | `ocudu` |
+| `ocudu-odu-*`, `ocudu-ocu-*` | O-DU / O-CU variants | `ocudu` |
+| (any of the above) `*.pcap` | NGAP/F1AP/E1AP/MAC/RLC captures | `pcap` |
+| `amarisoft-ue-*` | UE simulator | `amari-ue` |
 | `amarisoft-5gc-*` / `amarisoft-mme-*` | 5GC / MME | light-touch here (future `analyze-amari-5gc-log`) |
 
-All OCUDU app logs share the same log format, so `analyze-ocudu-gnb-log` handles
+All OCUDU app logs share the same log format, so `ocudu` handles
 `gnb.log`, `du.log`, `cu*.log` alike.
 
 ## testbed.json

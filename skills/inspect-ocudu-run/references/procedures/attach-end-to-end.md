@@ -25,17 +25,17 @@ the correlation spine.
    python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind prach
    python3 ${CLAUDE_SKILL_DIR}/scripts/correlate_radio.py <run-dir> --kind pusch --rnti 0x<tc-rnti>
    ```
-3. For RRC/NGAP/E1AP detail, delegate to `analyze-ocudu-gnb-log` (gNB side) and
-   `analyze-pcap` (the F1AP/NGAP/E1AP bodies); for the UE's view delegate to
-   `analyze-amari-ue-log`.
+3. For RRC/NGAP/E1AP detail, delegate to `ocudu` (gNB side) and
+   `pcap` (the F1AP/NGAP/E1AP bodies); for the UE's view delegate to
+   `amari-ue`.
 
 ## Where attach breaks, and who to blame
 
 | Symptom | Cross-source signal | Likely side |
 |---|---|---|
-| No gNB PRACH detection for a UE PRACH | UE has `PRACH:` lines, gNB PHY has none at that occasion | UE TX power / PRACH config / RU; check `analyze-amari-ue-log` + `analyze-ocudu-gnb-log` |
+| No gNB PRACH detection for a UE PRACH | UE has `PRACH:` lines, gNB PHY has none at that occasion | UE TX power / PRACH config / RU; check `amari-ue` + `ocudu` |
 | Msg3 `crc=KO` but UE transmitted | `correlate_radio --kind pusch` → `rx-ko/ue-tx` | gNB decode / ZMQ alignment / contention |
 | Msg3 `crc=KO sinr=inf`, no UE TX | `rx-ko/ue-silent` | UE DTX — UE never sent Msg3 |
-| RRC stops after setup, no NGAP InitialUEMessage | gNB has rrcSetupComplete but NGAP pcap lacks InitialUEMessage | gNB↔AMF (NGAP) — delegate to `analyze-pcap` |
+| RRC stops after setup, no NGAP InitialUEMessage | gNB has rrcSetupComplete but NGAP pcap lacks InitialUEMessage | gNB↔AMF (NGAP) — delegate to `pcap` |
 | InitialUEMessage but no ICS | NGAP has no InitialContextSetupRequest back | 5GC — check `mme.log` (light-touch) |
 | RACH contention (multi-UE) | `ue-extra-tx/contention` rows | expected; not a fault |

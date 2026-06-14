@@ -3,10 +3,10 @@
 
 """Shared helpers for the inspect-ocudu-run cross-correlation scripts.
 
-This skill orchestrates the per-artifact sub-skills (analyze-ocudu-gnb-log,
-analyze-amari-ue-log, analyze-pcap); these helpers exist only for the
+This skill orchestrates the analyze-ran-log knowledge module (its pcap /
+ocudu / amari-ue type subtrees); these helpers exist only for the
 *cross-correlation* work that spans artifact sources. Per-artifact parsing
-detail belongs in the sub-skills, not here.
+detail belongs in those type subtrees, not here.
 
 Provides:
 - the per-session shared cache root (prefix files written here with `run-`)
@@ -33,9 +33,9 @@ import re
 from pathlib import Path
 
 # --------------------------------------------------------------------------
-# Per-session shared cache root (shared with analyze-pcap / analyze-amari-ue-log
-# / analyze-ocudu-gnb-log). Write cross-correlation spills here with a `run-`
-# prefix. The OS reaps /tmp on reboot — no manual cleanup.
+# Per-session shared cache root (shared with the analyze-ran-log type
+# scripts). Write cross-correlation spills here with a `run-` prefix. The OS
+# reaps /tmp on reboot — no manual cleanup.
 # --------------------------------------------------------------------------
 
 CACHE_ROOT = (
