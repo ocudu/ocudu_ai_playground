@@ -68,7 +68,8 @@ the `[CONFIG  ] [D]` echo at the top of `gnb.log`.
 | `log.f1ap_level: info` | warning | F1AP `Tx/Rx PDU` per UE message |
 | `log.e1ap_level: info` | warning | E1AP `Tx/Rx PDU` (bearer context lifecycle) |
 | `log.pdcp_level: info` | warning | `[PDCP] TX/RX PDU` per SDU (very chatty under traffic) |
-| `log.mac_level: info` | info | Per-PDU MAC details |
+| `log.mac_level: info` | info | Per-PDU MAC details, MAC `proc="MAC UE Creation/Removal"` traces, **and all SCHED-layer lines — there is no `sched_level`; the scheduler's log output is gated by `mac_level`** |
+| `log.du_level: info` | warning | DU-manager `proc="UE Create"/"UE Configuration"/"UE Delete"` per-UE procedure traces |
 | `log.phy_level: info` | info | PDCCH/PDSCH/PUCCH/PUSCH per-slot lines (very chatty) |
 | `log.sec_level: info` | warning | Logs K_gNB and derived keys (often blank when `hex_max_size: 0`) |
 | `log.hex_max_size: N` | 0 | Bytes of hex dump shown per PDU; 0 = none, 32 = trimmed, large = full |

@@ -89,6 +89,12 @@ Upper-PDU dissector preflight), see `references/<type>/conventions.md`.
 
 These hold for every type; `references/<type>/conventions.md` adds the deltas.
 
+- **Run the helper scripts from within this skill.** The frontmatter
+  `allowed-tools` (`Bash(python3 *ran-log-reference/scripts*)`, plus the read-only
+  shell tools) pre-authorizes the scripts only while the skill is active. Invoke
+  the skill for log/pcap analysis rather than running the scripts ad hoc from the
+  main loop — that way they execute without permission prompts, and no
+  `settings.json` permission edits are needed.
 - **Session cache dir.** All intermediate state (script outputs the agent may
   post-filter, large spills, staged inputs) lives under one per-session,
   user-private directory:

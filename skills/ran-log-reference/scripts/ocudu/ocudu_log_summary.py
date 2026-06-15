@@ -65,7 +65,8 @@ CFG_KEYS = (
     "gnb_id", "ran_node_name",
     "all_level", "lib_level", "rrc_level", "ngap_level", "f1ap_level",
     "e1ap_level", "pdcp_level", "mac_level", "phy_level", "sec_level",
-    "cu_level", "xnap_level", "rlc_level",
+    "cu_level", "xnap_level", "rlc_level", "du_level",
+    "gtpu_level", "f1u_level", "sdap_level", "ofh_level", "fapi_level", "e2ap_level",
     "config_level", "hex_max_size",
     "pci", "band", "dl_arfcn", "channel_bandwidth_MHz", "common_scs",
     "nof_antennas_dl", "nof_antennas_ul",
@@ -75,20 +76,43 @@ CFG_KEYS = (
 )
 
 
-def parse_cfg(cfg_path: Path) -> dict:
+def _extract_cfg_echo(gnb_log) -> str:
+    """Pull the `[CONFIG] [D] Input configuration` YAML echo out of a gnb.log.
+    Used when no standalone ocudu_gnb.yml is present (e.g. a bare log file).
+    Requires log.config_level: debug (else the echo is absent)."""
+    if not gnb_log or not gnb_log.exists():
+        return ""
+    ts = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\s")
+    lines, capturing = [], False
+    with open(gnb_log, encoding="utf-8", errors="replace") as f:
+        for ln in f:
+            if not capturing:
+                if "[CONFIG" in ln and "Input configuration" in ln:
+                    capturing = True
+                continue
+            if ts.match(ln):            # next real log line => echo ended
+                break
+            lines.append(ln)
+    return "".join(lines)
+
+
+def parse_cfg(cfg_path: Path, gnb_log=None) -> dict:
     result: dict = {
         "raw": {},
         "pcaps": [],
         "log_levels": {},
+        "node_type": None,
+        "planes": [],
+        "l2_traces_suppressed": False,
         "tdd": False,
         "amf_addrs": [],
         "amf_port": None,
         "amf_bind_addrs": [],
     }
-    if not cfg_path.exists():
+    text = cfg_path.read_text(errors="replace") if cfg_path.exists() \
+        else _extract_cfg_echo(gnb_log)
+    if not text:
         return result
-
-    text = cfg_path.read_text(errors="replace")
 
     # Last-wins for each simple scalar key.
     for key in CFG_KEYS:
@@ -110,9 +134,38 @@ def parse_cfg(cfg_path: Path) -> dict:
     # be shown to explain why those procedure counts may be zero.
     for lvl in ("all_level", "lib_level", "rrc_level", "ngap_level",
                 "f1ap_level", "e1ap_level", "cu_level", "pdcp_level", "mac_level",
-                "phy_level", "sec_level", "xnap_level", "rlc_level", "config_level"):
+                "du_level", "phy_level", "sec_level", "xnap_level", "rlc_level",
+                "gtpu_level", "f1u_level", "sdap_level", "ofh_level", "fapi_level",
+                "e2ap_level", "config_level"):
         if lvl in result["raw"]:
             result["log_levels"][lvl.removesuffix("_level")] = result["raw"][lvl]
+
+    # Node type — from config sections present. Authoritative even when only
+    # CU/RRC layers happen to log at info (which can masquerade as a CU-CP log).
+    has_cu_cp = re.search(r"(?m)^cu_cp:", text) is not None
+    has_cu_up = re.search(r"(?m)^cu_up:", text) is not None
+    has_du    = re.search(r"(?m)^(cells|cell_cfg|ru_sdr|ru_ofh|du_high):", text) is not None
+    planes = ([ "CU-CP"] if has_cu_cp else []) + (["CU-UP"] if has_cu_up else []) \
+             + (["DU"] if has_du else [])
+    result["planes"] = planes
+    if has_du and (has_cu_cp or has_cu_up):
+        result["node_type"] = "monolithic gNB"
+    elif has_cu_cp and has_cu_up:
+        result["node_type"] = "CU (CP+UP)"
+    elif len(planes) == 1:
+        result["node_type"] = planes[0]
+    elif planes:
+        result["node_type"] = "+".join(planes)
+
+    # L2 trace availability: MAC details, SCHED lines (gated by mac_level — there
+    # is no sched_level) and DU `proc=...` traces need info+. Effective level =
+    # explicit layer level else all_level.
+    alll = result["log_levels"].get("all")
+    mac_eff = result["log_levels"].get("mac") or alll
+    du_eff  = result["log_levels"].get("du") or alll
+    if has_du and (mac_eff in (None, "warning", "error")
+                   or du_eff in (None, "warning", "error")):
+        result["l2_traces_suppressed"] = True
 
     if "tdd_ul_dl_cfg" in text or re.search(r"^\s*duplex\s*:\s*tdd\b", text, flags=re.MULTILINE):
         result["tdd"] = True
@@ -491,16 +544,22 @@ def ts_delta_seconds(t1: str, t2: str) -> float | None:
 # ---------------------------------------------------------------------------
 
 def summarize(path_str: str) -> None:
-    run_dir = resolve_run_dir(path_str)
-    gnb_log = run_dir / "gnb.log"
+    src = Path(path_str)
+    if src.is_file():
+        gnb_log, run_dir = src, src.parent      # accept any log filename (gnb (1).log, srsdu.log, ...)
+    else:
+        run_dir = resolve_run_dir(path_str)
+        gnb_log = run_dir / "gnb.log"
     stdout_log = run_dir / "stdout.log"
     cfg_path = run_dir / "ocudu_gnb.yml"
     metrics_path = run_dir / "metrics.json"
 
     print(f"Run directory : {run_dir}")
+    if gnb_log.name != "gnb.log":
+        print(f"Log file      : {gnb_log.name}")
     print()
 
-    cfg = parse_cfg(cfg_path)
+    cfg = parse_cfg(cfg_path, gnb_log)
     log = parse_gnb_log(gnb_log)
     out = parse_stdout(stdout_log)
     met = parse_metrics(metrics_path)
@@ -516,6 +575,9 @@ def summarize(path_str: str) -> None:
     # ----- Configuration -----
     print("=== Configuration ===")
     raw = cfg["raw"]
+    if cfg["node_type"]:
+        planes = f"  (planes: {', '.join(cfg['planes'])})" if cfg["planes"] else ""
+        print(f"  Node type     : {cfg['node_type']}{planes}")
     if "gnb_id" in raw:
         print(f"  gnb_id        : {raw['gnb_id']}")
     if "ran_node_name" in raw:
@@ -543,6 +605,10 @@ def summarize(path_str: str) -> None:
     if cfg["log_levels"]:
         levels = ", ".join(f"{k}={v}" for k, v in cfg["log_levels"].items())
         print(f"  Log levels    : {levels}")
+    if cfg["l2_traces_suppressed"]:
+        print("  L2 traces     : MAC/SCHED (gated by mac_level) + DU proc traces "
+              "suppressed (warning) -> per-UE proc=... lines absent; "
+              "DU/MAC latency profiling unavailable")
     if cfg["pcaps"]:
         print(f"  PCAPs enabled : {', '.join(cfg['pcaps'])}")
     print()

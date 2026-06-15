@@ -8,6 +8,16 @@ not needed.
 python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_ue_proc_latency.py <gnb.log> [proc-filter-substr]
 ```
 
+**Prerequisite — L2 log levels.** The DU/MAC `proc="..."` traces this tool keys
+on are emitted only when `du_level` (DU-manager) and `mac_level` (MAC; also gates
+SCHED — there is no `sched_level`) are at `info`/`debug`. In a Release build or
+any run with these at `warning` the traces are absent and the profiler prints
+nothing — this is a config artifact, not a fast run. Check the summary's
+`Log levels` / `L2 traces` line first (run `ocudu_log_summary.py`); if it reports
+L2 traces suppressed, the per-stage latencies are simply unavailable from that
+log. Note this also means a monolithic gNB log can look CU-only at a glance when
+only `rrc`/`cu` are at `info`.
+
 Reconstructs every UE-lifecycle procedure instance and reports per-stage and
 total latency (n, mean, p50, p90, p99, max), grouped into CREATION
 (`UE Create` + `MAC UE Creation`), CONFIGURATION (`UE Configuration` +
