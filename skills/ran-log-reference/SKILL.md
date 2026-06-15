@@ -122,27 +122,12 @@ These hold for every type; `references/<type>/conventions.md` adds the deltas.
 
 ## Memory & self-maintenance
 
-When analysis surfaces a generalisable learning — or reveals a doc/script is
-wrong — propose the change and apply it **only after the user approves**, editing
-**only files inside this skill's own `references/<type>/` and `scripts/<type>/`
-trees**. Never touch files elsewhere, and never git/commit — edits are left as
-diffs.
+When — and **only** when — an analysis session surfaces something to persist (a
+generalisable learning, or a doc/script that is wrong/stale), or the user asks to
+"reorganize <type> knowledge", **load `references/self-maintenance.md` and follow
+it**. It covers what is/isn't worth saving (general guidance vs run-specific
+verdicts; branch-only tooling → temp scripts; preferences → project auto-memory),
+where each kind goes, and the confirm-before-edit flow.
 
-- **Where things go** is type-specific: for a single-artifact type, see the
-  routing table in `references/<type>/conventions.md` (§ Memory routing). A
-  **cross-artifact** learning (clock/slot alignment, identifier joining, a
-  multi-source procedure trace) goes in `references/correlate/` —
-  `cross-correlation.md`, `ue-identity-map.md`, or a `correlate/procedures/*.md`;
-  a correlation-script fix goes in `scripts/correlate/`.
-- **For every edit**: propose the path + section + exact diff → confirm via
-  `AskUserQuestion` (**Apply** / **Edit wording** / **Skip**) → apply on approval
-  → for a `.py` change run `python3 -m py_compile` (re-run on the input when
-  practical) → report what changed.
-- **Never** save run-specific values (RNTIs, UE-IDs, AMF UE NGAP IDs, frame
-  numbers, timestamps, PCIs, KPIs, per-run narratives) — those don't generalise.
-  Operator-/preference-level knowledge goes to the project auto-memory under
-  `~/.claude/projects/<project-key>/memory/`, not `references/`.
-
-**Maintenance trigger**: on "reorganize <type> knowledge" (e.g. "reorganize pcap
-knowledge"), re-read all of `references/<type>/`, dedupe, fix stale tshark/grep
-syntax, and report a one-paragraph summary — each edit under the confirm flow.
+Guardrails (always): edit only this skill's own `references/<type>/` and
+`scripts/<type>/` trees, never elsewhere, and never git/commit — leave diffs.

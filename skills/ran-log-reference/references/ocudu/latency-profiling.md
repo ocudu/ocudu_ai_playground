@@ -45,3 +45,48 @@ branches/builds on mean + tail to see which phase dominates.
 
 Extending it: add an entry to the `PROCS` registry (procedure name → ordered
 `(stage_key, exact_label)` list) and, for racing stages, a `TRANSITIONS` entry.
+
+## Attributing UE-lifecycle latency
+
+Reusable checklist for *where* a stage's time may come from. Don't assume
+executor queueing — check these signals and let the log decide. Verify file:line
+against current source before quoting.
+
+### UE removal — candidate contributors
+
+- **Scheduler removal deferral.** The scheduler can intentionally hold a UE
+  before freeing it: `ue_repository::schedule_ue_rem` sets
+  `rem_slot = last_sl_tx + get_max_slot_ul_alloc_delay(ntn_cs_koffset) + 1`, and
+  `slot_indication` frees the UE only once `sl_tx >= rem_slot` **and**
+  `is_ue_ready_for_removal` (all DL/UL HARQs empty) — to avoid PUCCH collisions
+  with CSI/SR PDUs already in the resource grid and to let HARQs drain. To
+  measure it, the scheduler logs the actual free as SCHED
+  `ue=N rnti=…: UE has been successfully removed.` (gated by `mac_level`); its gap
+  from the removal-procedure start is the deferral, separate from any
+  control-executor resume after it.
+- **RRC-Release guard.** The `ran_resource_release_timeout` → MAC
+  `min_removal_delay` guard is applied only when the F1AP `UE Context Release`
+  carries an RRC container; without one the F1AP `Started → Initiate UE release`
+  gap is instead `srb_flush_grace_period`. Check which path applies before
+  attributing that gap.
+- **Cross-executor hops.** The DL/UL MAC `remove_ue` steps hop between control
+  and cell/UL executors and can queue under bursts.
+- **Often negligible** (confirm with a direct measurement rather than assuming):
+  `deallocate_ue_buffers`, `ue_mng.remove_ue`, the control-executor resume after
+  scheduler completion.
+
+### Creation — candidate contributors
+
+Per-stage MAC context creation involves cross-executor handshakes that are
+slot-quantized; the post-context scheduler-commit steps tend to carry the tail
+under concurrency. A small median with a large, UE-count-dependent tail points to
+queue contention rather than a single slow operation.
+
+### Reading the shapes
+
+- Flat, low-variance stage (mean ≈ p50 ≈ p99) ⇒ a fixed timer/deferral.
+- Large mean-vs-p50 gap that grows with UE count ⇒ burst / executor-queue
+  contention.
+- To split a stage that bundles a hop + a synchronous op, add a direct
+  `steady_clock` measurement around the op (log the elapsed µs) rather than
+  inferring from the stage delta.
