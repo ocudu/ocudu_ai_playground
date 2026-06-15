@@ -17,9 +17,9 @@ allowed-tools: Bash(python3 *ran-log-reference/scripts*), Bash(ls:*), Bash(grep:
 # RAN log reference
 
 Reference knowledge — format notes, procedure templates, grep/tshark recipes, and
-helper scripts — for the logs, configs, and captures of an OCUDU/Retina test run.
-This skill covers four knowledge **types** — three single-artifact and one cross-artifact —
-each with its own subtree:
+helper scripts — for the logs, configs, and captures of an OCUDU/Retina test run,
+across four **types** (three single-artifact, one cross-artifact), each with its
+own subtree:
 
 | Type | Scope | Subtree |
 |---|---|---|
@@ -28,51 +28,37 @@ each with its own subtree:
 | `amari-ue` | Amarisoft UE simulator: `ue.log`, `stdout.log`, `amarisoft_ue.cfg` | `references/amari-ue/`, `scripts/amari-ue/` |
 | `correlate` | **Cross-artifact**: line up the same event across UE log, gNB log, and pcaps for a whole run — clock/slot alignment, UE-identity joining, PRACH/PUSCH/PUCCH sent-vs-received | `references/correlate/`, `scripts/correlate/` |
 
-This module is **knowledge, not orchestration**. A higher-level inspect/run
-*action* skill drives a session (fetching artifacts, choosing a mode, composing
-other sources) and calls into this module; the correlation knowledge itself
-lives here, in the `correlate` subtree, alongside the per-artifact knowledge it
-builds on.
+This is **knowledge, not orchestration**: it gives the calling agent the context
+to analyze an artifact but takes no action itself. A higher-level inspect/run
+*action* skill drives the session (fetching artifacts, choosing a mode, composing
+other sources) and calls in here.
 
 ---
 
-## What this skill provides
-
-This is a **knowledge module**, not a task driver. It gives the calling agent
-(a higher-level inspect/run orchestrator, or a direct user session) the context
-to analyze one artifact. Per type, under `references/<type>/`:
-
-- **`conventions.md`** — the type-specific resolve scoping, efficiency rules, and
-  the memory "where things go" routing table. **Read this first** for the type.
-- **`analysis-guide.md`** — methodology for the three common activities
-  (producing an overview, answering a targeted question, investigating a failure).
-- **format refs** (`pcap-format.md` / `log-format.md` / `config-format.md`),
-  **`protocols/`** (pcap) and **`procedures/`** — field/filter references and
-  per-procedure expected-sequence / failure-marker templates.
-- **`scripts/<type>/`** — pre-vetted helper scripts that emit compact summaries.
-
-The general rules below (resolve → read-one, shared efficiency, memory flow)
-apply to every type; the per-type `conventions.md` carries only the deltas.
-
 ## How to use it
 
-1. **Resolve & classify** the input (§ Resolve & classify) — one script prints
-   the artifact `kind` and which `references/<type>/` subtree to read.
-2. For a single-artifact type, **read `references/<type>/conventions.md`**, then
-   follow `references/<type>/analysis-guide.md` for the activity at hand —
-   *Producing an overview*, *Answering a targeted question*, or *Investigating a
-   failure*. For `correlate`, start at `references/correlate/cross-correlation.md`
-   (the master clock/slot/ID model) and the cross-artifact traces in
-   `references/correlate/procedures/`.
-3. Apply the shared § Efficiency rules **plus** the type-specific rules in
-   `conventions.md` (single-artifact types) throughout.
+1. **Resolve & classify** the input (§ Resolve & classify) — one script prints the
+   artifact `kind` and which `references/<type>/` subtree to read.
+2. Read that subtree. Under `references/<type>/`:
+   - **`conventions.md`** — type-specific resolve scoping, efficiency deltas, and the
+     memory routing table. **Read this first.** (`correlate` instead starts at
+     `references/correlate/cross-correlation.md`, the master clock/slot/ID model.)
+   - **`analysis-guide.md`** — methodology for the three common activities: *producing
+     an overview*, *answering a targeted question*, *investigating a failure*.
+     (For `correlate`, the cross-artifact traces in `references/correlate/procedures/`.)
+   - **format refs** (`pcap-format.md` / `log-format.md` / `config-format.md`),
+     **`protocols/`** (pcap), **`procedures/`** — field/filter references and
+     per-procedure expected-sequence / failure-marker templates.
+   - **`scripts/<type>/`** — pre-vetted helper scripts that emit compact summaries.
+3. Apply the shared § Efficiency rules **plus** the type-specific deltas in
+   `conventions.md` throughout.
 4. If analysis surfaces a generalisable learning, persist it per § Memory &
    self-maintenance.
 
-**Load only what the kind needs.** Single-artifact work loads just that type's
-subtree — never pull a sibling type's `references/` into context. **Correlation**
-is the exception by design: it loads `references/correlate/` *and* draws on the
-per-artifact subtrees for the sources it joins (`pcap` / `ocudu` / `amari-ue`).
+**Load only what the kind needs** — single-artifact work pulls just that type's
+subtree, never a sibling's. `correlate` is the deliberate exception: it loads
+`references/correlate/` *and* draws on the per-artifact subtrees it joins
+(`pcap` / `ocudu` / `amari-ue`).
 
 ---
 
