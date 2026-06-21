@@ -15,40 +15,27 @@ joining sources.
 | pcap | `frame.time_epoch` (UTC seconds) | `1777472837.801640` | UTC seconds |
 | VIAVI `*_Command_Log*.txt` | `DD/MM/YY HH:MM:SS:mmm` | `18/06/26 12:05:34:913` | **tester-local — may differ from the gNB host** |
 
-## Clocks: do NOT assume a shared wall-clock — establish it per run
+## Clocks: establish the offset per run — don't assume a shared wall-clock
 
-**A component and the pcaps it writes share one clock by construction** — the
-same process emits `gnb.log` and `gnb_*.pcap`, so their Δ ≈ 0 always (the
-log↔pcap check is a sanity / display-TZ guard, not a real offset risk). Verified:
-`gnb.log` logs `NGSetupRequest` at `14:27:17.801593` and the first NGAP pcap frame
-epoch is `1777472837.801640` = `14:27:17.801640` UTC — the **same instant**.
-Co-located/NTP-synced UTC containers (e.g. OCUDU + an Amarisoft UE on one machine)
-likewise align.
-
-**But don't assume it across processes/hosts.** A separate tester/UE box, a remote
-5GC, or any host on a different timezone or unsynced clock can be offset by
-seconds to hours from the gNB. A VIAVI command log, in particular, carries
-**tester-local** timestamps whose epoch may have nothing to do with the gNB's
-(observed: a multi-hour offset, and a capture window that didn't even overlap the
-gNB run in wall-clock terms).
-
-So, per run:
-1. **Prefer the clock-independent keys** below — PHY `(SFN.slot, RNTI)` and the
-   RNTI / TC-RNTI chains — which join correctly regardless of clock relationship.
-2. **Establish the offset empirically before trusting any wall-clock comparison**:
-   match one unambiguous event across two sources (a unique RNTI/TC-RNTI, an NGAP
-   setup) and measure Δ. Treat that Δ as the source-pair offset; don't assume 0.
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/align_clocks.py <run-dir>
-   ```
-3. Only after Δ is known (and small/explained) is direct wall-clock comparison
-   between those two sources valid.
-
-**Separate gotcha — display timezone:** even when sources do share UTC,
-`capinfos`/`tshark` *display* frames in the host's local timezone (on a CEST host
-the frame above prints as `16:27:17`). **Never compare a `capinfos`/`tshark` human
-time to a log string** — use raw `frame.time_epoch` and treat container log
-strings as UTC. `utils.epoch_to_utc()` converts epoch → UTC datetime correctly.
+- **Same process ⇒ Δ≈0 by construction.** One process emits `gnb.log` and its
+  `gnb_*.pcap`, so they share a clock. Verified: gNB `NGSetupRequest` at
+  `14:27:17.801593` = first NGAP frame epoch `1777472837.801640` (same instant).
+- **ZMQ / co-located runs ⇒ UE and gNB share a clock too.** A ZMQ (simulated-RF)
+  setup almost always runs the Amarisoft UE and the OCUDU gNB on one host, so
+  their UTC container clocks align (Δ≈0); likewise any NTP-synced co-located
+  containers. UE↔gNB wall-clock is comparable here — still allow for the small
+  gNB decode-log latency (below), which is processing delay, not clock skew.
+- **Off-host ⇒ may be offset seconds→hours.** Real-RF / split-host runs: a
+  separate tester/UE box, a remote 5GC, an unsynced or other-TZ host. A VIAVI
+  command log is **tester-local** (observed multi-hour offset; its window may not
+  even overlap the gNB run).
+- **So: prefer the clock-independent key `(SFN.slot, RNTI)` + RNTI/TC-RNTI chains
+  (below).** Before any wall-clock compare against an off-host source, measure Δ
+  from one uniquely-matched event (RNTI/TC-RNTI, NGAP setup); don't assume 0.
+  Helper: `python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/align_clocks.py <run-dir>`.
+- **Display-TZ trap:** `capinfos`/`tshark` print frames in the host's local TZ (a
+  CEST host shows `16:27:17` for the frame above). Use raw `frame.time_epoch`;
+  treat container log strings as UTC. `utils.epoch_to_utc()` does it right.
 
 ## The exact radio key: PHY (SFN.slot, RNTI)
 

@@ -70,11 +70,8 @@ becomes the UE's C-RNTI, so it joins directly to the gNB's `c-rnti=0x<RNTI>`.
   it appears more than once, disambiguate by the gNB-side event (pick the
   occurrence whose outcome matches) or by time. The VIAVI `UE Id`, by contrast,
   is stable for the whole run — anchor on it.
-- **The VIAVI clock may not share the gNB's UTC epoch.** The tester's timestamps
-  can sit on a different timezone/epoch than `gnb.log` (a several-hour offset, and
-  the VIAVI window may not even span the same wall-clock as the gNB run). Prefer
-  the RNTI join over time; if you must align by time, derive the offset from a
-  uniquely-matched RNTI event first rather than assuming shared UTC.
+- **The VIAVI clock is tester-local and may be offset from the gNB** — prefer the
+  RNTI join over time (see cross-correlation.md § Clocks).
 - **Failure-side join.** A VIAVI `NR CONNECTION FAILED IND:UE Id:<N>` (body
   `RRC: ... T300/T319 expired`) is the UE-side view of a failed RRC setup; join it
   to the gNB C-RNTI via that UE's preceding `Random Access Complete` TC-RNTI to
