@@ -19,6 +19,11 @@ Amarisoft UEID (ue.log)  ──RNTI──►  C-RNTI  ──►  CU ue= / ran_ue
 - **Amarisoft UEID** (`ue.log`, 4-hex e.g. `0035`) — fixed for the whole run;
   the anchor for correlating the UE log to a gNB UE context. Stable across HO,
   reestablishment, and brief releases.
+- **VIAVI `UE Id`** (`*_Command_Log*.txt`, decimal `0`–`N`) — the VIAVI-tester
+  analogue of the Amarisoft UEID: fixed for the whole run, the anchor for
+  correlating the VIAVI log to a gNB UE context. The bridge to the gNB side is the
+  **C-RNTI**, printed on the VIAVI `L2 Random Access Complete` line (see § Joining
+  via the VIAVI log).
 - **C-RNTI** — joins the UE PHY/MAC to the gNB PHY/MAC/SCHED/RRC; the PHY radio
   key together with SFN.slot. Changes on HO and reestablishment.
 - **CU `ue=` / `ran_ue=`** — the gNB CU-internal index; `ran_ue` is the same value
@@ -43,6 +48,38 @@ grep "ue=<N> c-rnti=0x<RNTI>: UE created" gnb.log
 grep -E "ue=.*du_ue=<N>|c-rnti=0x<RNTI>.*du_ue=<N>" gnb.log
 ```
 
+## Joining via the VIAVI log
+
+The VIAVI log keys on the decimal `UE Id`; the gNB keys on the C-RNTI. The bridge
+is the **Random Access Complete** line, which prints both:
+
+```bash
+# VIAVI UE Id -> (T)C-RNTI: the RA-Complete line pairs them
+LC_ALL=C grep -a 'Random Access Complete' "$L" | grep 'UE Id:<N>'
+#   ... :UE Id:<N> (TC-RNTI: 0x<RNTI>, TimingAdv: …, PreambleTxCount: …)
+
+# C-RNTI -> VIAVI UE Id (reverse): which simulated UE got this RNTI
+LC_ALL=C grep -a 'TC-RNTI: 0x<RNTI>' "$L"
+```
+
+`TC-RNTI` is the temporary C-RNTI from the RAR; on contention resolution it
+becomes the UE's C-RNTI, so it joins directly to the gNB's `c-rnti=0x<RNTI>`.
+
+- **RNTIs are recycled.** In a churn run the same RNTI is handed out many times,
+  so confirm the RA-Complete you matched is the right one: grep the RNTI, and if
+  it appears more than once, disambiguate by the gNB-side event (pick the
+  occurrence whose outcome matches) or by time. The VIAVI `UE Id`, by contrast,
+  is stable for the whole run — anchor on it.
+- **The VIAVI clock may not share the gNB's UTC epoch.** The tester's timestamps
+  can sit on a different timezone/epoch than `gnb.log` (a several-hour offset, and
+  the VIAVI window may not even span the same wall-clock as the gNB run). Prefer
+  the RNTI join over time; if you must align by time, derive the offset from a
+  uniquely-matched RNTI event first rather than assuming shared UTC.
+- **Failure-side join.** A VIAVI `NR CONNECTION FAILED IND:UE Id:<N>` (body
+  `RRC: ... T300/T319 expired`) is the UE-side view of a failed RRC setup; join it
+  to the gNB C-RNTI via that UE's preceding `Random Access Complete` TC-RNTI to
+  read the network-side cause in `gnb.log`.
+
 ## Joining via pcaps
 
 ```bash
@@ -60,11 +97,13 @@ pcaps: the source DU shows `UEContextRelease`, the target DU `UEContextSetup`.
 | Identifier | Intra-CU HO | Reestablishment | Full release + re-attach |
 |---|---|---|---|
 | Amarisoft UEID | stable | stable | stable |
+| VIAVI UE Id | stable | stable | stable |
 | C-RNTI | **changes** | **changes** | resets |
 | CU ue= / ran_ue | **changes** | stable (direct RLF) / changes (post-HO) | resets |
 | amf_ue | stable | stable | resets |
 | cu_cp_ue / cu_up_ue | **stable** | stable | resets |
 | DU-local ue= (recycled) | **changes** | new | resets |
 
-**Anchor on the Amarisoft UEID** when correlating the UE log to a specific gNB
-context; anchor on `cu_cp_ue` when following a UE through handovers.
+**Anchor on the Amarisoft UEID** (or the VIAVI `UE Id` for a VIAVI run) when
+correlating the tester log to a specific gNB context; anchor on `cu_cp_ue` when
+following a UE through handovers.

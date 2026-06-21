@@ -159,11 +159,15 @@ This skill's `allowed-tools` already include `Skill`, `python3`, `tshark`,
 - **Never** read raw `gnb.log` / `ue.log` / pcaps into context — use
   `ran-log-reference`'s summary/search and correlate scripts (compact output). Cap
   any ad-hoc grep at 200 lines.
-- **Clocks/slots**: all logs and pcap `frame.time_epoch` share **UTC**; never
-  compare a `capinfos`/`tshark` human time (local-TZ display) to a log string —
-  use raw `frame.time_epoch`. The exact cross-source radio key is
-  **(SFN.slot, RNTI)** at the PHY layer. See
-  `ran-log-reference` › `references/correlate/cross-correlation.md`.
+- **Clocks/slots**: a component and the pcaps it writes share one clock by
+  construction (same process — `gnb.log` ↔ `gnb_*.pcap` Δ≈0). But don't assume it
+  across processes/hosts: an off-host source (VIAVI tester, remote 5GC, a UE sim
+  on another box) can be offset by seconds to hours — measure the offset per run
+  before comparing wall-clocks. Prefer the clock-independent key
+  **(SFN.slot, RNTI)** at the PHY layer (and RNTI/TC-RNTI chains). Separately,
+  never compare a `capinfos`/`tshark` human time (local-TZ display) to a log
+  string — use raw `frame.time_epoch`. See `ran-log-reference` ›
+  `references/correlate/cross-correlation.md`.
 - In multi-UE runs, scope correlation by `--rnti` early; the cross-product of
   64 UEs × many slots is large.
 

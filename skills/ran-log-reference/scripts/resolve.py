@@ -15,6 +15,7 @@ imports (e.g. resolve.py importing ocudu_log_summary):
     pcap        *.pcap/*.pcapng, or a dir of them       scripts/pcap/resolve.py
     ocudu       gnb.log / OCUDU component or run        scripts/ocudu/resolve.py
     amari-ue    ue.log / Amarisoft UE component/run     scripts/amari-ue/resolve.py
+    viavi       *_Command_Log*.txt/.zip (or a dir)      scripts/viavi/resolve.py
     correlate   a run dir spanning ≥2 RAN components     scripts/correlate/resolve.py
 
 The kind line and a `-> read references/<type>/` pointer are printed first, then
@@ -25,14 +26,16 @@ work; a single artifact or single-component dir resolves to its own type. Pass
 `--type` to force a kind.
 
 Usage:
-    resolve.py <artifact-or-dir> [--type pcap|ocudu|amari-ue|correlate] [passthrough args...]
+    resolve.py <artifact-or-dir> [--type pcap|ocudu|amari-ue|viavi|correlate] [passthrough args...]
 """
 
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -42,6 +45,7 @@ DELEGATE = {
     "pcap": ("pcap", "resolve.py"),
     "ocudu": ("ocudu", "resolve.py"),
     "amari-ue": ("amari-ue", "resolve.py"),
+    "viavi": ("viavi", "resolve.py"),
     "correlate": ("correlate", "resolve.py"),
 }
 KINDS = tuple(DELEGATE)
@@ -52,6 +56,11 @@ GNB_LOGS = ("gnb.log", "du.log", "cu.log", "cu_cp.log", "cu_up.log")
 UE_LOG = "ue.log"
 # 5GC/MME log basenames (Amarisoft core).
 CORE_LOGS = ("mme.log", "amf.log")
+# VIAVI RU-simulator command log: "<YYMMDD_HHMMSS>_Command_Log<NNN>.{txt,zip}".
+VIAVI_GLOB = "*Command_Log*"
+VIAVI_SUFFIXES = (".txt", ".zip")
+# First-lines signature, used to confirm a bare *.txt/*.zip is a VIAVI log.
+VIAVI_SIGNATURE = re.compile(r"(C: RSET 0x|I: CMPI |^\d{2}/\d{2}/\d{2} [\d:]+ RSET\b)", re.M)
 
 
 def _has_under(root: Path, name: str) -> bool:
@@ -65,6 +74,35 @@ def _has_any_under(root: Path, names) -> bool:
     return any(_has_under(root, n) for n in names)
 
 
+def _looks_viavi_file(path: Path) -> bool:
+    """True if `path` is a VIAVI command log — by name, else by content signature."""
+    if path.suffix.lower() not in VIAVI_SUFFIXES:
+        return False
+    if "Command_Log" in path.name:
+        return True
+    try:
+        if path.suffix.lower() == ".zip":
+            with zipfile.ZipFile(path) as zf:
+                names = [n for n in zf.namelist() if n.lower().endswith(".txt")]
+                member = (names or zf.namelist())[0]
+                with zf.open(member) as fh:
+                    head = fh.read(8192).decode("utf-8", "replace")
+        else:
+            with open(path, "rb") as fh:
+                head = fh.read(8192).decode("utf-8", "replace")
+    except (OSError, zipfile.BadZipFile, IndexError):
+        return False
+    return bool(VIAVI_SIGNATURE.search(head))
+
+
+def _has_viavi_under(root: Path) -> bool:
+    """True if a *Command_Log*.{txt,zip} exists at or below `root`."""
+    for suf in VIAVI_SUFFIXES:
+        if next((p for p in root.rglob(VIAVI_GLOB + suf) if p.is_file()), None):
+            return True
+    return False
+
+
 def classify(path: Path) -> tuple[str | None, str]:
     """Return (kind, reason). kind is None when the input is ambiguous/unknown."""
     if path.is_file():
@@ -75,6 +113,8 @@ def classify(path: Path) -> tuple[str | None, str]:
             return "amari-ue", "ue.log is an Amarisoft UE log"
         if path.name in GNB_LOGS:
             return "ocudu", f"{path.name} is an OCUDU app log"
+        if _looks_viavi_file(path):
+            return "viavi", f"{path.name} is a VIAVI command log"
         return None, f"unrecognized file: {path.name}"
 
     if not path.is_dir():
@@ -87,6 +127,9 @@ def classify(path: Path) -> tuple[str | None, str]:
         return "amari-ue", "directory contains ue.log"
     if sum((path / n).is_file() for n in PCAP_NAMES) >= 1:
         return "pcap", "directory contains Upper-PDU pcaps"
+    if any("Command_Log" in p.name and p.is_file()
+           for suf in VIAVI_SUFFIXES for p in path.glob(VIAVI_GLOB + suf)):
+        return "viavi", "directory contains a VIAVI command log"
 
     # Component / test directory: detect by what lives beneath it.
     has_gnb = _has_any_under(path, GNB_LOGS)
@@ -105,7 +148,9 @@ def classify(path: Path) -> tuple[str | None, str]:
         return "amari-ue", "ue.log found below the directory"
     if has_pcap:
         return "pcap", "Upper-PDU pcaps found below the directory"
-    return None, "no gnb.log / ue.log / *.pcap found"
+    if _has_viavi_under(path):
+        return "viavi", "VIAVI command log found below the directory"
+    return None, "no gnb.log / ue.log / *.pcap / command log found"
 
 
 def main(argv: list[str]) -> int:
@@ -126,7 +171,7 @@ def main(argv: list[str]) -> int:
     if not args:
         print(
             "usage: resolve.py <artifact-or-dir> "
-            "[--type pcap|ocudu|amari-ue|correlate] [passthrough args...]",
+            "[--type pcap|ocudu|amari-ue|viavi|correlate] [passthrough args...]",
             file=sys.stderr,
         )
         return 2

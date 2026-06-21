@@ -37,9 +37,12 @@ Capture one headline per component; don't dump raw per-artifact detail.
 python3 ${RAN_LOG_REF_DIR}/scripts/correlate/align_clocks.py <run-dir>
 ```
 
-Confirm the sources share UTC (log↔pcap Δ≈0) and that UE↔gNB PHY slots align.
-If `align_clocks` reports an unexpected offset, surface it as an anomaly — every
-later correlation depends on it.
+`align_clocks` checks log↔pcap (the gNB writes its own pcaps → Δ≈0 by
+construction; a sanity / display-TZ guard) and UE↔gNB PHY slot alignment.
+Cross-process/off-host sources (VIAVI tester, remote 5GC, a UE sim on another box)
+may be offset by seconds to hours — measure their offset before comparing
+wall-clocks. Surface a non-trivial offset as an anomaly; the (SFN.slot, RNTI) join
+doesn't depend on it.
 
 ## Phase D — consolidated overview block
 

@@ -3,7 +3,8 @@ name: ran-log-reference
 description: >
   Reference module for RAN test logs and captures — an OCUDU gNB/DU/CU
   log/config/metrics (`gnb.log`, `ocudu_gnb.yml`, `metrics.json`), an Amarisoft UE
-  log/config (`ue.log`, `amarisoft_ue.cfg`), an Upper-PDU packet capture
+  log/config (`ue.log`, `amarisoft_ue.cfg`), a VIAVI RU-simulator command log
+  (`*_Command_Log*.txt`/`.zip`), an Upper-PDU packet capture
   (`.pcap`/`.pcapng`: NGAP/F1AP/E1AP/MAC-NR/RLC-NR), or **cross-artifact
   correlation** across a whole run (clock/slot alignment, UE-identity joining,
   PRACH/PUSCH sent-vs-received). Detects the kind and loads that subtree's format
@@ -18,7 +19,7 @@ allowed-tools: Bash(python3 *ran-log-reference/scripts*), Bash(ls:*), Bash(grep:
 
 Reference knowledge — format notes, procedure templates, grep/tshark recipes, and
 helper scripts — for the logs, configs, and captures of an OCUDU/Retina test run,
-across four **types** (three single-artifact, one cross-artifact), each with its
+across five **types** (four single-artifact, one cross-artifact), each with its
 own subtree:
 
 | Type | Scope | Subtree |
@@ -26,6 +27,7 @@ own subtree:
 | `pcap` | `*.pcap`/`*.pcapng` — Upper-PDU captures (NGAP/F1AP/E1AP/MAC-NR/RLC-NR), usually five siblings (`mac`,`rlc`,`f1ap`,`e1ap`,`ngap`) per run | `references/pcap/`, `scripts/pcap/` |
 | `ocudu` | OCUDU `gnb`/`du`/`cu`/`cu_cp`/`cu_up` artifacts: `gnb.log`, `stdout.log`, `ocudu_gnb.yml`, `metrics.json` | `references/ocudu/`, `scripts/ocudu/` |
 | `amari-ue` | Amarisoft UE simulator: `ue.log`, `stdout.log`, `amarisoft_ue.cfg` | `references/amari-ue/`, `scripts/amari-ue/` |
+| `viavi` | VIAVI RU-simulator (TM500) command/event log: `*_Command_Log*.txt` (or its identical `.zip`) | `references/viavi/`, `scripts/viavi/` |
 | `correlate` | **Cross-artifact**: line up the same event across UE log, gNB log, and pcaps for a whole run — clock/slot alignment, UE-identity joining, PRACH/PUSCH/PUCCH sent-vs-received | `references/correlate/`, `scripts/correlate/` |
 
 This is **knowledge, not orchestration**: it gives the calling agent the context
@@ -73,9 +75,10 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/resolve.py <artifact-or-dir>
 
 It classifies the input — a `.pcap`/`.pcapng` or a directory of sibling pcaps →
 `pcap`; a `gnb.log` / OCUDU component or run dir → `ocudu`; a `ue.log` /
-Amarisoft UE component or run dir → `amari-ue`; a whole run dir spanning **≥2 RAN
-application components** (gNB + UE + 5GC) → `correlate` — then delegates to that
-kind's resolve script (`scripts/<kind>/resolve.py`). It prints the resolved
+Amarisoft UE component or run dir → `amari-ue`; a `*_Command_Log*.txt`/`.zip` (or
+a dir holding one) → `viavi`; a whole run dir spanning **≥2 RAN application
+components** (gNB + UE + 5GC) → `correlate` — then delegates to that kind's
+resolve script (`scripts/<kind>/resolve.py`). It prints the resolved
 `kind`, the `-> read references/<type>/` pointer, the per-kind inventory/
 validation, and a final `verdict:` line. **Bail if the verdict is not OK.** When
 the input matches no kind, it says so — ask the user rather than guessing.

@@ -7,8 +7,8 @@ ordinary analysis it is not needed.
 ## Scope (hard limits)
 
 - Edit **only** files inside this skill's own `references/<type>/` and
-  `scripts/<type>/` trees (`ocudu`, `amari-ue`, `pcap`, `correlate`), plus the
-  shared `references/*.md`.
+  `scripts/<type>/` trees (`ocudu`, `amari-ue`, `pcap`, `viavi`, `correlate`),
+  plus the shared `references/*.md`.
 - **Never** touch files elsewhere in the repo or the user's project.
 - **Never** `git add`/`commit`/`push` — leave edits as working-tree diffs for the
   user to review.

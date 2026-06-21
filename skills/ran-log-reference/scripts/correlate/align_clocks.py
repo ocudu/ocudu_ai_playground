@@ -9,8 +9,9 @@ one OCUDU run, so radio/CP correlation can trust its keys.
 
 It checks three things empirically:
   1. log <-> pcap : the gnb.log timestamp of NGSetupRequest vs the first NGAP
-     pcap frame epoch (same host/process) -> should be ~0, proving gnb.log and
-     pcap share the UTC clock (and that capinfos/tshark only *display* local TZ).
+     pcap frame epoch. The gNB writes both (same process) so Δ ~0 is guaranteed;
+     this is a sanity / display-TZ guard (capinfos/tshark only *display* local TZ),
+     NOT an offset measurement. Off-host sources (VIAVI, remote 5GC) are not checked.
   2. UE <-> gNB   : a co-identified PHY PUSCH (same SFN.slot + RNTI) in both
      ue.log and gnb.log -> the SFN.slot must match exactly (no PHY SFN offset);
      the wall-clock delta is the gNB decode-log latency, not clock skew.
@@ -165,8 +166,11 @@ def main(argv=None) -> int:
               + ("" if has_slot_rx else "  (MAC<->PHY: join on (SFN.slot,RNTI) / calibrate delay)"))
         print()
 
-    print("Conclusion: all sources share one UTC clock. Correlate radio events on")
-    print("(SFN.slot, RNTI); use raw frame.time_epoch for pcaps (NOT capinfos local-TZ display).")
+    print("Conclusion: gnb.log and the pcaps it writes share one clock by construction")
+    print("(same process). Correlate radio events on (SFN.slot, RNTI); use raw")
+    print("frame.time_epoch for pcaps (NOT capinfos local-TZ display). Off-host sources")
+    print("(VIAVI tester, remote 5GC, a UE sim on another box) are NOT checked here and may")
+    print("be offset — measure their offset from a matched RNTI/event before comparing wall-clocks.")
     return 0
 
 
