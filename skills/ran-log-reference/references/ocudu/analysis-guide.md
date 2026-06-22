@@ -46,7 +46,7 @@ If the script is not present or fails, fall back to the grep recipes in
 `log-format.md` § Key grep recipes to collect the same info manually.
 
 For UE-lifecycle latency questions (creation/configuration/removal per-stage and
-end-to-end timings), load `references/latency-profiling.md` — it documents the
+end-to-end timings), load `latency-profiling.md` — it documents the
 `scripts/ocudu/ocudu_ue_proc_latency.py` profiler. Not needed for ordinary
 overviews/failures.
 

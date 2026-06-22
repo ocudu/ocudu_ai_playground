@@ -4,7 +4,7 @@ Methodology for the three common UE-log analysis activities. This is reference
 knowledge for whoever holds the context (a higher-level inspect/run orchestrator
 skill or a direct user session) — pick the section that matches the task. It assumes the
 input has already been resolved to a run directory (see `SKILL.md` § Resolve) and
-that the § Efficiency rules apply throughout.
+that the `conventions.md` § Efficiency rules apply throughout.
 
 ---
 
@@ -36,7 +36,7 @@ The script emits, in one pass:
 - Anomalies detected (packet loss > 1%, PHY errors, unexpected final NAS state)
 
 If the script is not yet present or fails, fall back to the grep recipes in
-`references/amari-ue/log-format.md` to collect the same information manually.
+`log-format.md` to collect the same information manually.
 
 ### stdout quick-scan
 
@@ -133,7 +133,7 @@ Examples for common questions:
 | "How long did the run last?" | `grep -E "^# (Started|Ended)" ue.log` |
 
 Otherwise, use targeted grep with the canonical recipes in
-`references/amari-ue/log-format.md` § Key grep recipes. Always cap with `| head -n 200`;
+`log-format.md` § Key grep recipes. Always cap with `| head -n 200`;
 if a result is larger, narrow it (time window, UE ID) or spill into the session
 cache dir as `amari-query-<sha>.txt` and report the path (see SKILL.md
 § Efficiency rules).
@@ -173,7 +173,7 @@ missing `# Ended on`) as primary leads.
 
 ### first hypothesis — procedure dispatch
 
-Match the symptom to the most likely procedure from `references/amari-ue/procedures/`:
+Match the symptom to the most likely procedure from `procedures/`:
 
 | Symptom | File |
 |---|---|

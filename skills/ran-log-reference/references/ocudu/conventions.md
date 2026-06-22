@@ -38,19 +38,17 @@ mean before going further.
 ## Efficiency rules (ocudu)
 
 - **Never** read raw `gnb.log` into context — it can be 75k–500k+ lines.
-- The CONFIG echo at the top of `gnb.log` (everything between line 2 and the
-  first `[CONFIG  ] [I] Worker pool` line — several hundred lines) is verbose and
-  redundant with `ocudu_gnb.yml` — skip it unless the user explicitly asks about
-  an effective-config value.
+- Skip the CONFIG echo at the top of `gnb.log` (the `[CONFIG  ] [D]` block, several
+  hundred lines) unless the user explicitly asks about an effective-config value —
+  see `log-format.md` § Header (the CONFIG echo).
 - Spill larger results to `<cache-dir>/ocudu-<purpose>-<sha>.txt` (use the
   `ocudu-` prefix) and report the path.
 - `stdout.log` is short (typically 30–300 lines; longer for multi-UE runs that
   print the metrics table many times) — safe to read in full when single-UE.
   For multi-UE traffic runs, `head -n 50` plus `tail -n 30` is enough.
-- `ocudu_gnb.yml` is short (100–200 lines) — safe to read in full. Beware that
-  the file is a **concatenation of multiple YAML documents** with no `---`
-  separators; later keys override earlier ones (e.g. `all_level: info` then
-  `all_level: warning`). See `config-format.md`.
+- `ocudu_gnb.yml` is short (100–200 lines) — safe to read in full. Beware it is a
+  **concatenation of multiple YAML documents** with no `---` separators (later keys
+  win) — see `config-format.md` § Sections.
 - `metrics.json` is a standard JSON array of per-period records — parse it with
   `python3 -c 'import json; json.load(open("metrics.json"))'`, never `cat` it
   into context. The summary script rolls it up already.

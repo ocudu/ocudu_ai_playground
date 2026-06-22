@@ -9,8 +9,8 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_ue_proc_latency.py <gnb.log> [pr
 ```
 
 **Prerequisite — L2 log levels.** The DU/MAC `proc="..."` traces this tool keys
-on are emitted only when `du_level` (DU-manager) and `mac_level` (MAC; also gates
-SCHED — there is no `sched_level`) are at `info`/`debug`. In a Release build or
+on are emitted only when `du_level` (DU-manager) and `mac_level` (MAC — which also
+gates SCHED; see `config-format.md` § Common overrides) are at `info`/`debug`. In a Release build or
 any run with these at `warning` the traces are absent and the profiler prints
 nothing — this is a config artifact, not a fast run. Check the summary's
 `Log levels` / `L2 traces` line first (run `ocudu_log_summary.py`); if it reports

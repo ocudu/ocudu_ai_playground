@@ -5,7 +5,7 @@ the UE log. The gNB log signals PHY problems indirectly: PRACH not progressing,
 persistent `crc=KO` on PUSCH, late HARQs, ZMQ "Waiting for data" stalls
 (simulator only), and metrics rows showing degraded SNR.
 
-## Markers
+## Failure markers
 
 | Marker | Meaning |
 |---|---|
