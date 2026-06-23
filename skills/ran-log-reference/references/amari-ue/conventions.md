@@ -48,6 +48,7 @@ Match the surrounding format; no dates/timestamps.
 - new field / keyword / state / event → the matching table in `log-format.md`
   (§ Per-layer format, § NAS state values, § Key PHY channel keywords,
   § RRC channel keywords, § Key RRC message types, § PROD sim event types)
+- new `amarisoft_ue.cfg` field / quirk → `config-format.md` (§ Field reference)
 - failure signature / diagnostic step → `procedures/<proc>.md`
   (§ Investigation checklist or § Expected sequence)
 - a new `procedures/<name>.md` → also add a row to `analysis-guide.md`

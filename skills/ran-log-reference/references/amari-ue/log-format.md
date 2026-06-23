@@ -161,16 +161,8 @@ do not indicate errors.
 
 ## File: amarisoft_ue.cfg
 
-JSON5-style config (supports `//` and `/* */` comments, trailing commas).
-
-Key fields:
-- `log_options`: log verbosity per layer
-- `rf_driver.name`: should be `"ocudu"` for OCUDU-driven tests
-- `cell_groups[].cells[].band`: NR band number (e.g. 3, 78)
-- `cell_groups[].cells[].bandwidth`: channel bandwidth in MHz
-- `ue_list[].ue_count`: number of UEs simulated (1 = single UE, >1 = multi-UE)
-- `ue_list[].imsi`: base IMSI (incremented for multi-UE)
-- `ue_list[].sim_events`: list of simulation events with `start_time`, `event`
+JSON5 config (cell parameters, UE identity/credentials, and the `sim_events`
+scenario script). Full structure and field reference: `config-format.md`.
 
 ---
 

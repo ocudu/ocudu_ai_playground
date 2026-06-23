@@ -129,7 +129,7 @@ Examples for common questions:
 | "Was there packet loss?" | grep `CBR_RECV\|CBR_SEND` in `stdout.log` |
 | "What was the final NAS state?" | `--layer NAS` then tail |
 | "Did the UE reestablish?" | `--pattern "reestablishment" --layer RRC` |
-| "What band/BW was used?" | read `amarisoft_ue.cfg` or `grep "^RF" stdout.log` |
+| "What band/BW was used?" | read `amarisoft_ue.cfg` (fields: `config-format.md`) or `grep "^RF" stdout.log` |
 | "How long did the run last?" | `grep -E "^# (Started|Ended)" ue.log` |
 
 Otherwise, use targeted grep with the canonical recipes in
