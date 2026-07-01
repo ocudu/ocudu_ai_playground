@@ -108,8 +108,14 @@ there; `SRBID` picks the channel (`SRBID=0` → CCCH, `SRBID≥1` → DCCH). A
 security-activated DCCH release (`rrcRelease`) is PDCP-protected, so its bytes
 are opaque; a `SRBID=0` CCCH container is a plain `rrcReject`/`rrcSetup`.
 
+**In practice, use `f1ap_messages.py` (§ Parsing scripts)** — it resolves the RRC
+message type per frame (including hand-decoding this SRB0/DL-CCCH release
+container that tshark skips) and names the NAS message, so you don't `grep -V`
+or decode bits by hand. The recipe and manual decode below are the underlying
+mechanism — for a one-off check, or to understand what the script does.
+
 ```bash
-# List the RRC containers actually being sent (decode the hex, don't grep -V)
+# One-off: list the raw release-command containers (f1ap_messages.py decodes these for you)
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode==6 && f1ap.RRCContainer' \
     -T fields -e f1ap.RRCContainer | sort | uniq -c
 ```
