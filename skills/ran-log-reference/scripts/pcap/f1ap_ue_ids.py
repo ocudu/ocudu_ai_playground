@@ -78,8 +78,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pcap", help="path to f1ap.pcap")
     ap.add_argument("--ue", help="filter rows mentioning this identifier value")
-    ap.add_argument("--limit", type=int, default=200,
-                    help="cap text output rows (default 200; use 0 for no cap)")
+    ap.add_argument("--limit", type=int, default=0,
+                    help="cap text output rows (default 0 = no cap; set a positive N to cap)")
     ap.add_argument("--no-cache", action="store_true",
                     help="bypass /tmp tshark-extraction cache and re-run tshark")
     ap.add_argument("--json", action="store_true")
