@@ -98,6 +98,62 @@ def proc_name(proto: str, code: str | int | None, *, with_code: bool = True) -> 
         return str(c) if with_code else f"proc-{c}"
     return f"{name}({c})" if with_code else name
 
+
+def to_int(value: str | int | None, base: int = 0) -> int | None:
+    """Parse an int from a tshark field value ('0x41', '65', '', None) or None.
+
+    base=0 auto-detects the '0x' prefix tshark emits for hex fields; decimal
+    strings parse too. Returns None on empty/unparseable input.
+    """
+    try:
+        return int(str(value), base)
+    except (TypeError, ValueError):
+        return None
+
+
+# NAS 5GMM/5GSM message-type code -> name (TS 24.501 §9.7). Protocol-agnostic:
+# used wherever tshark reports nas_5gs.mm/sm.message_type (NGAP NAS-PDU and the
+# RRC dedicatedNAS-Message carried over F1AP). Unknown codes render as
+# "5GMM(0xNN)"/"5GSM(0xNN)". Note: ciphered post-security NAS has no readable
+# inner type, so tshark emits no code for it.
+NAS_5GMM_TYPES: dict[int, str] = {
+    0x41: "RegistrationRequest", 0x42: "RegistrationAccept", 0x43: "RegistrationComplete",
+    0x44: "RegistrationReject", 0x45: "DeregistrationRequest(UEorig)",
+    0x46: "DeregistrationAccept(UEorig)", 0x47: "DeregistrationRequest(UEterm)",
+    0x48: "DeregistrationAccept(UEterm)", 0x4c: "ServiceRequest", 0x4d: "ServiceReject",
+    0x4e: "ServiceAccept", 0x54: "ConfigurationUpdateCommand", 0x55: "ConfigurationUpdateComplete",
+    0x56: "AuthenticationRequest", 0x57: "AuthenticationResponse", 0x58: "AuthenticationReject",
+    0x59: "AuthenticationFailure", 0x5a: "AuthenticationResult", 0x5b: "IdentityRequest",
+    0x5c: "IdentityResponse", 0x5d: "SecurityModeCommand", 0x5e: "SecurityModeComplete",
+    0x5f: "SecurityModeReject", 0x64: "5GMMStatus", 0x65: "Notification",
+    0x66: "NotificationResponse", 0x67: "DLNASTransport", 0x68: "ULNASTransport",
+}
+NAS_5GSM_TYPES: dict[int, str] = {
+    0xc1: "PDUSessionEstablishmentRequest", 0xc2: "PDUSessionEstablishmentAccept",
+    0xc3: "PDUSessionEstablishmentReject", 0xc4: "PDUSessionAuthenticationCommand",
+    0xc5: "PDUSessionAuthenticationComplete", 0xc6: "PDUSessionAuthenticationResult",
+    0xc9: "PDUSessionModificationRequest", 0xca: "PDUSessionModificationReject",
+    0xcb: "PDUSessionModificationCommand", 0xcc: "PDUSessionModificationComplete",
+    0xcd: "PDUSessionModificationCommandReject", 0xd1: "PDUSessionReleaseRequest",
+    0xd2: "PDUSessionReleaseReject", 0xd3: "PDUSessionReleaseCommand",
+    0xd4: "PDUSessionReleaseComplete", 0xd6: "5GSMStatus",
+}
+
+
+def nas_name(mm_type: str | int | None, sm_type: str | int | None) -> str | None:
+    """Name a NAS message from tshark's reported mm/sm message-type code.
+
+    Prefers the 5GSM (session-management) code when present, else 5GMM. Returns
+    None when neither is set (no NAS, or ciphered/undecodable).
+    """
+    v = to_int(sm_type)
+    if v is not None:
+        return NAS_5GSM_TYPES.get(v, f"5GSM(0x{v:02x})")
+    v = to_int(mm_type)
+    if v is not None:
+        return NAS_5GMM_TYPES.get(v, f"5GMM(0x{v:02x})")
+    return None
+
 # Per-session cache root, shared across the artifact types (and, being
 # session-keyed, reusable by any other skill in the same session).
 # CLAUDE_CODE_TMPDIR (e.g. /tmp/claude-1000) is the per-user tmpdir Claude Code
@@ -223,6 +279,35 @@ def run_tshark(args: Sequence[str], *, check: bool = True) -> list[str]:
             f"args: {' '.join(args)}"
         )
     return [line for line in proc.stdout.splitlines() if line]
+
+
+def filter_valid_fields(
+    pcap: str | os.PathLike[str], fields: Iterable[str]
+) -> list[str]:
+    """Return the subset of `fields` that the local tshark build recognizes.
+
+    tshark rejects the whole `-T fields` query if any `-e` field is unknown, and
+    field names vary across Wireshark versions (e.g. -r16 suffixes). Probe once
+    (reading a single packet), drop the fields tshark reports as invalid, and
+    retry until the set is accepted. Order is preserved.
+    """
+    staged = stage_for_tshark(pcap)
+    remaining = list(fields)
+    for _ in range(len(remaining) + 1):
+        if not remaining:
+            return remaining
+        args = ["-r", str(staged), "-T", "fields", "-c", "1"]
+        for f in remaining:
+            args += ["-e", f]
+        try:
+            run_tshark(args)
+            return remaining
+        except TsharkError as e:
+            bad = {line.strip() for line in str(e).splitlines()} & set(remaining)
+            if not bad:
+                raise
+            remaining = [f for f in remaining if f not in bad]
+    return remaining
 
 
 def epoch_to_iso(epoch: float | str) -> str:
