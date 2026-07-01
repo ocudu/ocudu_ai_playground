@@ -26,7 +26,9 @@ ngap.pcap   InitialContextSetupResponse
 
 | Symptom | Cause hypothesis |
 |---|---|
-| `InitialULRRCMessageTransfer` but no `InitialUEMessage` in NGAP | CU didn't forward to AMF — check CU-CP log; AMF link may be down. |
+| `InitialULRRCMessageTransfer` but no `InitialUEMessage` in NGAP | CU didn't forward to AMF (check CU-CP log; AMF link may be down), **or** the CU rejected the UE at RRC setup — see the empty-container / rrcReject rows below. |
+| `InitialULRRCMessageTransfer` carries an **empty `DUtoCURRCContainer`** (IE present but zero-length) | DU can't admit the UE — no dedicated resources, commonly the cell PUCCH resource pool (`nof_cell_sr_resources`/`nof_cell_csi_resources`) exhausted under many-UE load. Per TS 38.473 §8.4.1.2 the DU signals "can't serve" via the empty container; the CU then rejects. No `InitialUEMessage` follows. |
+| `UEContextReleaseCommand` with an `rrcReject` `RRCContainer` on `SRBID=0`, right after an `InitialULRRCMessageTransfer` and with no `UEContextSetup` for that UE | CU rejected the RRC connection (admission). The rrcReject carries a wait timer (default 16 s) → the UE backs off and re-RACHes (RACH churn). tshark does **not** dissect this reject — decode it with `f1ap_messages.py` (see `../protocols/f1ap.md` § RRC PDUs inside F1AP containers). |
 | `InitialUEMessage` but no `InitialContextSetupRequest` | AMF dropped the registration; check AMF reachability and PLMN config. |
 | `InitialContextSetupRequest` with cause IE in subsequent failure | AMF rejected — read the cause IE. Common: authentication failure, illegal subscriber, no S-NSSAI match. |
 | `UEContextSetupFailure` from DU | DU couldn't admit the UE — no C-RNTI, cell barred, requested SRB/DRB conflict. |
@@ -43,6 +45,9 @@ tshark -r ngap.pcap \
 
 # F1AP UE context setup outcomes
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 5'
+
+# Admission rejects (empty DU-to-CU container → rrcReject), invisible to grep -V
+python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/f1ap_messages.py <f1ap.pcap> | grep rrcReject
 
 # Use the unified timeline for one UE
 python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/correlate_run.py <run-dir> --ue <ngap-ran-ue-id>
