@@ -52,7 +52,7 @@ Scheduler-only visibility (when RRC/CU layers are at warning):
 | 3 | NGAP | `Tx PDU ue=N ran_ue=N: HandoverRequired` |
 | 4 | NGAP | `Rx PDU ... HandoverCommand` |
 | 5 | RRC | `DCCH DL rrcReconfiguration` (carrying the target's `reconfigurationWithSync`) |
-| 6 | NGAP | `Tx PDU ... UplinkRanStatusTransfer` / `DownlinkRanStatusTransfer` |
+| 6 | NGAP | `Tx PDU ... UplinkRanStatusTransfer` (source→AMF; the target receives the matching `DownlinkRANStatusTransfer`) |
 | 7 | CU-CP | UEContextRelease after the handover completes on the target |
 
 ## Failure markers
@@ -94,6 +94,6 @@ Scheduler-only visibility (when RRC/CU layers are at warning):
 
 ## Cross-references
 
-- `procedures/reestablishment.md` — HO failure usually surfaces as a
+- `reestablishment.md` — HO failure usually surfaces as a
   reestablishment.
 - `pcap` type: F1AP / NGAP / RRC handover messages.

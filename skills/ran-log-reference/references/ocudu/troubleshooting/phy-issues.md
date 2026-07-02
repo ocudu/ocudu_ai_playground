@@ -55,6 +55,6 @@ persistent `crc=KO` on PUSCH, late HARQs, ZMQ "Waiting for data" stalls
 
 ## Cross-references
 
-- `procedures/throughput-degradation.md` — what late HARQs and failed PDCCH
+- `throughput-degradation.md` — what late HARQs and failed PDCCH
   do to throughput.
 - UE log: handoff to the `amari-ue` type for cell search, PRACH TX, RLF.

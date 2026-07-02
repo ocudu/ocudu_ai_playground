@@ -65,7 +65,7 @@ gNB ID), it falls back to a full RRC Setup:
 
 ## Cross-references
 
-- `procedures/handover.md` — most reestablishments in mobility tests follow a
+- `handover.md` — most reestablishments in mobility tests follow a
   failed HO.
-- `procedures/phy-issues.md` — PHY-side radio link degradation that triggers
+- `../troubleshooting/phy-issues.md` — PHY-side radio link degradation that triggers
   RLF.

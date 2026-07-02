@@ -50,7 +50,10 @@ other sources) and calls in here.
      (For `correlate`, the cross-artifact traces in `references/correlate/procedures/`.)
    - **format refs** (`pcap-format.md` / `log-format.md` / `config-format.md`),
      **`protocols/`** (pcap), **`procedures/`** — field/filter references and
-     per-procedure expected-sequence / failure-marker templates.
+     per-procedure expected-sequence / failure-marker templates. (The `ocudu`
+     subtree instead splits these into **`reference/`** — format refs, `uci.md`
+     vocabulary, and expected-sequence refs — and **`troubleshooting/`** — symptom
+     playbooks; see `references/ocudu/conventions.md` § Subtree layout.)
    - **`scripts/<type>/`** — pre-vetted helper scripts that emit compact summaries.
 3. Apply the shared § Efficiency rules **plus** the type-specific deltas in
    `conventions.md` throughout.

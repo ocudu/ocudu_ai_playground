@@ -43,7 +43,7 @@ The script emits, in one pass:
   late HARQs > 0, RRC release without prior `UEContextReleaseCommand`.
 
 If the script is not present or fails, fall back to the grep recipes in
-`log-format.md` § Key grep recipes to collect the same info manually.
+`reference/log-format.md` § Key grep recipes to collect the same info manually.
 
 For UE-lifecycle latency questions (creation/configuration/removal per-stage and
 end-to-end timings), load `latency-profiling.md` — it documents the
@@ -141,6 +141,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py <gnb.log> \
   [--after <HH:MM:SS.mmm>] \
   [--before <HH:MM:SS.mmm>] \
   [--pattern <regex>] \
+  [--level <D|I|W|E|C>] \
   [--count] \
   [--max-lines 200]
 ```
@@ -163,7 +164,7 @@ Examples for common questions:
 | "Reestablishment seen?" | `--pattern "rrcReestablishment"` |
 
 Otherwise, use targeted grep with the canonical recipes in
-`log-format.md` § Key grep recipes. Always cap with `| head -n 200`;
+`reference/log-format.md` § Key grep recipes. Always cap with `| head -n 200`;
 if a result is larger, narrow it (time window, UE id, cell) or spill into the
 session cache dir as `ocudu-query-<sha>.txt` and report the path (see SKILL.md
 § Efficiency rules).
@@ -227,23 +228,24 @@ leads.
 
 ### first hypothesis — procedure dispatch
 
-Match the symptom to the most likely procedure file:
+Match the symptom to the most likely troubleshooting or reference doc:
 
 | Symptom | File |
 |---|---|
-| UE never attached (no `UE created` or no `Initial Context Setup Routine finished`) | `procedures/ue-attach.md` |
-| UE attached but no data / DRB never set up | `procedures/pdu-session-setup.md` |
-| Handover triggered but failed (no `rrcReconfigurationComplete` on target, or RLF after `reconfigurationWithSync`) | `procedures/handover.md` |
-| RRC reestablishment seen (`rrcReestablishmentRequest`) | `procedures/reestablishment.md` |
-| UE released unexpectedly | `procedures/ue-release.md` |
-| NGAP / AMF connection lost or never established | `procedures/ngap-setup.md` |
-| PHY-only failures (PRACH undecoded, persistent `crc=KO`, ZMQ rx waiting) | `procedures/phy-issues.md` |
-| Throughput regression / late HARQs / failed PDCCH | `procedures/throughput-degradation.md` |
-| Process crashed / abnormal exit | `procedures/abnormal-exit.md` |
+| UE never attached (no `UE created` or no `Initial Context Setup Routine finished`) | `reference/ue-attach.md` |
+| UE attached but no data / DRB never set up | `reference/pdu-session-setup.md` |
+| Handover triggered but failed (no `rrcReconfigurationComplete` on target, or RLF after `reconfigurationWithSync`) | `reference/handover.md` |
+| RRC reestablishment seen (`rrcReestablishmentRequest`) | `reference/reestablishment.md` |
+| UE released unexpectedly | `reference/ue-release.md` |
+| NGAP / AMF connection lost or never established | `reference/ngap-setup.md` |
+| PHY-only failures (PRACH undecoded, persistent `crc=KO`, ZMQ rx waiting) | `troubleshooting/phy-issues.md` |
+| Throughput regression / late HARQs / failed PDCCH | `troubleshooting/throughput-degradation.md` |
+| High DL/UL KOs / BLER (localize attach vs steady-state vs release first) | `troubleshooting/harq-ko-bler.md` |
+| Process crashed / abnormal exit | `troubleshooting/abnormal-exit.md` |
 
-Load the matching file and follow its expected-sequence checklist.
+Load the matching doc and follow its expected-sequence checklist.
 
-If no procedure file matches, fall back to the layered approach:
+If no doc matches, fall back to the layered approach:
 1. Identify the **last successful** layer-level event before the symptom.
 2. Identify the **first divergent** event after it.
 3. The gap is your hypothesis space.
@@ -282,6 +284,8 @@ is insufficient — pull in the relevant sibling knowledge:
   UE-side log shows MIB/SIB decoding, PRACH transmission, RRC state machine.
 - the `pcap` type if any sibling `*.pcap` exists in the same run dir —
   F1AP/E1AP/NGAP body details are richer in pcap.
+- the OCUDU **source docs** for code-side design depth (architecture, threading,
+  why a procedure is sequenced as it is) — see `conventions.md` § Deeper knowledge.
 
 Reach for these when current clues plateau, not before.
 

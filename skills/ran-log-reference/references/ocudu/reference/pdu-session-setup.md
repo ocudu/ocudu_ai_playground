@@ -19,7 +19,7 @@ this is the procedure to inspect.
 | 4 | CU-UP | `ue=N: PDU session psi=N attached, dl_teid=..., ul_teid=...` |
 | 5 | CU-UP-E1 | `Tx PDU ... BearerContextSetupResponse` |
 | 6 | CU-CP-E1 | `Rx PDU ... BearerContextSetupResponse` |
-| 7 | CU-CP-F1 | `Tx PDU ... UEContextSetupRequest` *(if not already done as part of attach)* |
+| 7 | CU-CP-F1 | `Tx PDU ... UEContextModificationRequest` (registers the DRBs at the DU; the DU returns its F1-U DL TEIDs) |
 | 8 | CU-CP-E1 | `Tx PDU ... BearerContextModificationRequest` (with DRB DL/UL teids) |
 | 9 | CU-UP-E1 | `Tx PDU ... BearerContextModificationResponse` |
 | 10 | CU-UP | `Attaching dl_teid=... to F1-U tunnel with ul_teid=...` |
@@ -63,6 +63,6 @@ as `[GTPU] [I] ue=N DL teid=0x...: RX SDU. sdu_len=N qos_flow=QFI=N`.
 
 ## Cross-references
 
-- `procedures/ue-attach.md` — bearer setup overlaps with the attach
+- `ue-attach.md` — bearer setup overlaps with the attach
   procedure.
 - `pcap` type: `e1ap.pcap`, `f1ap.pcap` carry the full IE bodies.

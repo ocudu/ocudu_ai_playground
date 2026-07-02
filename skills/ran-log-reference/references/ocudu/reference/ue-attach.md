@@ -36,7 +36,7 @@ E1AP and acknowledges with `InitialContextSetupResponse`.
 | 24 | RRC  | `DCCH UL ueCapabilityInformation` |
 | 25 | CU-CP-E1 | `Tx PDU ... BearerContextSetupRequest` |
 | 26 | CU-UP-E1 | `Tx PDU ... BearerContextSetupResponse` |
-| 27 | CU-CP-E1 | `Tx PDU ... BearerContextModificationRequest` (post-RRC-reconfig) |
+| 27 | CU-CP-E1 | `Tx PDU ... BearerContextModificationRequest` (feeds the DU's F1-U DL TEIDs to CU-UP, before the reconfiguration — full E1/F1 DRB exchange in `pdu-session-setup.md`) |
 | 28 | RRC  | `DCCH DL rrcReconfiguration` (carries DRB config) |
 | 29 | RRC  | `DCCH UL rrcReconfigurationComplete` |
 | 30 | CU-CP | `ue=N: "Initial Context Setup Routine" finished successfully` |

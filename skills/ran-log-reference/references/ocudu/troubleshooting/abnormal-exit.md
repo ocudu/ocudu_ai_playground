@@ -61,5 +61,5 @@ missing.
 
 - `agent-log-*.log` files in the OCUDU component directory (one level up
   from the run dir) record SIGTERM/SIGKILL from Retina.
-- `procedures/throughput-degradation.md` — if the gNB was wedged on
+- `throughput-degradation.md` — if the gNB was wedged on
   scheduler latency before the crash, the metrics rows will show it.

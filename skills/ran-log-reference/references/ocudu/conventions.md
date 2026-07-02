@@ -19,6 +19,41 @@ When OCUDU symptoms point at the UE side, switch to the `amari-ue` type
 (`references/amari-ue/`); whole-run correlation is the job of a higher-level
 inspect/run orchestrator, not this module.
 
+## Subtree layout
+
+Debugging is symptom-first, so the docs split by role:
+
+- **`troubleshooting/`** — symptom → root-cause playbooks (abnormal exit, PHY /
+  radio-link issues, HARQ KOs/BLER, throughput degradation). Start here from a
+  symptom; each points on to the reference docs it needs.
+- **`reference/`** — lazily-loaded knowledge: format specs (`log-format.md`,
+  `config-format.md`), UCI outcome vocabulary (`uci.md`), and the expected-sequence
+  procedure references (attach, PDU session, NGAP setup, handover,
+  reestablishment, release).
+- top level — the entry point (`conventions.md`), the methodology + failure
+  dispatch (`analysis-guide.md`), and the latency profiler (`latency-profiling.md`).
+
+The `analysis-guide.md` § Investigating a failure dispatch table maps each symptom
+to the doc to load.
+
+## Deeper knowledge — the OCUDU source docs
+
+These `reference/` docs cover the **log-observable** layer. The code-side layer
+beneath it — component architecture, threading model, why a procedure is
+sequenced the way it is — lives in the **OCUDU source tree**, which carries its
+own layer-specific markdown docs: each source subdirectory has a `README.md`
+entry point that indexes the other `.md` files beside it.
+
+When the log-observable docs here don't go deep enough, and a source checkout is
+available, **read** those docs for extra context — start from the relevant
+subsystem directory's `README.md` and follow what it indexes. Don't assume the
+checkout's location or any doc's path; find the READMEs, and **ask the user for
+the checkout path if it isn't obvious** (the run's build `commit`/`branch` in the
+`gnb.log` banner identifies the matching source version). **Read-only — never
+edit the source tree.** Not every subdirectory ships docs; where a layer has
+none, fall back to the code/headers or the `spec-explorer` skill for 3GPP
+behaviour.
+
 ## Resolve & scope
 
 The dispatcher runs `scripts/ocudu/resolve.py`, which accepts a `gnb.log`
@@ -47,8 +82,9 @@ mean before going further.
   print the metrics table many times) — safe to read in full when single-UE.
   For multi-UE traffic runs, `head -n 50` plus `tail -n 30` is enough.
 - `ocudu_gnb.yml` is short (100–200 lines) — safe to read in full. Beware it is a
-  **concatenation of multiple YAML documents** with no `---` separators (later keys
-  win) — see `config-format.md` § Sections.
+  **concatenation of multiple YAML documents** with no `---` separators; later keys
+  win (e.g. `all_level: info` then `all_level: warning`) — see
+  `reference/config-format.md` § Sections.
 - `metrics.json` is a standard JSON array of per-period records — parse it with
   `python3 -c 'import json; json.load(open("metrics.json"))'`, never `cat` it
   into context. The summary script rolls it up already.
@@ -60,14 +96,19 @@ For UE-lifecycle latency questions, see `latency-profiling.md`.
 
 Match the surrounding format; no dates/timestamps.
 
-- new grep recipe → `log-format.md` § Key grep recipes
-- new layer / message / keyword → the matching table in `log-format.md`
+- new grep recipe → `reference/log-format.md` § Key grep recipes
+- new layer / message / keyword → the matching table in `reference/log-format.md`
   (§ Layer tags, § Procedure markers, § Common structured fields)
-- new YAML field / quirk → `config-format.md` (§ Sections, § Common overrides,
-  § Field reference)
-- failure signature / diagnostic step → `procedures/<proc>.md`
-  (§ Investigation checklist or § Expected sequence)
-- a new `procedures/<name>.md` → also add a row to `analysis-guide.md`
-  § Investigating a failure; a new `scripts/ocudu/<name>.py` → document it in
-  `analysis-guide.md` and/or the procedure file
+- UCI outcome vocabulary (ACK/NACK/DTX, SR positive/negative, CSI valid/invalid,
+  detection-status codes) → `reference/uci.md`
+- new YAML field / quirk → `reference/config-format.md` (§ Sections,
+  § Common overrides, § Field reference)
+- new symptom-driven diagnostic playbook → `troubleshooting/<name>.md`
+  (§ Investigation checklist); expected-sequence or vocabulary detail →
+  `reference/<name>.md` (§ Expected sequence for procedure docs, or the
+  doc's relevant section)
+- a new `troubleshooting/<name>.md` or `reference/<name>.md` reachable from a
+  symptom → also add a dispatch row to `analysis-guide.md` § Investigating a
+  failure; a new `scripts/ocudu/<name>.py` → document it in `analysis-guide.md`
+  and/or the relevant doc
 - a script bug → fix it in `scripts/ocudu/*.py`

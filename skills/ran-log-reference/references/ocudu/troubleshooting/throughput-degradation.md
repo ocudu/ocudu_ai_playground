@@ -39,7 +39,7 @@ In `gnb.log` the `[METRICS]` rows are the per-period summary. The
        --pattern "late_dl_harqs=[^0]|failed_pdcch=[^0]" --max-lines 20
    ```
 3. Compare MCS to channel quality. With high SNR (`pusch_snr_db > 25`) the
-   MCS should be near the cell's max (27 for 256QAM, 19 for 64QAM); much
+   MCS should be near the cell's max (27 for 256QAM, 28 for 64QAM); much
    lower MCS at high SNR ⇒ link adaptation issue.
 4. If only DL throughput is low, check whether the test workload was
    DL-limited (CBR rate). Compare `dl_brate` to the configured CBR rate
@@ -50,7 +50,7 @@ In `gnb.log` the `[METRICS]` rows are the per-period summary. The
 
 ## Common root causes
 
-- **Test ran for too long with PDCP at warning** — chatty PDCP logging at
+- **PDCP left at info in a performance test** — chatty PDCP logging at
   info-level can itself slow the gNB. Confirm `pdcp_level: warning` in
   `ocudu_gnb.yml` for performance tests.
 - **`low_phy_dl_throttling` set in config** — `ru_sdr.expert_cfg.low_phy_dl_throttling`
@@ -63,6 +63,6 @@ In `gnb.log` the `[METRICS]` rows are the per-period summary. The
 
 ## Cross-references
 
-- `procedures/phy-issues.md` — radio link signals.
+- `phy-issues.md` — radio link signals.
 - UE log: handoff to the `amari-ue` type to see UE-side throughput
   (CBR_RECV / CBR_SEND).

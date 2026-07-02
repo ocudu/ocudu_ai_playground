@@ -48,5 +48,5 @@ completed` followed by `==== gNB started ===`.
 
 ## Cross-references
 
-- Config: `../config-format.md` § AMF block (`cu_cp.amf.*`).
+- Config: `config-format.md` § Field reference (`cu_cp.amf.*` rows).
 - Companion artifact: `ngap.pcap` (analyze with the `pcap` type).
