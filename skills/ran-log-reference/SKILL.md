@@ -30,6 +30,15 @@ own subtree:
 | `viavi` | VIAVI RU-simulator (TM500) command/event log: `*_Command_Log*.txt` (or its identical `.zip`) | `references/viavi/`, `scripts/viavi/` |
 | `correlate` | **Cross-artifact**: line up the same event across UE log, gNB log, and pcaps for a whole run — clock/slot alignment, UE-identity joining, PRACH/PUSCH/PUCCH sent-vs-received | `references/correlate/`, `scripts/correlate/` |
 
+Alongside the per-type subtrees, **`references/common/`** holds the
+artifact-agnostic layer shared across all of them — protocol/procedure
+*semantics* (e.g. the F1AP message set, the UE-attach message ladder), the UE
+identifier model, the 3GPP spec map, and the FAPI reference. `resolve.py` never
+selects it; load it *in addition* to a type subtree when you need the meaning
+behind an observation, a standards clause, or a FAPI message. Axis split:
+`common/` = *what should happen*, the type subtrees = *how it looks here*,
+`correlate/` = *how to line up several artifacts*. See `references/common/README.md`.
+
 This is **knowledge, not orchestration**: it gives the calling agent the context
 to analyze an artifact but takes no action itself. A higher-level inspect/run
 *action* skill drives the session (fetching artifacts, choosing a mode, composing
@@ -61,9 +70,10 @@ other sources) and calls in here.
    self-maintenance.
 
 **Load only what the kind needs** — single-artifact work pulls just that type's
-subtree, never a sibling's. `correlate` is the deliberate exception: it loads
-`references/correlate/` *and* draws on the per-artifact subtrees it joins
-(`pcap` / `ocudu` / `amari-ue`).
+subtree, never a sibling's. Two deliberate exceptions: `references/common/` is
+pulled by any type when the shared semantics / spec / FAPI are needed; and
+`correlate` loads `references/correlate/` *and* draws on the per-artifact subtrees
+it joins (`pcap` / `ocudu` / `amari-ue`).
 
 ---
 

@@ -1,11 +1,13 @@
-# F1AP — CU ↔ DU (F1-C interface)
+# F1AP — pcap observation (CU ↔ DU, F1-C interface)
 
-## Purpose
+How F1AP shows up in `f1ap.pcap` and how to query it. The **semantics** —
+procedure-code meanings, UE-arrival paths, identifier model, failure signatures —
+are artifact-agnostic and live in `../../common/protocols/f1ap.md`; this file is
+the tshark/observation layer only.
 
-F1AP carries the control plane between the gNB-CU and gNB-DU in a split
-deployment. The `f1ap.pcap` captures UE-context lifecycle messages, F1
-infrastructure messages (F1 Setup, gNB-CU/DU Configuration Update), and the
-RRC-container transfers between CU and DU.
+The `f1ap.pcap` captures UE-context lifecycle messages, F1 infrastructure
+messages (F1 Setup, gNB-CU/DU Configuration Update), and the RRC-container
+transfers between CU and DU.
 
 ## Key tshark filters
 
@@ -23,7 +25,7 @@ tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 5 || f1ap.procedureCode == 6 || f1
 # RRC container traffic (UL/DL RRC message transfer)
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 11 || f1ap.procedureCode == 12 || f1ap.procedureCode == 13'
 
-# Specific procedures
+# Specific procedures (codes/meanings: ../../common/protocols/f1ap.md § Procedures and codes)
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode ==  1'   # F1Setup
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode ==  5'   # UEContextSetup
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode ==  6'   # UEContextRelease
@@ -33,66 +35,29 @@ tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 12'   # DLRRCMessageTransfer
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 13'   # ULRRCMessageTransfer
 ```
 
-## Identifier mapping
+The procedure-code table and F1Removal (26) are in the common semantics doc.
+
+## Identifier fields (tshark)
 
 - `f1ap.GNB_DU_UE_F1AP_ID` — DU-assigned, present from InitialULRRCMessageTransfer.
-- `f1ap.GNB_CU_UE_F1AP_ID` — CU-assigned, present once UEContextSetupRequest
-  has been sent.
-- `f1ap.C_RNTI` — present in InitialULRRCMessageTransfer (the DU's C-RNTI for
-  this UE).
-- See `../cross-pcap-correlation.md` for joining to NGAP / E1AP.
+- `f1ap.GNB_CU_UE_F1AP_ID` — CU-assigned, present once UEContextSetupRequest sent.
+- `f1ap.C_RNTI` — present in InitialULRRCMessageTransfer.
+- See `../cross-pcap-correlation.md` for joining to NGAP / E1AP, and
+  `../../common/identifiers.md` for the identifier model (scope, HO stability).
 
-## UE arrival paths in f1ap.pcap
+## UE-arrival signature (pcap view)
 
-A UE shows up in `f1ap.pcap` via one of two first-message paths, depending on
-*how* it arrived on this DU:
+The two first-F1AP-message paths (proc 11 vs proc 5) and what they mean are in
+`../../common/protocols/f1ap.md` § UE arrival paths. In a handover test the
+variation across UEs is expected, not an anomaly; for the full target-DU sequence
+see [`../procedures/handover.md`](../procedures/handover.md).
 
-| First F1AP message | What it means | DU role |
-|---|---|---|
-| `InitialULRRCMessageTransfer` (proc 11) | UE attached via RACH on this cell. The DU has just allocated a C-RNTI; the CU has not yet assigned a `gNB-CU-UE-F1AP-ID`. | Source/only DU. |
-| `UEContextSetup` (proc 5) — Request from CU | UE was handed over to this DU from elsewhere under the same CU. No preceding RACH on this DU; the C-RNTI in the request is freshly allocated for the target cell. | Target DU. |
+## Detecting the empty-container reject (pcap technique)
 
-In a handover test, the first-F1AP-message variation across UEs is the
-*expected* signature, not an anomaly. See
-[`../procedures/handover.md`](../procedures/handover.md) for the full target-DU
-sequence.
-
-## Common procedures and codes
-
-Verified against an OCUDU `f1ap.pcap` capture:
-
-| Code | Procedure | Initiator | Notes |
-|---:|---|---|---|
-|  1 | F1Setup | DU | at link establishment |
-|  5 | UEContextSetup | CU | new UE on DU |
-|  6 | UEContextRelease | CU | end of UE on DU |
-|  7 | UEContextModification | CU | bearer/cell change |
-| 11 | InitialULRRCMessageTransfer | DU | first RRC message from UE |
-| 12 | DLRRCMessageTransfer | CU | CU RRC → UE |
-| 13 | ULRRCMessageTransfer | DU | UE RRC → CU |
-| 26 | F1Removal | DU or CU | tear down the F1 interface |
-
-## Common failure signatures
-
-- **UEContextSetupFailure**: DU can't accept the UE — typically because no
-  C-RNTI is available, cell isn't admitting UEs, or the requested DRBs
-  conflict.
-- **UEContextReleaseCommand with `radio-connection-with-ue-lost`**: DU
-  reported the UE as lost; usually triggered by MAC inactivity timer or RLF.
-- **No UEContextSetupResponse for a sent Request**: CU side issue or DU
-  crash; check the gNB log around the matching epoch.
-- **InitialULRRCMessageTransfer without subsequent UEContextSetupRequest**:
-  CU received the UE but isn't deciding to admit it — usually a CU-CP
-  routing or AMF-selection issue.
-- **InitialULRRCMessageTransfer with an *empty* DUtoCURRCContainer**: the DU
-  could not allocate the UE's dedicated resources (commonly the cell PUCCH
-  resource pool — `nof_cell_sr_resources`/`nof_cell_csi_resources`) and signals
-  "can't serve this UE" per TS 38.473 §8.4.1.2. The CU then **rejects** the UE:
-  it sends a `UEContextReleaseCommand` carrying an `rrcReject` (with a wait
-  timer) as an `RRCContainer` on `SRBID=0`. The IE is *present but zero-length*
-  in this case, so detect it by container **content length**, not by presence:
-  `-T fields -e f1ap.DUtoCURRCContainer` → empty value ⇒ "can't serve" (a
-  non-empty value carries the CellGroupConfig for an admitted UE).
+The "can't serve" failure (`../../common/protocols/f1ap.md` § Failure signatures)
+is observed here by container **content length**, not IE presence:
+`-T fields -e f1ap.DUtoCURRCContainer` → empty value ⇒ "can't serve" (a non-empty
+value carries the CellGroupConfig for an admitted UE).
 
 ## RRC PDUs inside F1AP containers are NOT auto-dissected (tshark gotcha)
 
@@ -123,7 +88,7 @@ tshark -r f1ap.pcap -Y 'f1ap.procedureCode==6 && f1ap.RRCContainer' \
 Quick manual PER decode of a DL-CCCH message: bit0 = `message` choice (0=`c1`),
 bits1–2 = `c1` choice (`00`=`rrcReject`, `01`=`rrcSetup`). Example: an admission
 reject appears as `UEContextReleaseCommand`, `SRBID=0`, `RRCContainer: 09e0` →
-`c1: rrcReject`, `waitTime=16s` — completely invisible to `grep rrcReject`.
+`c1: rrcReject`, `waitTime=16s` → completely invisible to `grep rrcReject`.
 Distinguish reject-in-release from a normal release by the container: a bare
 release has no `RRCContainer`; a reject carries the short CCCH `rrcReject`.
 

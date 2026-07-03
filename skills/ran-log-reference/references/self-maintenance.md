@@ -8,7 +8,7 @@ ordinary analysis it is not needed.
 
 - Edit **only** files inside this skill's own `references/<type>/` and
   `scripts/<type>/` trees (`ocudu`, `amari-ue`, `pcap`, `viavi`, `correlate`),
-  plus the shared `references/*.md`.
+  the shared `references/common/` subtree, plus the shared `references/*.md`.
 - **Never** touch files elsewhere in the repo or the user's project.
 - **Never** `git add`/`commit`/`push` — leave edits as working-tree diffs for the
   user to review.
@@ -44,7 +44,13 @@ do not edit the skill.
 - **Single-artifact learning** → the routing table in
   `references/<type>/conventions.md` (§ Memory routing) names the exact file and
   section for a new grep/tshark recipe, log marker, config field, failure
-  signature, etc.
+  signature, etc. Observation-surface detail (a log line, a tshark filter, a UE
+  marker) stays in the type subtree even if it observes a shared procedure.
+- **Artifact-agnostic learning** (protocol/procedure *semantics* shared across
+  types, an identifier definition, a 3GPP spec pointer, a FAPI message) →
+  `references/common/` (`protocols/<proto>.md`, `procedures/<name>.md`,
+  `identifiers.md`, `spec-map.md`, `fapi.md`). If a per-type doc restates it, thin
+  that doc to link here.
 - **Cross-artifact learning** (clock/slot alignment, identifier joining, a
   multi-source procedure trace) → `references/correlate/`
   (`cross-correlation.md`, `ue-identity-map.md`, or `correlate/procedures/*.md`);

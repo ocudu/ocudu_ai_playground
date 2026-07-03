@@ -1,5 +1,8 @@
 # UE Registration (initial attach)
 
+Pcap observation surface. The artifact-agnostic attach message ladder is
+`../../common/procedures/ue-attach.md`; this file is the across-pcaps view of it.
+
 ## Trigger event
 
 `f1ap.pcap` contains an `InitialULRRCMessageTransfer` carrying an RRC Setup

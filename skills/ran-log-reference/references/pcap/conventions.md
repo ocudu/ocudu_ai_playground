@@ -40,11 +40,14 @@ hand.
 
 Match the surrounding format; no dates/timestamps.
 
-- new/changed tshark filter or field/procedure code → `protocols/<proto>.md`
-  § Key tshark filters / § Common procedures and codes (or `tshark-recipes.md`
-  if cross-cutting). A changed procedure code/name must also be mirrored in
-  `scripts/pcap/utils.py` `PROC_CODE_NAMES`, which the overview/proc-code scripts
-  use to print names.
+- new/changed tshark filter or field → `protocols/<proto>.md` § Key tshark
+  filters (or `tshark-recipes.md` if cross-cutting). A changed procedure
+  **code/name** is artifact-agnostic → `../common/protocols/<proto>.md`
+  § Procedures and codes; also mirror it in `scripts/pcap/utils.py`
+  `PROC_CODE_NAMES`, which the overview/proc-code scripts use to print names.
+- protocol/procedure **semantics** (message meaning, identifier model, failure
+  signature shared across artifacts) → `../common/` (not here); keep only the
+  tshark observation in `protocols/<proto>.md`.
 - Upper-PDU framing or dissector quirk → `pcap-format.md`
 - failure signature → `procedures/<proc>.md` § Failure markers
 - cross-protocol correlation pattern → `cross-pcap-correlation.md`

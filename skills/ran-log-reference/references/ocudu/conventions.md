@@ -113,6 +113,10 @@ Match the surrounding format; no dates/timestamps.
   `reference/<name>.md` (§ Expected sequence for procedure docs, or the
   doc's relevant section). Keep the two paired: a procedure's `reference/` doc
   carries the sequence and points to its `troubleshooting/` sibling for diagnosis.
+- protocol/procedure **semantics** shared across artifacts (a message meaning, an
+  abstract procedure ladder, an identifier definition, a spec/FAPI pointer) →
+  `../common/` (not here); a `reference/<name>.md` doc keeps only the gNB-log
+  observation and links to its `../common/procedures/<name>.md` ladder.
 - a new symptom-reachable playbook → add a dispatch row to `analysis-guide.md`
   § Investigating a failure pointing at the `troubleshooting/<name>.md` (which in
   turn cites its `reference/` sequence sibling); a new `scripts/ocudu/<name>.py` →

@@ -1,13 +1,9 @@
 # Procedure: UE attach (RRC connection + Initial Context Setup)
 
-Expected-sequence reference. For diagnosing a *failed* attach, see
-`../troubleshooting/ue-attach-failure.md`.
-
-A UE attaches by sending PRACH → MSG3 (RRC Setup Request) → RRC Setup →
-RRC Setup Complete (carries the NAS Registration Request). The NAS reaches
-the AMF, security and capability exchange happen, and the AMF issues
-`InitialContextSetupRequest`. The gNB then sets up the DRBs via F1AP +
-E1AP and acknowledges with `InitialContextSetupResponse`.
+gNB-log observation surface. The artifact-agnostic message ladder (what should
+happen, across all artifacts) is `../../common/procedures/ue-attach.md`; this file
+maps that ladder to the OCUDU `gnb.log` lines. For diagnosing a *failed* attach,
+see `../troubleshooting/ue-attach-failure.md`.
 
 ## Expected sequence (single UE, log levels at info)
 
