@@ -17,15 +17,9 @@ After step 3 the gNB is connected (log milestone `Connected to AMF. Supported
 PLMNs: …`; stdout `==== gNB started ====`). An `NGSetupFailure` at step 3 means
 PLMN/TAC/slice mismatch.
 
-## Observation surfaces (per artifact)
+## Observation & diagnosis
 
-- **gNB log (`ocudu`)** — `../../ocudu/reference/ngap-setup.md`: the SCTP + NGAP
-  log-line sequence and stdout milestones.
-- **pcap** — analyze `ngap.pcap` with the `pcap` type; NGSetup is NGAP code 21
-  (`../../pcap/protocols/ngap.md`).
-
-## Diagnosing failures
-
-gNB-side in `../../ocudu/troubleshooting/ngap-amf-connection.md` (SCTP connect
-failure, NGSetupFailure cause, dropped association). Protocol signatures:
+How each step appears, and its per-step failure markers (SCTP connect failure,
+NGSetupFailure cause, dropped association), live in the artifact subtrees — each
+links back to this ladder. Protocol-level failure signatures:
 `../protocols/ngap.md` § Failure signatures.

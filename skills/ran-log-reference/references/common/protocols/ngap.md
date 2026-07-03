@@ -2,9 +2,9 @@
 
 Artifact-agnostic meaning of the NGAP messages: what each procedure does, which
 node initiates it, the identifiers it carries, and the common failure signatures.
-**Observation is per-artifact** — tshark filters and field names are in
-`../../pcap/protocols/ngap.md`; gNB-log `Rx/Tx PDU` lines are in the `ocudu`
-subtree. Spec: TS 38.413 (see `../spec-map.md`).
+**Observation is per-artifact** — each subtree documents how these messages
+appear (tshark filters, gNB-log `Rx/Tx PDU` lines, UE markers). Spec: TS 38.413
+(see `../spec-map.md`).
 
 NGAP carries the control plane between the gNB and the AMF: NG interface setup,
 per-UE registration (Initial UE Message → Initial Context Setup), NAS transport,
@@ -35,8 +35,7 @@ between the RAN and the 5G core.
 - `RAN-UE-NGAP-ID` — gNB-assigned, present from InitialUEMessage onward.
 - `AMF-UE-NGAP-ID` — AMF-assigned, present from InitialContextSetupRequest onward.
 
-Full identifier model (scope, HO stability) in `../identifiers.md`; cross-artifact
-joining in `../../correlate/ue-identity-map.md`.
+Full identifier model (scope, HO stability) in `../identifiers.md`.
 
 ## Failure signatures
 

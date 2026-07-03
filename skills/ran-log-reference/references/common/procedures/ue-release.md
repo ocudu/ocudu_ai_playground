@@ -31,16 +31,8 @@ Command. After step 5 the gNB context is gone — a re-attaching UE gets a fresh
 | `release-due-to-pre-emption` | resource pre-emption by higher-priority traffic |
 | `unspecified` | generic; read the surrounding events |
 
-## Observation surfaces (per artifact)
+## Observation & diagnosis
 
-- **gNB log (`ocudu`)** — `../../ocudu/reference/ue-release.md`: the per-layer
-  E1/F1 sequence, plus the un-ACKed RRCRelease → DL-KO-burst effect in load runs.
-- **pcap** — `../../pcap/procedures/ue-context-release.md`: gNB- vs AMF-initiated
-  sequences, cause-IE values, and tshark filters.
-
-## Diagnosing failures
-
-gNB-side in `../../ocudu/troubleshooting/ue-release-issues.md` (stuck release,
-context leak) and `../../ocudu/troubleshooting/harq-ko-bler.md` (release-phase DL
-KO bursts); pcap-side in `../../pcap/procedures/ue-context-release.md`
-§ Failure markers. Protocol signatures: `../protocols/ngap.md`.
+How each step appears, and its per-step failure markers (stuck release, context
+leak, release-phase DL-KO bursts), live in the artifact subtrees — each links
+back to this ladder. Protocol-level failure signatures: `../protocols/ngap.md`.

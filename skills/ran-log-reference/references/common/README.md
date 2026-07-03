@@ -25,7 +25,7 @@ own log-line / tshark / UE-marker detail.
 - **`identifiers.md`** — the UE identity model: C-RNTI and the F1AP / E1AP / NGAP
   / AMF IDs — definitions, assigning node, scope, and which survive HO /
   reestablishment / release. The per-artifact field names live in each subtree;
-  the cross-artifact *joining* lives in `../correlate/ue-identity-map.md`.
+  the cross-artifact *joining* is handled by the correlation layer.
 - **`spec-map.md`** — procedure/message → governing 3GPP TS + clause, and how to
   hand off to the `spec-explorer` skill for canonical text.
 - **`fapi.md`** — the SCF FAPI (MAC↔PHY) message reference.

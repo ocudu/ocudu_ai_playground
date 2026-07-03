@@ -2,9 +2,9 @@
 
 Artifact-agnostic meaning of the F1AP messages: what each procedure does, which
 node initiates it, the UE identifiers it carries, and the common failure
-signatures. **Observation is per-artifact** — tshark filters and field names are
-in `../../pcap/protocols/f1ap.md`; gNB-log `Rx/Tx PDU` lines are in the `ocudu`
-subtree. Spec: TS 38.473 (see `../spec-map.md`).
+signatures. **Observation is per-artifact** — each subtree documents how these
+messages appear (tshark filters, gNB-log `Rx/Tx PDU` lines, UE markers). Spec:
+TS 38.473 (see `../spec-map.md`).
 
 F1AP carries the control plane between the gNB-CU and gNB-DU in a split
 deployment: UE-context lifecycle, F1 infrastructure (F1 Setup, gNB-CU/DU
@@ -30,7 +30,7 @@ Configuration Update), and the RRC-container transfers between CU and DU.
 - `C-RNTI` — carried in `InitialULRRCMessageTransfer` (the DU's C-RNTI for the UE).
 
 Full identifier model (scope, stability across HO/reestablishment) in
-`../identifiers.md`; cross-artifact joining in `../../correlate/ue-identity-map.md`.
+`../identifiers.md`.
 
 ## UE arrival paths
 

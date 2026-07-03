@@ -3,8 +3,8 @@
 The artifact-agnostic message sequence for an initial attach (RRC connection +
 NAS registration + Initial Context Setup). This is *what should happen*; each row
 notes which artifact surfaces it. For the exact observation surface — gNB log
-lines, tshark filters, UE-log markers — follow the per-artifact docs under
-§ Observation surfaces. Spec clauses in `../spec-map.md`.
+lines, tshark filters, UE-log markers — follow the per-artifact docs, which link
+back to this ladder. Spec clauses in `../spec-map.md`.
 
 A UE sends PRACH → MSG3 (RRC Setup Request) → RRC Setup → RRC Setup Complete
 (carrying the NAS Registration Request). The NAS reaches the AMF; authentication,
@@ -39,18 +39,9 @@ After step 18 the UE is attached and DRBs are operational — GTP-U SDUs start
 flowing. The NAS state machine on the UE walks
 `5GMM-NULL` → `REGISTERED-INITIATED` → `REGISTERED` across steps 3–17.
 
-## Observation surfaces (per artifact)
+## Observation & diagnosis
 
-- **gNB log (`ocudu`)** — `../../ocudu/reference/ue-attach.md`: the full per-layer
-  `Rx/Tx PDU` expected-sequence with `ue=`/`c-rnti=`/`du_ue=` keys.
-- **pcap** — `../../pcap/procedures/registration.md`: the across-pcaps sequence and
-  tshark filters; `../../pcap/protocols/f1ap.md` for F1AP filters.
-- **UE log (`amari-ue`)** — `../../amari-ue/procedures/registration.md`: the
-  UE-side `[PHY]`/`[RRC]`/`[NAS]` trace and NAS state transitions.
-
-## Diagnosing failures
-
-Failure markers and checklists are per-artifact (which observed step is missing →
-likely cause): gNB-side in `../../ocudu/troubleshooting/ue-attach-failure.md`,
-pcap-side in `../../pcap/procedures/registration.md` § Failure markers, UE-side in
-`../../amari-ue/procedures/registration.md` § Investigation checklist.
+How each step appears, and the failure marker per step (which observed step is
+missing → likely cause), live in the artifact subtrees — each links back to this
+ladder. Protocol-level failure signatures: `../protocols/f1ap.md`,
+`../protocols/ngap.md`, `../protocols/e1ap.md`.

@@ -2,9 +2,9 @@
 
 Artifact-agnostic meaning of the E1AP messages: what each procedure does, which
 node initiates it, the identifiers it carries, and the common failure signatures.
-**Observation is per-artifact** — tshark filters and field names are in
-`../../pcap/protocols/e1ap.md`; gNB-log `Rx/Tx PDU` lines are in the `ocudu`
-subtree. Spec: TS 38.463 (see `../spec-map.md`).
+**Observation is per-artifact** — each subtree documents how these messages
+appear (tshark filters, gNB-log `Rx/Tx PDU` lines, UE markers). Spec: TS 38.463
+(see `../spec-map.md`).
 
 E1AP carries the control plane between the gNB-CU-CP and gNB-CU-UP: it manages
 bearer contexts and PDU-session resources on the user-plane side. It is the data-
@@ -34,8 +34,7 @@ NGAP but throughput is zero, the fault is usually here.
 - `dRB_ID` — per-DRB selector (when DRB-level granularity is in play).
 - GTP-U TEIDs for the user plane appear inside the BearerContextSetup IEs.
 
-Full identifier model (scope, HO stability) in `../identifiers.md`; cross-artifact
-joining in `../../correlate/ue-identity-map.md`.
+Full identifier model (scope, HO stability) in `../identifiers.md`.
 
 ## Failure signatures
 

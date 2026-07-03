@@ -33,18 +33,9 @@ Key tells: the `ReconfigurationComplete` is sent on the **target** cell (differe
 cell index / fresh C-RNTI than the command); a reconfiguration **without**
 `reconfigurationWithSync` is a bearer/measurement update, not a HO.
 
-## Observation surfaces (per artifact)
+## Observation & diagnosis
 
-- **gNB log (`ocudu`)** — `../../ocudu/reference/handover.md`: intra- vs inter-gNB
-  sequences and the scheduler-only signals when RRC/CU are at `warning`.
-- **pcap** — `../../pcap/procedures/handover.md`: per-variant triggers, the
-  first-F1AP-message role signature, and the CFRA timeline.
-- **UE log (`amari-ue`)** — `../../amari-ue/procedures/handover.md`: the
-  reconfigurationWithSync + target-cell-completion view.
-
-## Diagnosing failures
-
-gNB-side in `../../ocudu/troubleshooting/handover-failure.md`; pcap-side in
-`../../pcap/procedures/handover.md` § Failure markers; UE-side in
-`../../amari-ue/procedures/handover.md`. A failed HO usually surfaces as a
+How each step appears, and its per-step failure markers, live in the artifact
+subtrees — each links back to this ladder. Protocol-level failure signatures:
+`../protocols/f1ap.md`, `../protocols/ngap.md`. A failed HO usually surfaces as a
 re-establishment → `reestablishment.md`.

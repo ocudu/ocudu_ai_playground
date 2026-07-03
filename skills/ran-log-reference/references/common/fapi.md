@@ -43,8 +43,8 @@ Uplink indications (PHY→MAC):
 
 - A per-slot cadence issue (missed `SLOT.indication`, late `DL_TTI.request`) points
   at the L1↔L2 boundary rather than the scheduler logic.
-- The UCI outcome vocabulary carried in `UCI.indication` (ACK/NACK/DTX, SR
-  positive/negative, CSI valid/invalid) is detailed for OCUDU in
-  `../ocudu/reference/uci.md`.
+- `UCI.indication` carries the UCI outcome vocabulary — HARQ-ACK/NACK/DTX, SR
+  positive/negative, CSI valid/invalid; the per-artifact subtree names how each
+  outcome is printed.
 - `RACH.indication` is the PHY's view of random access; it is the FAPI counterpart
-  of the scheduler's PRACH-detected event — see `procedures/ue-attach.md` step 1.
+  of the scheduler's PRACH-detected event — see `procedures/random-access.md`.

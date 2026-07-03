@@ -24,18 +24,8 @@ After step 7 the user plane is up; the first core DL packet appears as a GTP-U
 RX SDU. On the UE side the tell is an `RRC reconfiguration` **without**
 `reconfigurationWithSync` (a bearer/measurement update, not a handover).
 
-## Observation surfaces (per artifact)
+## Observation & diagnosis
 
-- **gNB log (`ocudu`)** — `../../ocudu/reference/pdu-session-setup.md`: the
-  per-layer E1/F1/GTPU expected-sequence with TEID plumbing.
-- **pcap** — `../../pcap/procedures/pdu-session-setup.md`: the across-pcaps
-  sequence and tshark filters.
-- **UE log (`amari-ue`)** — `../../amari-ue/procedures/data-session.md`: the
-  UE-side reconfiguration + CBR traffic-stats view.
-
-## Diagnosing failures
-
-Per-artifact: gNB-side in `../../ocudu/troubleshooting/no-user-plane.md`,
-pcap-side in `../../pcap/procedures/pdu-session-setup.md` § Failure markers,
-UE-side in `../../amari-ue/procedures/data-session.md` § Investigation checklist.
-Protocol failure signatures: `../protocols/e1ap.md`, `../protocols/ngap.md`.
+How each step appears, and its per-step failure markers, live in the artifact
+subtrees — each links back to this ladder. Protocol-level failure signatures:
+`../protocols/e1ap.md`, `../protocols/ngap.md`.

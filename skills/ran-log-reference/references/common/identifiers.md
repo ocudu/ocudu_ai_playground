@@ -8,7 +8,7 @@ print it differs.
 - The **per-artifact label** for each ID (tshark field, gNB log key, UE-log
   field) lives in that artifact's subtree.
 - The **cross-artifact joining** (follow one UE across UE log ↔ gNB log ↔ pcaps,
-  which ID to anchor on) lives in `../correlate/ue-identity-map.md`.
+  which ID to anchor on) is handled by the correlation layer.
 
 ## Identifier table
 

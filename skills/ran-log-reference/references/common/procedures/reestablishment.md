@@ -23,18 +23,10 @@ C-RNTI + PCI so the gNB can find the old UE context. Spec: TS 38.331 §5.3.7 (se
 ID, or `force_reestablishment_fallback: true`) it sends `rrcReject` or `rrcSetup`
 at step 4 instead — forcing a full re-attach (`ue-attach.md`).
 
-## Observation surfaces (per artifact)
+## Observation & diagnosis
 
-- **gNB log (`ocudu`)** — `../../ocudu/reference/reestablishment.md`: the
-  per-layer sequence and the context-lookup / fallback signals.
-- **UE log (`amari-ue`)** — `../../amari-ue/procedures/handover.md`
-  § RRC Reestablishment: the UE-side request/accept/reject view.
-- **pcap** — the returning UE appears as a fresh `InitialULRRCMessageTransfer`
-  whose RRC container is a `RRCReestablishmentRequest`
-  (`../../pcap/procedures/handover.md` § Failure markers).
-
-## Diagnosing failures
-
-gNB-side in `../../ocudu/troubleshooting/reestablishment.md` (RLF cause,
-reject / setup-fallback / no-complete). Most re-establishments in mobility runs
-follow a failed handover → `handover.md`.
+How each step appears, and its per-step failure markers (RLF cause,
+reject / setup-fallback / no-complete), live in the artifact subtrees — each
+links back to this ladder. In a pcap the returning UE appears as a fresh initial
+UL RRC transfer whose RRC container is a re-establishment request. Most
+re-establishments in mobility runs follow a failed handover → `handover.md`.

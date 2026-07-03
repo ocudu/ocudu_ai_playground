@@ -28,19 +28,10 @@ retry** — that absence is normal, not a failure.
   (initial), `Handover` (CFRA), `SR MAX Exceeded` / `SR NO Resource` (SR→RA
   fallback).
 
-## Observation surfaces (per artifact)
+## Observation & diagnosis
 
-- **pcap** — `../../pcap/procedures/random-access.md`: what is/isn't visible and
-  the MAC↔F1AP join by RNTI.
-- **VIAVI** — `../../viavi/procedures/random-access.md`: the `L2 Random Access`
-  line shapes, triggers, and `Result:` failure reasons.
-- **gNB log (`ocudu`)** — RA is embedded in `../../ocudu/reference/ue-attach.md`
-  steps 1–6 and `../../ocudu/reference/reestablishment.md`.
-
-## Diagnosing failures
-
-pcap-side in `../../pcap/procedures/random-access.md` § Failure markers;
-VIAVI-side in `../../viavi/procedures/random-access.md` § Failure markers &
-causes; gNB-side via the attach / fallback-scheduling troubleshooting docs. RA is
-a two-sided procedure — always confirm the UE/VIAVI view against the gNB log and
-MAC pcap.
+How each step appears, and its per-step failure markers, live in the artifact
+subtrees — each links back to this ladder. RA is a two-sided procedure: always
+confirm the UE/VIAVI (tester) view against the gNB (network) view. In the abstract
+flow RA is the entry to an attach (`ue-attach.md`) and a re-establishment
+(`reestablishment.md`).
