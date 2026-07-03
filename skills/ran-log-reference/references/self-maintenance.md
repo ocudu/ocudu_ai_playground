@@ -57,6 +57,32 @@ do not edit the skill.
   a correlation-script fix → `scripts/correlate/`.
 - **Script bug/feature** → the matching `scripts/<type>/*.py`.
 
+### Layering — the dependency direction is one-way
+
+The subtrees form layers; a doc may link **down** (to a more general layer) but
+**never up**:
+
+```
+common/            (base: artifact-agnostic semantics, spec, FAPI, identifiers)
+   ▲
+per-type subtrees  (ocudu / pcap / amari-ue / viavi — observation of common)
+   ▲
+correlate/         (composes per-type observations)
+```
+
+- A `references/common/` doc must **not** reference `ocudu` / `pcap` / `amari-ue`
+  / `viavi` / `correlate` (no `../../<type>/…` or `../correlate/…` paths). It may
+  *name* an artifact kind descriptively (e.g. a "where seen" column: "pcap `f1ap`
+  (11)", "gNB log (SCHED)") — that is not a folder link. Keep it self-contained;
+  link only to sibling `common/` docs.
+- A per-type doc **may** link into `common/` (the reverse direction — this is how
+  an observation cites its semantics/ladder), but not into a sibling per-type
+  subtree.
+- `correlate/` may link into both `common/` and the per-type subtrees it joins.
+
+When adding to `common/`, the observation mapping lives on the artifact side: the
+per-type doc links up to the common ladder, not the other way round.
+
 ## Step 3 — apply (confirm flow)
 
 For every edit:
