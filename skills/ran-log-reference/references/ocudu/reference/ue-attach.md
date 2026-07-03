@@ -1,5 +1,8 @@
 # Procedure: UE attach (RRC connection + Initial Context Setup)
 
+Expected-sequence reference. For diagnosing a *failed* attach, see
+`../troubleshooting/ue-attach-failure.md`.
+
 A UE attaches by sending PRACH → MSG3 (RRC Setup Request) → RRC Setup →
 RRC Setup Complete (carries the NAS Registration Request). The NAS reaches
 the AMF, security and capability exchange happen, and the AMF issues
@@ -45,59 +48,15 @@ E1AP and acknowledges with `InitialContextSetupResponse`.
 After step 31 the UE is fully attached and DRBs are operational. The gNB's
 `[GTPU]` lines start showing UL/DL SDUs flowing.
 
-## Failure markers
+## Diagnosing failures
 
-| Where it fails | Marker | Likely cause |
-|---|---|---|
-| Before step 1 | PRACH not detected at all | UE TX power / SSB alignment / wrong `prach_config_index` |
-| Step 1 → 6 | MSG3 doesn't decode (`crc=KO` on PUSCH for that rnti) | Power / timing / wrong MSG3 grant params |
-| Step 8 missing | `Initial ULRRCMessageTransfer` arrived but `UE created` not logged | CU-CP rejected the UE — check warnings; could be max_nof_ues hit |
-| Step 11 missing | `rrcSetupComplete` never seen | UE never decoded MSG4 or NAS PDU encoding failed |
-| Step 15 missing | NAS exchange stalls between RRC and `InitialContextSetupRequest` | AMF auth failure (check `amf_ue` ID transition), 5GC issue |
-| Step 30 missing | `"Initial Context Setup Routine"` logged `initialized` but never `finished successfully` | UE didn't reply to securityMode / Reconfiguration; or bearer setup failed in E1AP |
-| Step 31 followed by immediate UEContextRelease from AMF | NAS rejected the request | Check `cause` IE in `UEContextReleaseCommand` |
+For failure markers (which step is missing → likely cause), the investigation
+checklist, and multi-UE `Initial Context Setup OK K/N` gap analysis, see
+`../troubleshooting/ue-attach-failure.md`. A missing MSG4/ConRes (step 6) is a
+fallback-scheduling problem → `../troubleshooting/ue-fallback-scheduling-issues.md`.
 
-## Investigation checklist
+## Cross-references
 
-1. Did PRACH happen?
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --layer SCHED --pattern "prach\(" --count
-   ```
-2. Did the UE get a C-RNTI?
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern "UE created" --max-lines 20
-   ```
-3. Did rrcSetupComplete arrive?
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern "rrcSetupComplete" --max-lines 10
-   ```
-4. Was Initial Context Setup acknowledged?
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern '"Initial Context Setup Routine"' --max-lines 20
-   ```
-5. If a specific UE failed, scope everything by `c-rnti` and look at the gap:
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --rnti <hex> --max-lines 200
-   ```
-6. Cross-correlate with the Amarisoft UE log via the `amari-ue` type — the
-   UE log shows whether the UE actually decoded MSG4, whether it sent
-   Reconfiguration Complete, and whether NAS Auth Response went out.
-
-## Multi-UE specifics
-
-In `multiue.attach_dettach.baseline` the gNB processes UEs in batches. The
-`[SCHED] [W] UE creation (ue=N): latency1=...` and
-`[MAC] [W] MAC UE creation (ue=N): ...` warnings are **expected diagnostic
-output**, not real warnings — they report per-UE creation latency for
-performance tracking.
-
-When `Initial Context Setup OK : K/N` shows K < N, the gap is the most
-useful single signal. Find which UEs missed it:
-
-```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern "UE created" \
-    | grep -oE "ue=[0-9]+" | sort -u > /tmp/created.txt
-python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern '"Initial Context Setup Routine" finished' \
-    | grep -oE "ue=[0-9]+" | sort -u > /tmp/done.txt
-comm -23 /tmp/created.txt /tmp/done.txt
-```
+- `pdu-session-setup.md` — the DRB/bearer setup that overlaps steps 25–29.
+- `../troubleshooting/ue-attach-failure.md` — attach failure dispatch.
+</content>

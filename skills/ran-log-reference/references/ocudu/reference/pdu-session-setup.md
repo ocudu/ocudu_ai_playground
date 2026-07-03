@@ -1,13 +1,13 @@
 # Procedure: PDU session / DRB setup
 
+Expected-sequence reference. For an attach that succeeded at RRC but shows **no
+data flow**, diagnose with `../troubleshooting/no-user-plane.md`.
+
 The PDU session is set up as part of Initial Context Setup (see
 `ue-attach.md`): the AMF sends the PDU session list in
 `InitialContextSetupRequest`, the gNB requests the bearer from the CU-UP
 over E1AP, then plumbs the DRBs to the DU over F1AP and acknowledges with
 `PDUSessionResourceSetupResponseTransfer`.
-
-For attaches that **succeeded** at the RRC level but show **no data flow**,
-this is the procedure to inspect.
 
 ## Expected sequence
 
@@ -30,39 +30,13 @@ this is the procedure to inspect.
 After step 13 the user-plane is up. The first DL packet from the core appears
 as `[GTPU] [I] ue=N DL teid=0x...: RX SDU. sdu_len=N qos_flow=QFI=N`.
 
-## Failure markers
+## Diagnosing failures
 
-| Where it fails | Marker | Likely cause |
-|---|---|---|
-| Step 5 missing | `BearerContextSetupRequest` not acknowledged | CU-UP not started or rejected the bearer (check `[CU-UP   ]` lines) |
-| Step 5 ack with failure cause | `BearerContextSetupResponse` body shows failed bearers | QoS / DRB ID conflict — check PCAP for cause IE |
-| Step 9 missing | DRB modification stalls | F1-U tunnel attach failed on DU |
-| Step 13 missing despite reconfigComplete | `Tunnel added` not seen | GTPU layer at warning, or tunnel creation actually failed |
-| Step 12 received but no UL data | `[GTPU] [I] UL teid=...: TX PDU` lines absent | UE not generating traffic, or NAS PDU session not activated on UE side |
-
-## Investigation checklist
-
-1. Did the bearer context come up?
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern "BearerContext(Setup|Modification)(Request|Response)" --max-lines 40
-   ```
-2. Did the F1-U tunnel attach?
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern "Attaching dl_teid|F1-U tunnel" --max-lines 20
-   ```
-3. Is the user-plane flowing?
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --layer GTPU --max-lines 30
-   ```
-4. Did the reconfiguration land?
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern "rrcReconfiguration(Complete)?" --max-lines 30
-   ```
-5. If E1AP layer is at warning, enable `e1ap_level: info` in `ocudu_gnb.yml`
-   for the next run, or analyse the `e1ap.pcap` via the `pcap` type.
+For failure markers and the investigation checklist, see
+`../troubleshooting/no-user-plane.md`.
 
 ## Cross-references
 
-- `ue-attach.md` — bearer setup overlaps with the attach
-  procedure.
+- `ue-attach.md` — bearer setup overlaps with the attach procedure.
 - `pcap` type: `e1ap.pcap`, `f1ap.pcap` carry the full IE bodies.
+</content>

@@ -232,18 +232,21 @@ Match the symptom to the most likely troubleshooting or reference doc:
 
 | Symptom | File |
 |---|---|
-| UE never attached (no `UE created` or no `Initial Context Setup Routine finished`) | `reference/ue-attach.md` |
-| UE attached but no data / DRB never set up | `reference/pdu-session-setup.md` |
-| Handover triggered but failed (no `rrcReconfigurationComplete` on target, or RLF after `reconfigurationWithSync`) | `reference/handover.md` |
-| RRC reestablishment seen (`rrcReestablishmentRequest`) | `reference/reestablishment.md` |
-| UE released unexpectedly | `reference/ue-release.md` |
-| NGAP / AMF connection lost or never established | `reference/ngap-setup.md` |
+| UE never attached (no `UE created` or no `Initial Context Setup Routine finished`) | `troubleshooting/ue-attach-failure.md` |
+| UE stuck in fallback: `ra-ContentionResolutionTimer` expiry, RRC Setup/Reest timeout, or Msg4/ConRes never scheduled | `troubleshooting/ue-fallback-scheduling-issues.md` |
+| UE attached but no data / DRB never set up | `troubleshooting/no-user-plane.md` |
+| Handover triggered but failed (no `rrcReconfigurationComplete` on target, or RLF after `reconfigurationWithSync`) | `troubleshooting/handover-failure.md` |
+| RRC reestablishment seen (`rrcReestablishmentRequest`) | `troubleshooting/reestablishment.md` |
+| UE released unexpectedly | `troubleshooting/ue-release-issues.md` |
+| NGAP / AMF connection lost or never established | `troubleshooting/ngap-amf-connection.md` |
 | PHY-only failures (PRACH undecoded, persistent `crc=KO`, ZMQ rx waiting) | `troubleshooting/phy-issues.md` |
 | Throughput regression / late HARQs / failed PDCCH | `troubleshooting/throughput-degradation.md` |
 | High DL/UL KOs / BLER (localize attach vs steady-state vs release first) | `troubleshooting/harq-ko-bler.md` |
 | Process crashed / abnormal exit | `troubleshooting/abnormal-exit.md` |
 
-Load the matching doc and follow its expected-sequence checklist.
+Each row points to a `troubleshooting/` playbook (failure markers + investigation
+checklist); each playbook cites the expected message sequence in its `reference/`
+sibling. Load the matching playbook and work its checklist.
 
 If no doc matches, fall back to the layered approach:
 1. Identify the **last successful** layer-level event before the symptom.

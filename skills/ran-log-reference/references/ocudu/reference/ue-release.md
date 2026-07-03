@@ -1,5 +1,8 @@
 # Procedure: UE release
 
+Expected-sequence reference. For an unexpected / stuck release, or release-phase
+DL KO bursts, diagnose with `../troubleshooting/ue-release-issues.md`.
+
 UE release happens when the AMF (or, in some configurations, the gNB itself
 after the inactivity timer) decides the RRC connection should be torn down.
 The trigger arrives as NGAP `UEContextReleaseCommand`, propagates down
@@ -45,36 +48,14 @@ for the localize + load-dependence method.
 After step 19 the AMF considers the UE released. The gNB context for `ue=N`
 no longer exists; if the same UE re-attaches it will get a new `ue=N` index.
 
-## Failure markers
+## Diagnosing failures
 
-| Marker | Meaning |
-|---|---|
-| Release triggered by gNB inactivity (`Inactivity timer expired`) | Normal in idle tests — UE was attached but didn't generate traffic for `cu_cp.inactivity_timer` seconds |
-| `BearerContextReleaseComplete` missing | CU-UP didn't ack — process stuck (check `[CU-UP   ]` lines) |
-| `"UE Removal Routine" finished successfully` missing despite step 1 happening | Release got stuck mid-flow; CU-CP context leak — check warnings for F1/E1 timeouts |
-| `RRC container not ACKed within a time window of 120msec` | Benign in simulator runs (the UE may have already detached); becomes a concern on real radios if persistent |
-
-## Investigation checklist
-
-1. Find release triggers:
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern "UEContextReleaseCommand" --max-lines 20
-   ```
-2. Match each command to its completion:
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern "UE Removal Routine.*finished" --count
-   ```
-3. Was the cause IE in the command an error? The cause is carried in the
-   NGAP body — visible in `ngap.pcap` (handoff to the `pcap` type), or in
-   `gnb.log` only when `ngap_level: info` and `hex_max_size > 0`.
-4. For UEs that never released (creations > releases), find the missing UE:
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern "UE created" --max-lines 50
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern '"UE Removal Routine" finished' --max-lines 50
-   ```
+For failure markers (stuck release, context leak, inactivity trigger) and the
+investigation checklist, see `../troubleshooting/ue-release-issues.md`.
 
 ## Cross-references
 
 - `ue-attach.md` — release reverses the attach.
-- `pcap` type: `ngap.pcap` carries the `cause` IE in
-  `UEContextReleaseCommand`.
+- `../troubleshooting/harq-ko-bler.md` — release-phase DL KO bursts.
+- `pcap` type: `ngap.pcap` carries the `cause` IE in `UEContextReleaseCommand`.
+</content>

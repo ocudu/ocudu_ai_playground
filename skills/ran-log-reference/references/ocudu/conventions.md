@@ -23,13 +23,18 @@ inspect/run orchestrator, not this module.
 
 Debugging is symptom-first, so the docs split by role:
 
-- **`troubleshooting/`** — symptom → root-cause playbooks (abnormal exit, PHY /
-  radio-link issues, HARQ KOs/BLER, throughput degradation). Start here from a
-  symptom; each points on to the reference docs it needs.
+- **`troubleshooting/`** — symptom → root-cause playbooks (failure markers +
+  investigation checklist). Two kinds: cross-cutting diagnostics (abnormal exit,
+  PHY / radio-link, HARQ KOs/BLER, throughput degradation, fallback scheduling)
+  and per-procedure failure dispatch (attach, no-user-plane, handover,
+  reestablishment, UE release, NGAP/AMF). Start here from a symptom; each cites
+  the expected-sequence `reference/` doc it needs.
 - **`reference/`** — lazily-loaded knowledge: format specs (`log-format.md`,
   `config-format.md`), UCI outcome vocabulary (`uci.md`), and the expected-sequence
   procedure references (attach, PDU session, NGAP setup, handover,
-  reestablishment, release).
+  reestablishment, release). Procedure docs hold the **sequence + vocabulary
+  only**; their failure markers and checklists live in the paired
+  `troubleshooting/` doc.
 - top level — the entry point (`conventions.md`), the methodology + failure
   dispatch (`analysis-guide.md`), and the latency profiler (`latency-profiling.md`).
 
@@ -103,12 +108,13 @@ Match the surrounding format; no dates/timestamps.
   detection-status codes) → `reference/uci.md`
 - new YAML field / quirk → `reference/config-format.md` (§ Sections,
   § Common overrides, § Field reference)
-- new symptom-driven diagnostic playbook → `troubleshooting/<name>.md`
-  (§ Investigation checklist); expected-sequence or vocabulary detail →
+- failure markers / investigation checklist (incl. for a procedure) →
+  `troubleshooting/<name>.md`; expected-sequence or vocabulary detail →
   `reference/<name>.md` (§ Expected sequence for procedure docs, or the
-  doc's relevant section)
-- a new `troubleshooting/<name>.md` or `reference/<name>.md` reachable from a
-  symptom → also add a dispatch row to `analysis-guide.md` § Investigating a
-  failure; a new `scripts/ocudu/<name>.py` → document it in `analysis-guide.md`
-  and/or the relevant doc
+  doc's relevant section). Keep the two paired: a procedure's `reference/` doc
+  carries the sequence and points to its `troubleshooting/` sibling for diagnosis.
+- a new symptom-reachable playbook → add a dispatch row to `analysis-guide.md`
+  § Investigating a failure pointing at the `troubleshooting/<name>.md` (which in
+  turn cites its `reference/` sequence sibling); a new `scripts/ocudu/<name>.py` →
+  document it in `analysis-guide.md` and/or the relevant doc
 - a script bug → fix it in `scripts/ocudu/*.py`

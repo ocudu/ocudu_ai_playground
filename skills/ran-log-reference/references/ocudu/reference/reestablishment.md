@@ -1,5 +1,8 @@
 # Procedure: RRC reestablishment (post-RLF recovery)
 
+Expected-sequence reference. For diagnosing an RLF / a reestablishment that was
+rejected or fell back to setup, see `../troubleshooting/reestablishment.md`.
+
 When the UE detects Radio Link Failure (RLF) — too many consecutive PDCCH out-
 of-sync indications, T310 expiry, RACH max attempts, integrity check failure,
 or HO failure — it tears down the dedicated RRC connection and attempts to
@@ -30,42 +33,13 @@ gNB ID), it falls back to a full RRC Setup:
 - In `cu_cp.rrc.force_reestablishment_fallback: true` mode, the gNB always
   falls back.
 
-## Failure markers
+## Diagnosing failures
 
-| Marker | Meaning |
-|---|---|
-| `CCCH DL rrcReject` after a reestablishment request | gNB refused to reestablish (max ue, mismatched IDs) |
-| `CCCH DL rrcSetup` after a reestablishment request | Fallback to full setup — UE context was lost |
-| `Reestablishment failed` log line (if present in the build) | Internal failure |
-| No `rrcReestablishmentComplete` after `rrcReestablishment` | UE didn't ACK — likely radio gone |
-
-## Investigation checklist
-
-1. Find every reestablishment attempt:
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern "rrcReestablishment" --max-lines 30
-   ```
-2. For each, capture the cause carried in the request body. The cause
-   appears as a continuation line under `rrcReestablishmentRequest`:
-   - `reconfigurationFailure` — HO command failed → see `handover.md`.
-   - `handoverFailure` — explicit HO failure.
-   - `otherFailure` — generic RLF (PDCCH out-of-sync, T310, RACH max).
-3. Match old → new c-rnti via `CU-CP` log lines, then trace the original UE
-   to see what happened just before:
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --rnti <old_hex> --before <reest_ts> --max-lines 80
-   ```
-4. PHY/MAC view of the radio link in the seconds before the reestablishment:
-   ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --layer PHY --rnti <old_hex> \
-       --after <T-2s> --before <reest_ts> --pattern "crc=KO|sr=yes" --max-lines 30
-   ```
-5. Cross-correlate with the Amarisoft UE log — the UE log emits
-   `rrc_reestablishment` SIM-Event or an internal RLF notification.
+For failure markers (reject / setup-fallback / no complete) and the
+investigation checklist, see `../troubleshooting/reestablishment.md`.
 
 ## Cross-references
 
-- `handover.md` — most reestablishments in mobility tests follow a
-  failed HO.
-- `../troubleshooting/phy-issues.md` — PHY-side radio link degradation that triggers
-  RLF.
+- `handover.md` — most reestablishments in mobility tests follow a failed HO.
+- `../troubleshooting/reestablishment.md` — RLF-cause + recovery diagnosis.
+</content>
