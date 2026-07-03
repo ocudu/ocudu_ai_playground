@@ -30,4 +30,3 @@ association) and the investigation checklist, see
 
 - `config-format.md` — § Field reference (`cu_cp.amf.*` rows).
 - Companion artifact: `ngap.pcap` (analyze with the `pcap` type).
-</content>

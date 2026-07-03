@@ -42,4 +42,3 @@ investigation checklist, see `../troubleshooting/reestablishment.md`.
 
 - `handover.md` — most reestablishments in mobility tests follow a failed HO.
 - `../troubleshooting/reestablishment.md` — RLF-cause + recovery diagnosis.
-</content>

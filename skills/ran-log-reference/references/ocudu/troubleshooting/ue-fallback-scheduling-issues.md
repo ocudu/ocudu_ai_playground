@@ -148,5 +148,3 @@ build commit):
 - `ue-attach-failure.md` — attach broke somewhere other than fallback scheduling.
 - Correlate with the UE side (`amari-ue` type) to confirm the UE actually
   transmitted Msg3 / listened for Msg4.
-</content>
-</invoke>

@@ -117,7 +117,7 @@ These hold for every type; `references/<type>/conventions.md` adds the deltas.
   `${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/`. The
   root is keyed by session, so any other skill in the same session (e.g. a
   higher-level orchestrator) can reuse these cached outputs. Write files with a
-  **type prefix** — `pcap-`, `ocudu-`, `amari-`, `correlate-` — so the types don't collide.
+  **type prefix** — `pcap-`, `ocudu-`, `amari-`, `viavi-`, `correlate-` — so the types don't collide.
   Helper scripts create the dir
   lazily; the OS reaps `/tmp` on reboot, so no manual cleanup.
 - **Never** read a raw `gnb.log` / `ue.log` / pcap into context — they can be

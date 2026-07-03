@@ -116,7 +116,8 @@ Match the surrounding format; no dates/timestamps.
 - protocol/procedure **semantics** shared across artifacts (a message meaning, an
   abstract procedure ladder, an identifier definition, a spec/FAPI pointer) →
   `../common/` (not here); a `reference/<name>.md` doc keeps only the gNB-log
-  observation and links to its `../common/procedures/<name>.md` ladder.
+  observation and links to its ladder there — from the `reference/` subdir that is
+  `../../common/procedures/<name>.md`.
 - a new symptom-reachable playbook → add a dispatch row to `analysis-guide.md`
   § Investigating a failure pointing at the `troubleshooting/<name>.md` (which in
   turn cites its `reference/` sequence sibling); a new `scripts/ocudu/<name>.py` →

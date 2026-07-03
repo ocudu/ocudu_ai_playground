@@ -55,4 +55,3 @@ fallback-scheduling problem → `../troubleshooting/ue-fallback-scheduling-issue
 
 - `pdu-session-setup.md` — the DRB/bearer setup that overlaps steps 25–29.
 - `../troubleshooting/ue-attach-failure.md` — attach failure dispatch.
-</content>

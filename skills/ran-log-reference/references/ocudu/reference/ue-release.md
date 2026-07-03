@@ -58,4 +58,3 @@ investigation checklist, see `../troubleshooting/ue-release-issues.md`.
 - `ue-attach.md` — release reverses the attach.
 - `../troubleshooting/harq-ko-bler.md` — release-phase DL KO bursts.
 - `pcap` type: `ngap.pcap` carries the `cause` IE in `UEContextReleaseCommand`.
-</content>

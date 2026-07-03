@@ -39,4 +39,3 @@ For failure markers and the investigation checklist, see
 
 - `ue-attach.md` — bearer setup overlaps with the attach procedure.
 - `pcap` type: `e1ap.pcap`, `f1ap.pcap` carry the full IE bodies.
-</content>

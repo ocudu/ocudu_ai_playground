@@ -40,4 +40,3 @@ For the **expected SCTP + NG Setup sequence**, see `../reference/ngap-setup.md`.
 - `../reference/ngap-setup.md` — the expected SCTP + NG Setup sequence.
 - `../reference/config-format.md` — § Field reference (`cu_cp.amf.*` rows).
 - `pcap` type: `ngap.pcap` carries the NGSetup / cause IEs.
-</content>

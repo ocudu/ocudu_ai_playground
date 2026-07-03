@@ -41,4 +41,3 @@ at step 11 is usually benign, see `../reference/ue-release.md`.
 - `../reference/ue-release.md` — the expected release sequence.
 - `harq-ko-bler.md` — release-phase DL KO bursts (the load-dependent feedback race).
 - `pcap` type: `ngap.pcap` carries the `cause` IE in `UEContextReleaseCommand`.
-</content>

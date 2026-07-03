@@ -44,4 +44,3 @@ For the **expected message sequence** (13 steps, E1AP↔F1AP↔GTPU), see
 - `../reference/ue-attach.md` — bearer setup overlaps with the attach procedure.
 - `ue-attach-failure.md` — if the attach itself did not complete.
 - `pcap` type: `e1ap.pcap`, `f1ap.pcap` carry the full IE bodies.
-</content>

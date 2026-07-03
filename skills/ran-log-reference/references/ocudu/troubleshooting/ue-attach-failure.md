@@ -83,4 +83,3 @@ comm -23 /tmp/created.txt /tmp/done.txt
 - `ue-fallback-scheduling-issues.md` — MSG4/ConRes never scheduled (step 6).
 - `no-user-plane.md` — attach reached RRC but DRBs/data never came up.
 - `phy-issues.md` — PRACH / MSG3 radio-side failures.
-</content>

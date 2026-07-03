@@ -54,6 +54,10 @@ Match the surrounding format; no dates/timestamps, no run-specific values.
 - new GETSTATS field / block detail → `log-format.md` § GETSTATS dump
 - failure signature / diagnostic step → `procedures/<proc>.md`
   (§ Investigation checklist or § Expected sequence)
+- protocol/procedure **semantics** shared across artifacts (a message meaning, an
+  abstract procedure ladder, an identifier definition, a spec/FAPI pointer) →
+  `../common/` (not here); a `procedures/<name>.md` doc keeps only the VIAVI-log
+  observation and links to its `../common/procedures/<name>.md` ladder.
 - a new `procedures/<name>.md` → also add a row to `analysis-guide.md`
   § Investigating a failure; a new `scripts/viavi/<name>.py` → document it in
   `analysis-guide.md` and/or the procedure file

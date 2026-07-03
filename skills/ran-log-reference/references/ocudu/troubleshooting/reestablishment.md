@@ -47,4 +47,3 @@ see `../reference/reestablishment.md`.
 - `handover-failure.md` — most reestablishments in mobility tests follow a failed HO.
 - `phy-issues.md` — PHY-side radio link degradation that triggers RLF.
 - `ue-fallback-scheduling-issues.md` — the reestablishment DCCH grant is scheduled in fallback.
-</content>

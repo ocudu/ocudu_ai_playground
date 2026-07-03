@@ -67,4 +67,3 @@ RRC/CU-at-warning → pcap path), see `../troubleshooting/handover-failure.md`.
 
 - `reestablishment.md` — HO failure usually surfaces as a reestablishment.
 - `pcap` type: F1AP / NGAP / RRC handover messages.
-</content>

@@ -49,4 +49,3 @@ test catalogue, and the scheduler-only visibility notes, see
 - `../reference/handover.md` — the expected HO sequences and test catalogue.
 - `reestablishment.md` — HO failure usually surfaces as a reestablishment.
 - `pcap` type: F1AP / NGAP / RRC handover messages.
-</content>
