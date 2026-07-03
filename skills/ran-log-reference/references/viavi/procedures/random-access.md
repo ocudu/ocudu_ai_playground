@@ -1,5 +1,8 @@
 # Procedure: random access (VIAVI)
 
+VIAVI-log observation surface. The artifact-agnostic RA ladder is
+`../../common/procedures/random-access.md`; this file is the tester-side view.
+
 Random access is the most common VIAVI failure signal and the entry point for
 most attach/mobility problems. Every PRACH attempt is an `I: CMPI L2 Random
 Access …` line keyed by `UE Id:<N>`.

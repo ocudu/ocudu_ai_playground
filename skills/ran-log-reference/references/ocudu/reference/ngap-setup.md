@@ -1,11 +1,12 @@
 # Procedure: NGAP / AMF connection
 
-Expected-sequence reference. For a connection that failed or dropped, diagnose
-with `../troubleshooting/ngap-amf-connection.md`.
+gNB-log observation surface. The artifact-agnostic message ladder is
+`../../common/procedures/ngap-setup.md`; this file maps it to the OCUDU `gnb.log`
+lines. For a connection that failed or dropped, diagnose with
+`../troubleshooting/ngap-amf-connection.md`.
 
 Connects the gNB's CU-CP to the AMF over SCTP and exchanges NG Setup so the gNB
-can serve UEs. This is the first thing that has to succeed in a run; nothing
-useful happens before it.
+can serve UEs — the first thing that must succeed in a run.
 
 ## Expected sequence
 

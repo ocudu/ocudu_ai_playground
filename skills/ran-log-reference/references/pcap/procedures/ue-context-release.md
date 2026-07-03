@@ -1,5 +1,8 @@
 # UE Context Release
 
+Pcap observation surface. The artifact-agnostic message ladder + cause-IE values
+is `../../common/procedures/ue-release.md`; this file is the pcap view.
+
 UE-context release is initiated either by the AMF (idle release, AMF policy)
 or by the gNB (RLF detected). The cause IE distinguishes the two.
 

@@ -1,5 +1,8 @@
 # PDU Session Resource Setup
 
+Pcap observation surface. The artifact-agnostic message ladder is
+`../../common/procedures/pdu-session-setup.md`; this file is the across-pcaps view.
+
 Establishes the user-plane bearers after a UE has registered. Spans NGAP,
 E1AP, and F1AP.
 

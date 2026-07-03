@@ -1,17 +1,12 @@
 # Procedure: RRC reestablishment (post-RLF recovery)
 
-Expected-sequence reference. For diagnosing an RLF / a reestablishment that was
+gNB-log observation surface. The artifact-agnostic message ladder (RLF triggers +
+fallback) is `../../common/procedures/reestablishment.md`; this file maps it to
+the OCUDU `gnb.log` lines. For diagnosing an RLF / a reestablishment that was
 rejected or fell back to setup, see `../troubleshooting/reestablishment.md`.
 
-When the UE detects Radio Link Failure (RLF) — too many consecutive PDCCH out-
-of-sync indications, T310 expiry, RACH max attempts, integrity check failure,
-or HO failure — it tears down the dedicated RRC connection and attempts to
-restore it on the same or a neighbour cell via the RRC Reestablishment
-procedure.
-
-On the gNB side this means a UE arrives with a `rrcReestablishmentRequest`
-carrying the previous c-rnti and pci so the gNB can locate the old UE
-context.
+On the gNB side a UE arrives with a `rrcReestablishmentRequest` carrying the
+previous c-rnti and pci so the gNB can locate the old UE context.
 
 ## Expected sequence
 

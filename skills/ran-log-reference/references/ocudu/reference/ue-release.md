@@ -1,13 +1,9 @@
 # Procedure: UE release
 
-Expected-sequence reference. For an unexpected / stuck release, or release-phase
-DL KO bursts, diagnose with `../troubleshooting/ue-release-issues.md`.
-
-UE release happens when the AMF (or, in some configurations, the gNB itself
-after the inactivity timer) decides the RRC connection should be torn down.
-The trigger arrives as NGAP `UEContextReleaseCommand`, propagates down
-through E1AP (bearer release) and F1AP (UE context release), and ends with
-the DU clearing its UE state and the CU-CP acknowledging back to the AMF.
+gNB-log observation surface. The artifact-agnostic message ladder (and the
+cause-IE values) is `../../common/procedures/ue-release.md`; this file maps it to
+the OCUDU `gnb.log` lines. For an unexpected / stuck release, or release-phase DL
+KO bursts, diagnose with `../troubleshooting/ue-release-issues.md`.
 
 ## Expected sequence
 

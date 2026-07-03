@@ -1,11 +1,13 @@
-# NGAP — gNB ↔ AMF (N2 interface)
+# NGAP — pcap observation (gNB ↔ AMF, N2 interface)
 
-## Purpose
+How NGAP shows up in `ngap.pcap` and how to query it. The **semantics** —
+procedure-code meanings, identifier model, failure signatures — are
+artifact-agnostic and live in `../../common/protocols/ngap.md`; this file is the
+tshark/observation layer only.
 
-NGAP carries the control-plane exchanges between the gNB and the AMF in the 5G
-core. The `ngap.pcap` in an OCUDU run captures every NGAP PDU sent or received
-on the N2 link. Useful for diagnosing failures that happen between UE
-registration and PDU-session establishment, and for AMF rejection causes.
+The `ngap.pcap` captures every NGAP PDU on the N2 link. Useful for failures
+between UE registration and PDU-session establishment, and for AMF rejection
+causes.
 
 ## Key tshark filters
 
@@ -22,7 +24,7 @@ tshark -r ngap.pcap -Y 'ngap.unsuccessfulOutcome_element || ngap.cause'
 # Single-UE lifecycle
 tshark -r ngap.pcap -Y 'ngap.RAN_UE_NGAP_ID == <N>'
 
-# Specific procedures
+# Specific procedures (codes/meanings: ../../common/protocols/ngap.md)
 tshark -r ngap.pcap -Y 'ngap.procedureCode == 15'   # InitialUEMessage
 tshark -r ngap.pcap -Y 'ngap.procedureCode == 14'   # InitialContextSetup
 tshark -r ngap.pcap -Y 'ngap.procedureCode == 29'   # PDUSessionResourceSetup
@@ -30,45 +32,13 @@ tshark -r ngap.pcap -Y 'ngap.procedureCode == 41'   # UEContextRelease
 tshark -r ngap.pcap -Y 'ngap.procedureCode ==  0'   # AMFConfigurationUpdate
 ```
 
-## Identifier mapping
+## Identifier fields (tshark)
 
-- `ngap.RAN_UE_NGAP_ID` — gNB-assigned, present from InitialUEMessage onwards.
+- `ngap.RAN_UE_NGAP_ID` — gNB-assigned, present from InitialUEMessage onward.
 - `ngap.AMF_UE_NGAP_ID` — AMF-assigned, present from InitialContextSetupRequest
-  onwards.
-- See `../cross-pcap-correlation.md` for joining to F1AP / E1AP.
-
-## Common procedures and codes
-
-| Code | Procedure | Initiator | Notes |
-|---:|---|---|---|
-|  0 | AMFConfigurationUpdate | AMF | infrastructure |
-|  4 | DownlinkNASTransport | AMF | NAS to UE |
-| 14 | InitialContextSetup | AMF | UE registration completion |
-| 15 | InitialUEMessage | gNB | First NGAP for a UE |
-| 19 | NASNonDeliveryIndication | gNB | NAS not delivered |
-| 21 | NGSetup | gNB | NG-C setup at startup |
-| 24 | Paging | AMF | DL idle-mode paging |
-| 28 | PDUSessionResourceRelease | AMF | release PDU session (carries `cause`, not a failure) |
-| 29 | PDUSessionResourceSetup | AMF | establish PDU session |
-| 35 | RANConfigurationUpdate | gNB | infrastructure |
-| 40 | UEContextModification | AMF | |
-| 41 | UEContextRelease | AMF or gNB | end of UE in NG |
-| 44 | UERadioCapabilityInfoIndication | gNB | UE radio capabilities |
-| 46 | UplinkNASTransport | gNB | NAS to AMF |
-
-## Common failure signatures
-
-- **NGSetupFailure**: gNB rejected by AMF at startup — check PLMN/TAC config.
-- **InitialContextSetupFailure**: AMF rejected the UE — cause IE distinguishes
-  authentication failure, subscription issue, config mismatch.
-- **PDUSessionResourceSetupResponse with `failedListPDUSessions`**: UPF or
-  E1AP problem; pair with `e1ap.pcap` BearerContextSetup outcome.
-- **UEContextReleaseCommand with cause `radio-connection-with-ue-lost`**:
-  AMF-initiated release after RLF reported by gNB.
-- **UEContextReleaseCommand with cause `user-inactivity`**: normal idle
-  release — not a failure.
-- **InitialUEMessage without subsequent InitialContextSetupRequest**: AMF
-  silently dropped the registration — check connectivity / AMF logs.
+  onward.
+- See `../cross-pcap-correlation.md` for joining to F1AP / E1AP, and
+  `../../common/identifiers.md` for the identifier model.
 
 ## Parsing script
 

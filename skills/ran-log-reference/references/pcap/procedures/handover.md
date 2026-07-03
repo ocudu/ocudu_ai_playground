@@ -1,5 +1,8 @@
 # Handover (HO)
 
+Pcap observation surface. The artifact-agnostic message ladder + variants is
+`../../common/procedures/handover.md`; this file is the pcap view.
+
 Handover variants seen in OCUDU tests:
 
 - **Intra-CU intra-DU** — same DU, same cell-group, target cell change only.

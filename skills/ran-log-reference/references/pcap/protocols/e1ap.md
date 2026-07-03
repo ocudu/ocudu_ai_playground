@@ -1,11 +1,12 @@
-# E1AP — CU-CP ↔ CU-UP (E1 interface)
+# E1AP — pcap observation (CU-CP ↔ CU-UP, E1 interface)
 
-## Purpose
+How E1AP shows up in `e1ap.pcap` and how to query it. The **semantics** —
+procedure-code meanings, identifier model, failure signatures — are
+artifact-agnostic and live in `../../common/protocols/e1ap.md`; this file is the
+tshark/observation layer only.
 
-E1AP carries the control plane between the gNB-CU-CP and gNB-CU-UP. It
-manages bearer contexts and PDU session resources on the user-plane side.
-Use `e1ap.pcap` to diagnose data-path setup problems when the UE attaches
-fine via NGAP but throughput is zero or PDU session setup fails.
+Use `e1ap.pcap` to diagnose data-path setup problems when the UE attaches fine
+via NGAP but throughput is zero or PDU-session setup fails.
 
 ## Key tshark filters
 
@@ -17,7 +18,7 @@ tshark -r e1ap.pcap \
     -e e1ap.procedureCode \
     -e e1ap.GNB_CU_CP_UE_E1AP_ID -e e1ap.GNB_CU_UP_UE_E1AP_ID
 
-# Bearer context lifecycle (codes verified against an OCUDU pcap)
+# Bearer context lifecycle (codes/meanings: ../../common/protocols/e1ap.md)
 tshark -r e1ap.pcap -Y 'e1ap.procedureCode in {8,9,10,11,12}'
 
 # Specific procedures
@@ -28,43 +29,15 @@ tshark -r e1ap.pcap -Y 'e1ap.procedureCode == 3'    # gNB-CU-UP-E1Setup
 tshark -r e1ap.pcap -Y 'e1ap.procedureCode == 7'    # E1Release
 ```
 
-## Identifier mapping
+## Identifier fields (tshark)
 
 - `e1ap.GNB_CU_CP_UE_E1AP_ID` — CU-CP-assigned.
 - `e1ap.GNB_CU_UP_UE_E1AP_ID` — CU-UP-assigned (after BearerContextSetupResponse).
-- Bearer / PDU-session ID fields:
-  - `e1ap.pDU_Session_ID` — per-PDU-session selector.
-  - `e1ap.dRB_ID` — per-DRB selector (when DRB-level granularity is in play).
+- `e1ap.pDU_Session_ID` — per-PDU-session selector.
+- `e1ap.dRB_ID` — per-DRB selector.
 - GTP-U TEIDs for the user plane appear inside the BearerContextSetup IEs.
-
-## Common procedures and codes
-
-Verified against an OCUDU `e1ap.pcap` capture:
-
-| Code | Procedure | Initiator | Notes |
-|---:|---|---|---|
-|  3 | gNB-CU-UP-E1Setup | CU-UP | E1 link setup from CU-UP side |
-|  4 | gNB-CU-CP-E1Setup | CU-CP | E1 link setup from CU-CP side |
-|  5 | gNB-CU-UP-ConfigurationUpdate | CU-UP | |
-|  6 | gNB-CU-CP-ConfigurationUpdate | CU-CP | |
-|  7 | E1Release | either | E1 link teardown |
-|  8 | bearerContextSetup | CU-CP | create user-plane bearer |
-|  9 | bearerContextModification | CU-CP | add/remove DRBs, change QoS |
-| 10 | bearerContextModificationRequired | CU-UP | CU-UP-initiated change |
-| 11 | bearerContextRelease | CU-CP | tear down user-plane |
-| 12 | bearerContextReleaseRequest | CU-UP | CU-UP-initiated release |
-
-## Common failure signatures
-
-- **BearerContextSetupFailure**: CU-UP could not accept the bearer — check
-  cause IE; common reasons: resources unavailable, UPF unreachable, TNL
-  address mismatch.
-- **No BearerContextSetup at all despite NGAP PDUSessionResourceSetupRequest**:
-  CU-CP didn't forward to CU-UP — check CU-CP log for E1 link state.
-- **BearerContextReleaseRequest mid-session**: CU-UP terminated the bearer
-  itself (overload, link failure, configuration error).
-- **E1SetupFailure**: CU-CP and CU-UP didn't agree at startup — check
-  capabilities, supported S-NSSAIs.
+- See `../cross-pcap-correlation.md` for joining to NGAP / F1AP, and
+  `../../common/identifiers.md` for the identifier model.
 
 ## Parsing script
 

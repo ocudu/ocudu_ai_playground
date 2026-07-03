@@ -1,5 +1,8 @@
 # Random Access (RA)
 
+Pcap observation surface. The artifact-agnostic message ladder is
+`../../common/procedures/random-access.md`; this file is the pcap view.
+
 The 4-step RA procedure (Msg1 → Msg2 → Msg3 → Msg4) is mostly **not visible**
 in OCUDU pcaps: Msg1 (PRACH) is a PHY event, not a MAC PDU. What is visible:
 

@@ -51,9 +51,9 @@ Present the script output as one block:
   the script output verbatim, don't paraphrase. The scripts already print
   procedures as `Name(code)` (e.g. `InitialContextSetup(14)`); for any bare code
   not yet in the map, look it up in the protocol's code table —
-  `../common/protocols/<proto>.md` § Procedures and codes where the protocol has
-  been migrated (e.g. f1ap), else `references/pcap/protocols/<proto>.md`
-  § Common procedures and codes.
+  `../common/protocols/<proto>.md` § Procedures and codes for the migrated
+  protocols (f1ap, e1ap, ngap), else `references/pcap/protocols/<proto>.md`
+  § Common procedures and codes (mac, rlc).
 - Anomalies bulleted last, one each — non-zero failure counts, unbalanced
   setup/release procedure tallies, sibling pcaps with non-overlapping time ranges.
 

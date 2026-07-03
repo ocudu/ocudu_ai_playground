@@ -30,9 +30,12 @@ own log-line / tshark / UE-marker detail.
   hand off to the `spec-explorer` skill for canonical text.
 - **`fapi.md`** — the SCF FAPI (MAC↔PHY) message reference.
 - **`protocols/`** — per-protocol message semantics (procedure codes, IE/identifier
-  meaning), artifact-agnostic. Currently: `f1ap.md`.
+  meaning), artifact-agnostic. Currently: `f1ap.md`, `e1ap.md`, `ngap.md`.
+  (MAC-NR/RLC-NR live only in the `pcap` subtree — no cross-artifact duplication
+  to lift, so they stay there as pcap dissection.)
 - **`procedures/`** — abstract cross-layer procedure ladders with a per-artifact
-  "where seen" column. Currently: `ue-attach.md`.
+  "where seen" column: `ue-attach.md`, `pdu-session-setup.md`, `handover.md`,
+  `reestablishment.md`, `ue-release.md`, `random-access.md`, `ngap-setup.md`.
 
 Coverage is incremental: protocols and procedures move here as they are needed;
 the per-type subtrees remain authoritative for anything not yet migrated.

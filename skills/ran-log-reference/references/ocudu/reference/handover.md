@@ -1,7 +1,9 @@
 # Procedure: Handover
 
-Expected-sequence reference. For a HO that was triggered but did not complete,
-diagnose with `../troubleshooting/handover-failure.md`.
+gNB-log observation surface. The artifact-agnostic message ladder + variants is
+`../../common/procedures/handover.md`; this file maps it to the OCUDU `gnb.log`
+lines. For a HO that was triggered but did not complete, diagnose with
+`../troubleshooting/handover-failure.md`.
 
 NR handovers come in two flavours in OCUDU runs:
 

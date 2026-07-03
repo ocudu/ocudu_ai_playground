@@ -1,13 +1,10 @@
 # Procedure: PDU session / DRB setup
 
-Expected-sequence reference. For an attach that succeeded at RRC but shows **no
-data flow**, diagnose with `../troubleshooting/no-user-plane.md`.
-
-The PDU session is set up as part of Initial Context Setup (see
-`ue-attach.md`): the AMF sends the PDU session list in
-`InitialContextSetupRequest`, the gNB requests the bearer from the CU-UP
-over E1AP, then plumbs the DRBs to the DU over F1AP and acknowledges with
-`PDUSessionResourceSetupResponseTransfer`.
+gNB-log observation surface. The artifact-agnostic message ladder is
+`../../common/procedures/pdu-session-setup.md`; this file maps it to the OCUDU
+`gnb.log` lines. For an attach that succeeded at RRC but shows **no data flow**,
+diagnose with `../troubleshooting/no-user-plane.md`. Setup overlaps Initial
+Context Setup — see `ue-attach.md`.
 
 ## Expected sequence
 

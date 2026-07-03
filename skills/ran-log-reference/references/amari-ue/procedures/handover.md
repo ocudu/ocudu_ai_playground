@@ -1,5 +1,9 @@
 # Handover and reestablishment procedures
 
+UE-log observation surface. The artifact-agnostic ladders are
+`../../common/procedures/handover.md` and
+`../../common/procedures/reestablishment.md`; this file is the UE-side view.
+
 ## Handover (reconfigurationWithSync)
 
 ### Expected sequence (inter-cell HO, e.g. CL 00 → CL 01)

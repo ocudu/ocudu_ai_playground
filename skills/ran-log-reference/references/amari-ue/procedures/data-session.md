@@ -1,5 +1,9 @@
 # Data session procedure
 
+UE-log observation surface. The artifact-agnostic PDU-session ladder is
+`../../common/procedures/pdu-session-setup.md`; this file is the UE-side view
+(reconfiguration + CBR traffic stats).
+
 ## Expected sequence (PDU session establishment)
 
 After initial registration, the AMF triggers PDU session setup:
