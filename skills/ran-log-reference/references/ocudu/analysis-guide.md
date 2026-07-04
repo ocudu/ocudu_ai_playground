@@ -288,7 +288,7 @@ is insufficient — pull in the relevant sibling knowledge:
 - the `pcap` type if any sibling `*.pcap` exists in the same run dir —
   F1AP/E1AP/NGAP body details are richer in pcap.
 - the OCUDU **source docs** for code-side design depth (architecture, threading,
-  why a procedure is sequenced as it is) — see `conventions.md` § Deeper knowledge.
+  why a procedure is sequenced as it is) — see `source-code.md`.
 
 Reach for these when current clues plateau, not before.
 

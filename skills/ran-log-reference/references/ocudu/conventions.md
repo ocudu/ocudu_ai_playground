@@ -36,7 +36,8 @@ Debugging is symptom-first, so the docs split by role:
   only**; their failure markers and checklists live in the paired
   `troubleshooting/` doc.
 - top level — the entry point (`conventions.md`), the methodology + failure
-  dispatch (`analysis-guide.md`), and the latency profiler (`latency-profiling.md`).
+  dispatch (`analysis-guide.md`), the latency profiler (`latency-profiling.md`),
+  and how to escalate to the OCUDU source tree (`source-code.md`).
 
 The `analysis-guide.md` § Investigating a failure dispatch table maps each symptom
 to the doc to load.
@@ -44,20 +45,12 @@ to the doc to load.
 ## Deeper knowledge — the OCUDU source docs
 
 These `reference/` docs cover the **log-observable** layer. The code-side layer
-beneath it — component architecture, threading model, why a procedure is
-sequenced the way it is — lives in the **OCUDU source tree**, which carries its
-own layer-specific markdown docs: each source subdirectory has a `README.md`
-entry point that indexes the other `.md` files beside it.
-
-When the log-observable docs here don't go deep enough, and a source checkout is
-available, **read** those docs for extra context — start from the relevant
-subsystem directory's `README.md` and follow what it indexes. Don't assume the
-checkout's location or any doc's path; find the READMEs, and **ask the user for
-the checkout path if it isn't obvious** (the run's build `commit`/`branch` in the
-`gnb.log` banner identifies the matching source version). **Read-only — never
-edit the source tree.** Not every subdirectory ships docs; where a layer has
-none, fall back to the code/headers or the `spec-explorer` skill for 3GPP
-behaviour.
+beneath it — architecture, threading, why a metric is computed or a procedure
+sequenced the way it is — lives in the **OCUDU source tree**. When the docs here
+don't go deep enough, escalate to it: `source-code.md` says when to reach for it,
+where to find it (in-project → elsewhere under `$HOME` → public repo, with the
+permission model), and how to read it (subsystem READMEs, match the build,
+read-only).
 
 ## Resolve & scope
 
@@ -122,4 +115,6 @@ Match the surrounding format; no dates/timestamps.
   § Investigating a failure pointing at the `troubleshooting/<name>.md` (which in
   turn cites its `reference/` sequence sibling); a new `scripts/ocudu/<name>.py` →
   document it in `analysis-guide.md` and/or the relevant doc
+- how/where to load the OCUDU source tree (locations, permission model,
+  navigation) → `source-code.md`
 - a script bug → fix it in `scripts/ocudu/*.py`
