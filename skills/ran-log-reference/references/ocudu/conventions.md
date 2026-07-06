@@ -15,10 +15,6 @@ A single run directory typically contains:
 | `ps_info_gnb.txt` | Process CPU/memory snapshot (rarely needed) |
 | `*.pcap` | Optional protocol captures — analyze with the `pcap` type (`references/pcap/`) |
 
-When OCUDU symptoms point at the UE side, switch to the `amari-ue` type
-(`references/amari-ue/`); whole-run correlation is the job of a higher-level
-inspect/run orchestrator, not this module.
-
 ## Subtree layout
 
 Debugging is symptom-first, so the docs split by role:

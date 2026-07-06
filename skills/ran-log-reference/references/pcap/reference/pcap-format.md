@@ -66,7 +66,7 @@ The helper scripts inject both flags automatically for any `-r` read
 tshark on `mac.pcap`/`rlc.pcap` needs the flags added explicitly.
 
 For the full per-protocol code tables, see the protocol files under
-`references/pcap/protocols/`.
+`references/pcap/reference/protocols/`.
 
 ## Why this format matters for analysis
 

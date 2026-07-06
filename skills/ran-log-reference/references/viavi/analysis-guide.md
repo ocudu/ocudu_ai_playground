@@ -33,7 +33,8 @@ One streaming pass (handles `.txt` and `.zip`) emitting:
 - **Errors / warnings** — failed command responses, TMAE warnings, RLC max-retx.
 - **Anomalies** — RA errors, CONNECTION FAILED, RLC max-retx, non-`0x00` responses.
 
-If the script is unavailable, fall back to the grep recipes in `log-format.md`.
+If the script is unavailable, fall back to the grep recipes in
+`reference/log-format.md`.
 
 ### summary block
 
@@ -94,8 +95,9 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/viavi/viavi_log_search.py <command-log> \
 
 Note `--event` is a substring filter on `I: CMPI` lines — use the precise form
 (`"NR REGISTRATION IND"`, not `"REGISTRATION IND"`, which also matches
-`DEREGISTRATION IND`). Otherwise use the canonical greps in `log-format.md`
-§ Key grep recipes; cap with `| head -n 200` and spill larger results to
+`DEREGISTRATION IND`). Otherwise use the canonical greps in
+`reference/log-format.md` § Key grep recipes; cap with `| head -n 200` and spill
+larger results to
 `viavi-query-<sha>.txt` (see `SKILL.md` § Efficiency rules).
 
 ### answer
@@ -119,13 +121,15 @@ leads.
 
 | Symptom | File |
 |---|---|
-| UE never connected / `CONNECTION FAILED IND` | `procedures/ue-attach.md` |
-| UE connected but never `REGISTRATION IND` | `procedures/ue-attach.md` |
-| Random-access errors (`Max_Preambles_Exceeded`) | `procedures/random-access.md` |
-| Reestablishments / handover churn | `procedures/random-access.md` (RA-triggered reest) |
-| Low throughput / high BLER | `procedures/throughput.md` |
+| UE never connected / `CONNECTION FAILED IND` | `troubleshooting/ue-attach.md` |
+| UE connected but never `REGISTRATION IND` | `troubleshooting/ue-attach.md` |
+| Random-access errors (`Max_Preambles_Exceeded`) | `troubleshooting/random-access.md` |
+| Reestablishments / handover churn | `troubleshooting/random-access.md` (RA-triggered reest) |
+| Low throughput / high BLER | `troubleshooting/throughput.md` |
 
-Load the matching file and follow its expected-sequence checklist.
+Load the matching file and follow its failure markers / investigation checklist.
+Each per-procedure playbook cites its `reference/` expected-sequence sibling
+(`reference/<proc>.md`) for the normal message ladder to compare against.
 
 ### investigation loop
 

@@ -3,8 +3,8 @@
 Throughput and block-error stats come from **GETSTATS** dumps, requested by
 `C: FORW 0x00 Ok MTE GETSTATS [ALL] [<ue-list>] [COMBINED]`. Each dump covers the
 UE subset in `<ue-list>`, and a measurement round fires several dumps in a row,
-so always aggregate across dumps rather than reading one. See `log-format.md`
-§ GETSTATS dump for the full block layout.
+so always aggregate across dumps rather than reading one. See
+`../reference/log-format.md` § GETSTATS dump for the full block layout.
 
 ## What to read
 

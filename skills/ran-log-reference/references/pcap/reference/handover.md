@@ -1,7 +1,8 @@
 # Handover (HO)
 
 Pcap observation surface. The artifact-agnostic message ladder + variants is
-`../../common/procedures/handover.md`; this file is the pcap view.
+`../../common/procedures/handover.md`; this file is the pcap view. For diagnosing
+a *failed* handover, see `../troubleshooting/handover.md`.
 
 Handover variants seen in OCUDU tests:
 
@@ -51,29 +52,12 @@ f1ap.pcap (src)     UEContextReleaseCommand                    (T0 + ~150 ms)
 f1ap.pcap (src)     UEContextReleaseComplete                   (T0 + ~200 ms)
 ```
 
-## Failure markers
+## Diagnosing failures
 
-| Symptom | Cause hypothesis |
-|---|---|
-| No `UEContextSetupRequest` on target | HO not triggered or CU never decided to hand over. |
-| `UEContextSetupFailure` on target | Target DU can't admit — resources, cell config, S-NSSAI. |
-| No CFRA RAR on target after target context setup | Target PRACH not configured for CFRA, or UE never sent the preamble (logs). |
-| No `RRCReconfigComplete` after RAR | UE failed on target; expect re-establishment or release. |
-| Re-establishment after HO (a new `InitialULRRCMessageTransfer` for the same UE after the HO window, carrying an `RRCReestablishmentRequest` inside the RRC container) | HO failed; the UE is recovering. The RRC `cause` IE lives inside the embedded RRC message, not as an F1AP field. |
-| Inter-CU: `HandoverFailure` (NGAP) | Target rejected — check NGAP cause IE. |
-
-## tshark filters
-
-```bash
-# Inter-CU HO triggers (HandoverPreparation / HandoverResourceAllocation)
-tshark -r ngap.pcap -Y 'ngap.procedureCode == 12 || ngap.procedureCode == 13'
-
-# Source/target context lifecycle in one timeline
-python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/correlate_run.py <run-dir> \
-    --ue <ngap-ran-ue-id> --window-ms 1000
-```
+For failure markers (which step is missing → likely cause) and the tshark
+checklist, see `../troubleshooting/handover.md`.
 
 ## Cross-references
 
-- `../protocols/ngap.md`, `../protocols/f1ap.md`, `../protocols/mac.md`
-- `../cross-pcap-correlation.md`
+- `protocols/ngap.md`, `protocols/f1ap.md`, `protocols/mac.md`
+- `cross-pcap-correlation.md`

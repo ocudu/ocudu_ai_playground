@@ -61,7 +61,7 @@ that layer (see `log-format.md` § Per-layer format for what each layer emits).
 
 A `name: "ocudu"` (or `zmq`) driver with `tx_port*/rx_port*` means **sample
 transport over TCP to a co-located gNB** — UE and gNB share a host and therefore
-a clock (see `../correlate/cross-correlation.md` § Clocks).
+a clock (see `../../correlate/cross-correlation.md` § Clocks).
 
 ### `cell_groups[].cells[]`
 

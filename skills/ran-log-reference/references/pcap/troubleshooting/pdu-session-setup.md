@@ -1,29 +1,8 @@
-# PDU Session Resource Setup
+# Troubleshooting: PDU Session Resource Setup
 
-Pcap observation surface. The artifact-agnostic message ladder is
-`../../common/procedures/pdu-session-setup.md`; this file is the across-pcaps view.
-
-Establishes the user-plane bearers after a UE has registered. Spans NGAP,
-E1AP, and F1AP.
-
-## Trigger event
-
-`ngap.pcap` contains `PDUSessionResourceSetupRequest` (procedure code 29)
-from the AMF.
-
-## Expected sequence across pcaps
-
-```
-ngap.pcap   PDUSessionResourceSetupRequest                  (T0)
-e1ap.pcap   BearerContextSetupRequest                       (T0 + a few ms)
-e1ap.pcap   BearerContextSetupResponse                      (T0 + tens of ms)
-f1ap.pcap   UEContextModificationRequest                    (DRBs added)
-f1ap.pcap   UEContextModificationResponse
-ngap.pcap   PDUSessionResourceSetupResponse
-```
-
-DRB traffic appears in `rlc.pcap` (and corresponding scheduling in `mac.pcap`)
-once the user plane is up.
+The user-plane bearers never come up after registration — the NGAP request has no
+matching response, or an E1AP/F1AP setup fails. For the **expected across-pcaps
+sequence** this walks against, see `../reference/pdu-session-setup.md`.
 
 ## Failure markers
 
@@ -52,6 +31,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/correlate_run.py <run-dir> --around <T0
 
 ## Cross-references
 
-- `../protocols/ngap.md`
-- `../protocols/e1ap.md`
-- `../protocols/f1ap.md`
+- `../reference/pdu-session-setup.md` — the expected sequence this walks against.
+- `../reference/protocols/ngap.md`
+- `../reference/protocols/e1ap.md`
+- `../reference/protocols/f1ap.md`

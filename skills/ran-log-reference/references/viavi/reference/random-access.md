@@ -43,21 +43,7 @@ Initiated vs Complete vs Error do **not** reconcile to a single arithmetic
 identity across the run — a UE can be Initiated in one window and Complete/Error
 in another, and an attempt may be Cancelled. Read them as rates, not a balance.
 
-## Failure markers & causes
+## Diagnosing failures
 
-| `Result:` reason | Likely cause |
-|---|---|
-| `Max_Preambles_Exceeded` | UE sent all preambles without a RAR — no/late Msg2 from the gNB, weak UL, or PRACH config mismatch |
-
-When RA errors cluster, check:
-
-1. **Trigger mix** — `Handover` vs `Connection Establish` errors point at different
-   subsystems (mobility config vs initial access).
-   `--event "Random Access Initiated"` and inspect the trigger.
-2. **Which UEs / cells** — scope `--ue N` or grep the `Cell Id`; a single-cell
-   cluster suggests a per-cell PRACH/coverage issue.
-3. **`PreambleTxCount` distribution** — consistently high counts (even on
-   *Complete*) indicate marginal UL before any hard failure.
-4. **Network side** — RA is a two-sided procedure; confirm against the **OCUDU
-   gNB log** (PRACH detection, RAR/Msg2 scheduling) and the **MAC pcap**. The
-   VIAVI log only shows the tester's view.
+For failure markers, causes, and the RA-error investigation checklist, see
+`../troubleshooting/random-access.md`.

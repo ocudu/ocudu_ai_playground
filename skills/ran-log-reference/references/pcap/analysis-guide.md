@@ -25,7 +25,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/pcap_overview.py <file.pcap> --top 5
 `pcap_overview.py` emits, for the pcap:
 
 - packet count, and first/last `frame.time_epoch`
-- distinct UE identifiers per ID-type (see `references/pcap/protocols/general.md`)
+- distinct UE identifiers per ID-type (see `references/pcap/reference/protocols/general.md`)
 - top procedure codes (NGAP/F1AP/E1AP) or PDU types (MAC/RLC)
 - count of `Failure` / `Reject` PDUs
 
@@ -52,7 +52,7 @@ Present the script output as one block:
   procedures as `Name(code)` (e.g. `InitialContextSetup(14)`); for any bare code
   not yet in the map, look it up in the protocol's code table —
   `../common/protocols/<proto>.md` § Procedures and codes for the migrated
-  protocols (f1ap, e1ap, ngap), else `references/pcap/protocols/<proto>.md`
+  protocols (f1ap, e1ap, ngap), else `references/pcap/reference/protocols/<proto>.md`
   § Common procedures and codes (mac, rlc).
 - Anomalies bulleted last, one each — non-zero failure counts, unbalanced
   setup/release procedure tallies, sibling pcaps with non-overlapping time ranges.
@@ -133,17 +133,18 @@ Rejects, unbalanced setup/release counts) as primary leads.
 
 ### first hypothesis — procedure dispatch
 
-Pick the most likely matching procedure from `procedures/`:
+Pick the most likely matching troubleshooting playbook:
 
 | Symptom | File |
 |---|---|
-| PRACH not detected, UE stuck before RRC Setup, Msg3 failures | `random-access.md` |
-| InitialUEMessage without InitialContextSetupResponse, AMF rejections | `registration.md` |
-| PDU Session Resource Setup Failure, zero throughput with UE attached | `pdu-session-setup.md` |
-| HandoverPreparation / HandoverCommand / UEContextSetup on target, CFRA / CBRA on target cell, re-establishment after HO | `handover.md` |
-| unexpected UEContextReleaseCommand, cause IE pointing at RLF or AMF-initiated release | `ue-context-release.md` |
+| PRACH not detected, UE stuck before RRC Setup, Msg3 failures | `troubleshooting/random-access.md` |
+| InitialUEMessage without InitialContextSetupResponse, AMF rejections | `troubleshooting/registration.md` |
+| PDU Session Resource Setup Failure, zero throughput with UE attached | `troubleshooting/pdu-session-setup.md` |
+| HandoverPreparation / HandoverCommand / UEContextSetup on target, CFRA / CBRA on target cell, re-establishment after HO | `troubleshooting/handover.md` |
+| unexpected UEContextReleaseCommand, cause IE pointing at RLF or AMF-initiated release | `troubleshooting/ue-context-release.md` |
 
-Load that file and follow its expected-sequence checklist.
+Each playbook (failure markers + tshark checklist) cites the expected across-pcaps
+sequence in its `reference/` sibling. Load the matching playbook and work it.
 
 ### investigation loop
 

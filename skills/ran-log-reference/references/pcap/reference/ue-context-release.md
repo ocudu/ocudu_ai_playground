@@ -1,7 +1,8 @@
 # UE Context Release
 
 Pcap observation surface. The artifact-agnostic message ladder + cause-IE values
-is `../../common/procedures/ue-release.md`; this file is the pcap view.
+is `../../common/procedures/ue-release.md`; this file is the pcap view. For
+diagnosing an *abnormal* release, see `../troubleshooting/ue-context-release.md`.
 
 UE-context release is initiated either by the AMF (idle release, AMF policy)
 or by the gNB (RLF detected). The cause IE distinguishes the two.
@@ -49,29 +50,12 @@ f1ap.pcap   UEContextReleaseComplete
 | `unspecified` | Generic; look at surrounding events |
 | `release-due-to-pre-emption` | Resource pre-emption by higher-priority traffic |
 
-## Failure markers
+## Diagnosing failures
 
-| Symptom | Cause hypothesis |
-|---|---|
-| `UEContextReleaseCommand` with `radio-connection-with-ue-lost` early in run | RLF — check MAC inactivity, RLC retransmission storm in earlier window. |
-| No `UEContextReleaseComplete` after Command | DU/CU crash or hang; pair with logs around the same epoch. |
-| Release Request with no AMF Command response | NGAP link broken; AMF didn't see the request. |
-| F1AP release without NGAP release | CU released the DU side but kept the NGAP context — usually a multi-DU split-decision; double-check it's not a stuck context. |
-
-## tshark filters
-
-```bash
-# All NGAP releases with cause
-tshark -r ngap.pcap \
-    -Y 'ngap.procedureCode == 42 || ngap.procedureCode == 41' \
-    -T fields -e frame.number -e frame.time_epoch \
-    -e ngap.RAN_UE_NGAP_ID -e ngap.cause
-
-# F1AP releases
-tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 6'
-```
+For failure markers (abnormal / stuck releases → likely cause) and the tshark
+checklist, see `../troubleshooting/ue-context-release.md`.
 
 ## Cross-references
 
-- `../protocols/ngap.md`, `../protocols/f1ap.md`, `../protocols/e1ap.md`
-- `../cross-pcap-correlation.md`
+- `protocols/ngap.md`, `protocols/f1ap.md`, `protocols/e1ap.md`
+- `cross-pcap-correlation.md`

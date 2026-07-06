@@ -116,7 +116,7 @@ def check_pcap(pcap: Path) -> dict:
     if not found:
         return {**out, "ok": False,
                 "reason": f"no 3GPP dissector bound (frame.protocols={protos}); "
-                f"try `-d user_dlt 252,...` and note it in references/pcap-format.md"}
+                f"try `-d user_dlt 252,...` and note it in references/pcap/reference/pcap-format.md"}
     return {**out, "ok": True}
 
 

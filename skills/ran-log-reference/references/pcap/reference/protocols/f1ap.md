@@ -2,7 +2,7 @@
 
 How F1AP shows up in `f1ap.pcap` and how to query it. The **semantics** —
 procedure-code meanings, UE-arrival paths, identifier model, failure signatures —
-are artifact-agnostic and live in `../../common/protocols/f1ap.md`; this file is
+are artifact-agnostic and live in `../../../common/protocols/f1ap.md`; this file is
 the tshark/observation layer only.
 
 The `f1ap.pcap` captures UE-context lifecycle messages, F1 infrastructure
@@ -25,7 +25,7 @@ tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 5 || f1ap.procedureCode == 6 || f1
 # RRC container traffic (UL/DL RRC message transfer)
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 11 || f1ap.procedureCode == 12 || f1ap.procedureCode == 13'
 
-# Specific procedures (codes/meanings: ../../common/protocols/f1ap.md § Procedures and codes)
+# Specific procedures (codes/meanings: ../../../common/protocols/f1ap.md § Procedures and codes)
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode ==  1'   # F1Setup
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode ==  5'   # UEContextSetup
 tshark -r f1ap.pcap -Y 'f1ap.procedureCode ==  6'   # UEContextRelease
@@ -43,18 +43,18 @@ The procedure-code table and F1Removal (26) are in the common semantics doc.
 - `f1ap.GNB_CU_UE_F1AP_ID` — CU-assigned, present once UEContextSetupRequest sent.
 - `f1ap.C_RNTI` — present in InitialULRRCMessageTransfer.
 - See `../cross-pcap-correlation.md` for joining to NGAP / E1AP, and
-  `../../common/identifiers.md` for the identifier model (scope, HO stability).
+  `../../../common/identifiers.md` for the identifier model (scope, HO stability).
 
 ## UE-arrival signature (pcap view)
 
 The two first-F1AP-message paths (proc 11 vs proc 5) and what they mean are in
-`../../common/protocols/f1ap.md` § UE arrival paths. In a handover test the
+`../../../common/protocols/f1ap.md` § UE arrival paths. In a handover test the
 variation across UEs is expected, not an anomaly; for the full target-DU sequence
-see [`../procedures/handover.md`](../procedures/handover.md).
+see [`../handover.md`](../handover.md).
 
 ## Detecting the empty-container reject (pcap technique)
 
-The "can't serve" failure (`../../common/protocols/f1ap.md` § Failure signatures)
+The "can't serve" failure (`../../../common/protocols/f1ap.md` § Failure signatures)
 is observed here by container **content length**, not IE presence:
 `-T fields -e f1ap.DUtoCURRCContainer` → empty value ⇒ "can't serve" (a non-empty
 value carries the CellGroupConfig for an admitted UE).

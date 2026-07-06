@@ -15,6 +15,23 @@ A single run directory typically contains:
 
 Ignore `metrics.json` — it is empty in these runs.
 
+## Subtree layout
+
+Debugging is symptom-first, so the docs split by role:
+
+- **`troubleshooting/`** — per-procedure failure playbooks (failure markers /
+  investigation checklist) for registration, data-session, handover. Start here
+  from a symptom; each cites the expected-sequence `reference/` doc.
+- **`reference/`** — lazily-loaded knowledge: format refs (`log-format.md`,
+  `config-format.md`) and the expected-sequence procedure refs (sequence +
+  vocabulary **only**; failure content lives in the paired `troubleshooting/`
+  doc).
+- top level — the entry point (`conventions.md`) and the methodology + failure
+  dispatch (`analysis-guide.md`).
+
+The `analysis-guide.md` § Investigating a failure dispatch table maps each symptom
+to the `troubleshooting/` doc to load.
+
 ## Resolve & scope
 
 The dispatcher runs `scripts/amari-ue/resolve.py`, which accepts a `ue.log`

@@ -36,7 +36,7 @@ The script emits, in one pass:
 - Anomalies detected (packet loss > 1%, PHY errors, unexpected final NAS state)
 
 If the script is not yet present or fails, fall back to the grep recipes in
-`log-format.md` to collect the same information manually.
+`reference/log-format.md` to collect the same information manually.
 
 ### stdout quick-scan
 
@@ -129,11 +129,11 @@ Examples for common questions:
 | "Was there packet loss?" | grep `CBR_RECV\|CBR_SEND` in `stdout.log` |
 | "What was the final NAS state?" | `--layer NAS` then tail |
 | "Did the UE reestablish?" | `--pattern "reestablishment" --layer RRC` |
-| "What band/BW was used?" | read `amarisoft_ue.cfg` (fields: `config-format.md`) or `grep "^RF" stdout.log` |
+| "What band/BW was used?" | read `amarisoft_ue.cfg` (fields: `reference/config-format.md`) or `grep "^RF" stdout.log` |
 | "How long did the run last?" | `grep -E "^# (Started|Ended)" ue.log` |
 
 Otherwise, use targeted grep with the canonical recipes in
-`log-format.md` § Key grep recipes. Always cap with `| head -n 200`;
+`reference/log-format.md` § Key grep recipes. Always cap with `| head -n 200`;
 if a result is larger, narrow it (time window, UE ID) or spill into the session
 cache dir as `amari-query-<sha>.txt` and report the path (see SKILL.md
 § Efficiency rules).
@@ -173,18 +173,19 @@ missing `# Ended on`) as primary leads.
 
 ### first hypothesis — procedure dispatch
 
-Match the symptom to the most likely procedure from `procedures/`:
+Match the symptom to the most likely procedure from `troubleshooting/`:
 
 | Symptom | File |
 |---|---|
-| UE never attached / stuck before 5GMM-REGISTERED | `procedures/registration.md` |
-| UE attached but no data flow / CBR loss high | `procedures/data-session.md` |
-| UE attached, HO triggered but CBR loss spike | `procedures/handover.md` |
-| UE disconnected unexpectedly / reestablishment seen | `procedures/handover.md` |
-| UE deregistered before `power_off` sim event | `procedures/registration.md` |
-| PHY failures only (crc=FAIL, PRACH not responding) | `procedures/registration.md` |
+| UE never attached / stuck before 5GMM-REGISTERED | `troubleshooting/registration.md` |
+| UE attached but no data flow / CBR loss high | `troubleshooting/data-session.md` |
+| UE attached, HO triggered but CBR loss spike | `troubleshooting/handover.md` |
+| UE disconnected unexpectedly / reestablishment seen | `troubleshooting/handover.md` |
+| UE deregistered before `power_off` sim event | `troubleshooting/registration.md` |
+| PHY failures only (crc=FAIL, PRACH not responding) | `troubleshooting/registration.md` |
 
-Load the matching file and follow its expected-sequence checklist.
+Load the matching playbook and follow its investigation checklist; each cites its
+`reference/` sequence sibling for the expected message flow.
 
 ### investigation loop
 

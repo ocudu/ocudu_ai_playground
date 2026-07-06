@@ -57,12 +57,15 @@ other sources) and calls in here.
    - **`analysis-guide.md`** — methodology for the three common activities: *producing
      an overview*, *answering a targeted question*, *investigating a failure*.
      (For `correlate`, the cross-artifact traces in `references/correlate/procedures/`.)
-   - **format refs** (`pcap-format.md` / `log-format.md` / `config-format.md`),
-     **`protocols/`** (pcap), **`procedures/`** — field/filter references and
-     per-procedure expected-sequence / failure-marker templates. (The `ocudu`
-     subtree instead splits these into **`reference/`** — format refs, `uci.md`
-     vocabulary, and expected-sequence refs — and **`troubleshooting/`** — symptom
-     playbooks; see `references/ocudu/conventions.md` § Subtree layout.)
+   - **`reference/`** — lazily-loaded knowledge: format refs (`log-format.md` /
+     `config-format.md` / `pcap-format.md`), any protocol field refs
+     (`protocols/`, pcap), and the per-procedure expected-sequence + vocabulary
+     docs (sequence only; failure content lives in the paired `troubleshooting/`
+     doc).
+   - **`troubleshooting/`** — symptom-first failure playbooks (failure markers +
+     investigation checklist), per-procedure and cross-cutting; the entry point
+     when starting from a symptom. Each type's `conventions.md` § Subtree layout
+     details its own split.
    - **`scripts/<type>/`** — pre-vetted helper scripts that emit compact summaries.
 3. Apply the shared § Efficiency rules **plus** the type-specific deltas in
    `conventions.md` throughout.

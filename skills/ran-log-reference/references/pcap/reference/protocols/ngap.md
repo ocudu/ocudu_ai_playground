@@ -2,7 +2,7 @@
 
 How NGAP shows up in `ngap.pcap` and how to query it. The **semantics** —
 procedure-code meanings, identifier model, failure signatures — are
-artifact-agnostic and live in `../../common/protocols/ngap.md`; this file is the
+artifact-agnostic and live in `../../../common/protocols/ngap.md`; this file is the
 tshark/observation layer only.
 
 The `ngap.pcap` captures every NGAP PDU on the N2 link. Useful for failures
@@ -24,7 +24,7 @@ tshark -r ngap.pcap -Y 'ngap.unsuccessfulOutcome_element || ngap.cause'
 # Single-UE lifecycle
 tshark -r ngap.pcap -Y 'ngap.RAN_UE_NGAP_ID == <N>'
 
-# Specific procedures (codes/meanings: ../../common/protocols/ngap.md)
+# Specific procedures (codes/meanings: ../../../common/protocols/ngap.md)
 tshark -r ngap.pcap -Y 'ngap.procedureCode == 15'   # InitialUEMessage
 tshark -r ngap.pcap -Y 'ngap.procedureCode == 14'   # InitialContextSetup
 tshark -r ngap.pcap -Y 'ngap.procedureCode == 29'   # PDUSessionResourceSetup
@@ -38,7 +38,7 @@ tshark -r ngap.pcap -Y 'ngap.procedureCode ==  0'   # AMFConfigurationUpdate
 - `ngap.AMF_UE_NGAP_ID` — AMF-assigned, present from InitialContextSetupRequest
   onward.
 - See `../cross-pcap-correlation.md` for joining to F1AP / E1AP, and
-  `../../common/identifiers.md` for the identifier model.
+  `../../../common/identifiers.md` for the identifier model.
 
 ## Parsing script
 

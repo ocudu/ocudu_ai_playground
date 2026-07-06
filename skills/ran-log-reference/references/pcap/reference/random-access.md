@@ -1,7 +1,8 @@
 # Random Access (RA)
 
 Pcap observation surface. The artifact-agnostic message ladder is
-`../../common/procedures/random-access.md`; this file is the pcap view.
+`../../common/procedures/random-access.md`; this file is the pcap view. For
+diagnosing a *failed* RA, see `../troubleshooting/random-access.md`.
 
 The 4-step RA procedure (Msg1 → Msg2 → Msg3 → Msg4) is mostly **not visible**
 in OCUDU pcaps: Msg1 (PRACH) is a PHY event, not a MAC PDU. What is visible:
@@ -31,31 +32,13 @@ f1ap.pcap    DLRRCMessageTransfer         (RRC Setup)                        (T0
 mac.pcap     DL MAC PDU on RNTI = X (Msg4)                                   (T0 + tens of ms)
 ```
 
-## Failure markers
+## Diagnosing failures
 
-| Symptom | Cause hypothesis |
-|---|---|
-| No RAR in `mac.pcap` | PRACH not detected — check logs. |
-| RAR present, no Msg3 UL PDU on TC-RNTI | UE didn't transmit Msg3 (coverage, mis-tuned UE). |
-| Msg3 PDU present, no `InitialULRRCMessageTransfer` | DU dropped Msg3 — RAPID mismatch, contention with another UE. |
-| `InitialULRRCMessageTransfer` present, no RRC Setup back | CU side issue — check `f1ap.pcap` for outgoing DLRRCMessageTransfer; if absent, CU log. |
-| RA succeeds for some UEs, fails for others on the same cell | Contention or RAPID collision; correlate with PRACH-occasion logs. |
-
-## tshark filters
-
-```bash
-# All RAR PDUs in order (mac.pcap needs the MAC-NR UDP heuristic)
-tshark -r mac.pcap --enable-heuristic mac_nr_udp -Y 'mac-nr.rar' \
-    -T fields -e frame.number -e frame.time_epoch -e mac-nr.rnti
-
-# First F1AP per UE (procedureCode 11 = InitialULRRCMessageTransfer)
-tshark -r f1ap.pcap -Y 'f1ap.procedureCode == 11' \
-    -T fields -e frame.number -e frame.time_epoch \
-    -e f1ap.GNB_DU_UE_F1AP_ID -e f1ap.C_RNTI
-```
+For failure markers (which step is missing → likely cause) and the tshark
+checklist, see `../troubleshooting/random-access.md`.
 
 ## Cross-references
 
-- `../protocols/mac.md` — MAC fields used here.
-- `../protocols/f1ap.md` — F1AP procedures.
-- `../cross-pcap-correlation.md` — joining MAC and F1AP by RNTI.
+- `protocols/mac.md` — MAC fields used here.
+- `protocols/f1ap.md` — F1AP procedures.
+- `cross-pcap-correlation.md` — joining MAC and F1AP by RNTI.

@@ -20,7 +20,7 @@ UEContextReleaseCommand (proc 6), so for those the top-level CCCH message type i
 decoded here from the container bits (a 1-bit message CHOICE + 2-bit c1 index —
 DL-CCCH: 0=rrcReject, 1=rrcSetup). A UEContextReleaseCommand DCCH container is
 PDCP-protected / not dissected and is reported as `rrcRelease?` (inferred).
-See references/pcap/protocols/f1ap.md § "RRC PDUs inside F1AP containers".
+See references/pcap/reference/protocols/f1ap.md § "RRC PDUs inside F1AP containers".
 
 Usage:
     f1ap_messages.py <f1ap.pcap>

@@ -13,7 +13,22 @@ A VIAVI test produces a single artifact in two forms:
 
 The VIAVI tester emulates the RU, RF channel, NR UEs, and core; this log is the
 control/observation channel for an OCUDU test, not an OCUDU app log. See
-`log-format.md` for the full grammar.
+`reference/log-format.md` for the full grammar.
+
+## Subtree layout
+
+- **`troubleshooting/`** — failure playbooks: per-procedure (random-access,
+  ue-attach) plus the throughput diagnostic (`throughput.md`). Start here from a
+  symptom; each per-procedure doc cites its expected-sequence `reference/` doc.
+- **`reference/`** — lazily-loaded knowledge: the format ref (`log-format.md`) and
+  the expected-sequence / vocabulary procedure refs (sequence + vocabulary
+  **only**; failure content lives in the paired `troubleshooting/` doc). Note
+  `throughput.md` is a diagnostic with no `reference/` sibling.
+- top level — the entry point (`conventions.md`) and the methodology + failure
+  dispatch (`analysis-guide.md`).
+
+The `analysis-guide.md` § Investigating a failure dispatch table maps each symptom
+to the `troubleshooting/` doc to load.
 
 ## Resolve & scope
 
