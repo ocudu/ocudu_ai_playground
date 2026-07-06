@@ -16,27 +16,36 @@ Typical trigger: doubt about the exact meaning of a field in `metrics.json` / th
 ## Where — preference order
 
 If `$RAN_LOG_REFERENCE_OCUDU_PATH` is set, use that checkout — the user saved it in
-a prior session (see tier 2). Otherwise, in order:
+a prior session. Otherwise, in order:
 
 1. **In-project** (preferred) — a checkout vendored inside the current project as a
    git submodule or cloned directory. Check for it first (`.gitmodules`, or an
    `ocudu`/source directory in the project). Already permissioned — use it directly.
 2. **Elsewhere under `$HOME`** — a separate checkout on the machine. Needs the
    user's explicit **choice + permission**: ask which path, confirm before relying
-   on it. Do not assume a location. Once given, offer to persist it as the
-   `RAN_LOG_REFERENCE_OCUDU_PATH` env var in project settings (`.claude/settings.json`
-   `env`) so future sessions reuse it without re-asking.
+   on it. Do not assume a location.
 3. **Public repo `https://gitlab.com/ocudu/ocudu`** — when no local checkout is
    usable. Needs the user's permission to fetch; shallow-clone into the session
    cache dir.
 
 For tiers 2–3 the choice and permission are the user's to give — ask, don't assume.
 
+Once a checkout is resolved by any tier, offer to persist its path as the
+`RAN_LOG_REFERENCE_OCUDU_PATH` env var in project settings (`.claude/settings.json`
+`env`) so future sessions reuse it without re-detecting or re-asking.
+
 ## Match the build
 
 The run's build `commit`/`branch` in the `gnb.log` banner identifies the matching
 source version — check out (or verify against) that revision so the code lines up
 with the log under analysis.
+
+Switching revisions is destructive, so guard it: if the checkout is **not**
+in-project, or has **pending changes**, ask the user before dropping anything and
+checking out a different branch. If they decline, either create a **temporary
+worktree** at the target revision (leaving their tree untouched) or abort the
+source-level analysis — don't switch anyway. An in-project checkout with a clean
+tree can be checked out without asking.
 
 ## How to navigate
 
