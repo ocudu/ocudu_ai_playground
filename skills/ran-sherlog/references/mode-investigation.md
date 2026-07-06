@@ -48,11 +48,10 @@ log, and the pcap, and names the join key at each step.
 Repeat until diagnosis or the user stops:
 
 1. Pick the **next smallest cross-source check** that confirms or refutes the
-   current hypothesis — usually one correlation-script run, one
-   `correlate/map_ue_ids.py` pass, one single-artifact query run here with an
-   `ran-log-reference` type, or (when the expected behavior or implementation is in
-   question) a `spec-explorer` lookup or an OCUDU-source grep. Don't read raw logs.
-2. Run it. Apply the efficiency + clock/slot rules.
+   current hypothesis. Prefer `ran-log-reference` scripts and summarized metrics
+   over reading raw logs. When the expected behavior or implementation is in
+   question, do a `spec-explorer` or OCUDU-source lookup.
+2. Run it.
 3. Decide if the result is **meaningful** (locates a failure in time+source,
    confirms/refutes the hypothesis, or opens a lead in another source).
    Intermediate non-results feed silently into the next check.

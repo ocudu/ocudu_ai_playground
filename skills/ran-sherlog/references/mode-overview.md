@@ -3,8 +3,9 @@
 Produce one consolidated, factual overview of the whole run by delegating each
 artifact to its `ran-log-reference` type and adding the cross-source (`correlate`)
 layer on top. Do not enter the investigation loop. Ask `AskUserQuestion` only at
-the end (escalation). Load `ran-log-reference` once via the `Skill` tool;
-`${RAN_LOG_REF_DIR}` below is that skill's directory.
+the end (escalation). Load `ran-log-reference` once via the `Skill` tool; `${RAN_LOG_REF_DIR}` below =
+`${CLAUDE_SKILL_DIR}/../ran-log-reference` (the sibling skill dir) — substitute it
+inline (the shell doesn't persist env vars between calls).
 
 ## Phase A — inventory
 
@@ -40,7 +41,7 @@ python3 ${RAN_LOG_REF_DIR}/scripts/correlate/align_clocks.py <run-dir>
 `align_clocks` checks log↔pcap (Δ≈0, same process) and UE↔gNB PHY slot alignment.
 Off-host sources (VIAVI tester, remote 5GC, a UE sim on another box) may be
 offset — surface a non-trivial Δ as an anomaly; the (SFN.slot, RNTI) join doesn't
-depend on it. (Clock model: cross-correlation.md § Clocks.)
+depend on it. (Clock model: `ran-log-reference`'s `correlate` subtree.)
 
 ## Phase D — consolidated overview block
 

@@ -62,8 +62,9 @@ not here (see § Memory).
 Then resolve + inventory the run through `ran-log-reference`: invoke it via the
 `Skill` tool and follow its § Resolve & classify (a whole-run directory classifies
 as `correlate`; its resolver prints the inventory and verdict — bail if not OK).
-(`${RAN_LOG_REF_DIR}`, used below, = that skill's directory, i.e.
-`${CLAUDE_SKILL_DIR}` while its guidance is active.)
+(`${RAN_LOG_REF_DIR}` in the commands below = `${CLAUDE_SKILL_DIR}/../ran-log-reference`,
+the sibling skill dir — substitute it inline, since the shell doesn't persist env
+vars between calls.)
 
 ---
 
@@ -90,10 +91,9 @@ Load and follow the matching file:
 
 The analysis knowledge those modes lean on lives in `ran-log-reference`: the
 per-artifact subtrees (`references/{pcap,ocudu,amari-ue}/`) and the **`correlate`**
-subtree (`references/correlate/` — the master clock/slot/ID model in
-`cross-correlation.md`, `ue-identity-map.md`, `components.md`, and the
-cross-artifact traces in `correlate/procedures/`). This skill keeps only
-`references/ci-retrieval.md` and the three `mode-*.md` playbooks.
+subtree (`references/correlate/` — the master clock/slot/ID model and the
+cross-artifact procedure traces; follow that subtree's own index). This skill keeps
+only `references/ci-retrieval.md` and the three `mode-*.md` playbooks.
 
 ---
 
