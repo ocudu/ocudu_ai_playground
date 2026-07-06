@@ -51,8 +51,8 @@ other sources) and calls in here.
 1. **Resolve & classify** the input (§ Resolve & classify) — one script prints the
    artifact `kind` and which `references/<type>/` subtree to read.
 2. Read that subtree. Under `references/<type>/`:
-   - **`conventions.md`** — type-specific resolve scoping, efficiency deltas, and the
-     memory routing table. **Read this first.** (`correlate` instead starts at
+   - **`conventions.md`** — type-specific resolve scoping and efficiency deltas.
+     **Read this first.** (`correlate` instead starts at
      `references/correlate/cross-correlation.md`, the master clock/slot/ID model.)
    - **`analysis-guide.md`** — methodology for the three common activities: *producing
      an overview*, *answering a targeted question*, *investigating a failure*.

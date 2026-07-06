@@ -42,10 +42,10 @@ do not edit the skill.
 ## Step 2 — where it goes
 
 - **Single-artifact learning** → the routing table in
-  `references/<type>/conventions.md` (§ Memory routing) names the exact file and
-  section for a new grep/tshark recipe, log marker, config field, failure
-  signature, etc. Observation-surface detail (a log line, a tshark filter, a UE
-  marker) stays in the type subtree even if it observes a shared procedure.
+  `references/<type>/self-maintenance.md` names the exact file and section for a
+  new grep/tshark recipe, log marker, config field, failure signature, etc.
+  Observation-surface detail (a log line, a tshark filter, a UE marker) stays in
+  the type subtree even if it observes a shared procedure.
 - **Artifact-agnostic learning** (protocol/procedure *semantics* shared across
   types, an identifier definition, a 3GPP spec pointer, a FAPI message) →
   `references/common/` (`protocols/<proto>.md`, `procedures/<name>.md`,
