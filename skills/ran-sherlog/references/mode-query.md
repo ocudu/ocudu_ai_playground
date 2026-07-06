@@ -25,8 +25,8 @@ Restate the question in one sentence. Decide:
   |---|---|
   | "Did every PRACH/PUSCH the UE sent reach the gNB?" | `correlate/correlate_radio.py --kind pusch` (and `--kind prach`) |
   | "Is the UE↔gNB↔pcap on the same clock?" | `correlate/align_clocks.py` |
-  | "Trace UE 0003 end to end" | `correlate/map_ue_ids.py` + `correlate/correlate_radio.py --rnti` + `correlate/procedures/attach-end-to-end.md` |
-  | "Which UE owns C-RNTI 0x4607 across the logs and pcap?" | `correlate/ue-identity-map.md` + `correlate/map_ue_ids.py` |
+  | "Trace UE 0003 end to end" | `correlate/map_ue_ids.py` + `correlate/correlate_radio.py --rnti`, guided by the attach trace in the `correlate` subtree |
+  | "Which UE owns C-RNTI 0x4607 across the logs and pcap?" | `correlate/map_ue_ids.py`, guided by the identity model in the `correlate` subtree |
 
 Ask via `AskUserQuestion` only when scoping is genuinely ambiguous (e.g. a
 multi-UE run and the question names no UE → list candidate RNTIs/UE-IDs from the
@@ -34,10 +34,10 @@ inventory).
 
 ## Phase B — execute
 
-For cross-artifact questions, anchor on the right key (see `ran-log-reference` ›
-`references/correlate/cross-correlation.md`):
+For cross-artifact questions, anchor on the right key (the clock/key model lives in
+`ran-log-reference`'s `correlate` subtree):
 - radio events → **(SFN.slot, RNTI)** at the PHY layer (exact);
-- UE identity → the Amarisoft UEID / C-RNTI chain (`correlate/ue-identity-map.md`);
+- UE identity → the Amarisoft UEID / C-RNTI chain (its correlate identity model);
 - CP events / pcap → wall-clock UTC (raw `frame.time_epoch`).
 
 Scope by `--rnti` early in multi-UE runs. Cap output; spill large tables to the
@@ -58,7 +58,6 @@ Question answered or marked unanswerable. Don't loop — let the user drive next
 
 ## Persist learnings
 
-If you found a reusable cross-correlation recipe, persist it into `ran-log-reference`
-› `references/correlate/cross-correlation.md` (or a `correlate/procedures/*.md`).
-If the learning is single-artifact, route it to that type instead (see SKILL.md
-§ Memory).
+If you found a reusable cross-correlation recipe, persist it into `ran-log-reference`'s
+`correlate` subtree (route per its self-maintenance). If the learning is
+single-artifact, route it to that type instead (see SKILL.md § Memory).

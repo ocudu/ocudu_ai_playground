@@ -44,5 +44,5 @@ find /tmp/run_artifacts -maxdepth 4 -name testbed.json
 
 Point `ran-log-reference`'s `scripts/correlate/resolve.py` at the selected test's
 directory under `/tmp/run_artifacts/...` and proceed with the chosen mode. The
-downloaded layout matches the local layout in `ran-log-reference` ›
-`references/correlate/components.md`.
+downloaded layout matches the local run layout documented in `ran-log-reference`'s
+`correlate` subtree.

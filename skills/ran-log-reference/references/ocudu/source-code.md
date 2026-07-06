@@ -54,4 +54,19 @@ Start at the relevant subsystem directory's `README.md`, which indexes the sibli
 where a layer has none, fall back to its headers/source (`.h`/`.cpp`), or to the
 `spec-explorer` skill for 3GPP behaviour (see `../common/spec-map.md`).
 
-**Read-only — never edit the source tree.**
+## Modifying the source
+
+Reading is the default — don't edit the source tree to understand it. The one
+exception: confirming a hypothesis that *requires* a source change (adding a unit
+test, or a temporary log line). The **first time** this comes up in a session, ask
+the user for authorization before touching anything, offering:
+
+1. **Edit the `$RAN_LOG_REFERENCE_OCUDU_PATH` checkout in place** — modify their
+   configured tree directly.
+2. **Work in a throwaway git worktree** — isolate the change at the matching build
+   revision, leaving their tree untouched.
+3. **No authorization** — don't modify; fall back to reasoning from the read-only
+   source, or leave the hypothesis unconfirmed.
+
+Once granted, the choice holds for the rest of the session. Absent authorization,
+the tree stays **read-only**.
