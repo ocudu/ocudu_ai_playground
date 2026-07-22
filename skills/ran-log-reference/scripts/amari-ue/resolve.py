@@ -82,6 +82,11 @@ def build_report(given: Path) -> dict:
 
     report["present"] = [a for a in ARTIFACTS if (run_dir / a).is_file()]
     report["missing"] = [a for a in ARTIFACTS if not (run_dir / a).is_file()]
+    cfg_path = run_dir / "amarisoft_ue.cfg"
+    if cfg_path.is_file():
+        cfg = ue_log_summary.parse_cfg(cfg_path)
+        report["simulated_ues"] = cfg["ue_count"]
+        report["n_ue_groups"] = cfg["n_ue_groups"]
     if len(components) > 1:
         report["components"] = components
         report["resolved_component"] = next(
@@ -101,6 +106,9 @@ def render_text(r: dict) -> str:
     if r["missing"]:
         line += f"   (missing: {', '.join(r['missing'])})"
     lines.append(line)
+    if "simulated_ues" in r:
+        groups_note = f" across {r['n_ue_groups']} imsi/ue_count blocks" if r["n_ue_groups"] > 1 else ""
+        lines.append(f"simulated UEs (from amarisoft_ue.cfg): {r['simulated_ues']}{groups_note}")
     if r.get("components"):
         rc = r.get("resolved_component") or "the latest"
         lines.append(

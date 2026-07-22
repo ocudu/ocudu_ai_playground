@@ -175,8 +175,12 @@ def render_text(inv: dict) -> str:
     if inv["testbed"]:
         lines.append("")
         lines.append("Testbed map (component -> address:port):")
-        # Collapse large families of identical-prefix components (e.g. 64 UEs)
-        # into one range line to keep the output token-cheap.
+        # Collapse large families of identical-prefix components into one range
+        # line to keep the output token-cheap. NOTE: this is a count of testbed
+        # component *slots* (containers/processes), NOT the number of simulated
+        # UEs — a single amarisoft-ue-N container can simulate many UEs via its
+        # amarisoft_ue.cfg. For the real simulated-UE count, resolve that
+        # component with the amari-ue type (its resolve.py reports it from cfg).
         ue_items = [(n, ni) for n, ni in inv["testbed"].items() if n.startswith("amarisoft-ue-")]
         other = [(n, ni) for n, ni in inv["testbed"].items() if not n.startswith("amarisoft-ue-")]
         for name, ni in other:
@@ -189,7 +193,8 @@ def render_text(inv: dict) -> str:
                 lines.append(f"  {n:<22} {ni['address']}:{ni['port']}")
             else:
                 lines.append(f"  amarisoft-ue-1..{len(ue_items):<10} {addr}:{ports[0]}-{ports[-1]} "
-                             f"({len(ue_items)} UEs)")
+                             f"({len(ue_items)} testbed slots — NOT simulated-UE count, "
+                             f"see amari-ue resolve for that)")
     lines.append("")
     lines.append("Clock note: all logs (gnb/ue/mme) and pcap frame.time_epoch are UTC and")
     lines.append("directly comparable. capinfos/tshark DISPLAY in local TZ — use raw")

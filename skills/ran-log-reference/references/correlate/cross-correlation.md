@@ -89,7 +89,9 @@ Notes and caveats:
   UEIDs, one gNB event → collision (`ue-extra-tx/contention`); expected in
   multi-UE attach, not a fault.
 - **Count reconciliation**: UE-side attaches vs gNB `UE created` vs NGAP
-  `InitialUEMessage` vs pcap — disagreement localises where UEs are lost.
+  `InitialUEMessage` vs pcap — disagreement localises where UEs are lost. For
+  "how many UEs", use `amari-ue`'s cfg-derived count, not the testbed map's
+  `amarisoft-ue-N` slot range (slots ≠ simulated UEs; see its `conventions.md`).
 
 ## Scripts
 

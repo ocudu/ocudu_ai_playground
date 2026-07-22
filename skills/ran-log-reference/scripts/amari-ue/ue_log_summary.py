@@ -57,10 +57,12 @@ def resolve_run_dir(path_str: str) -> Path:
 def parse_cfg(cfg_path: Path) -> dict:
     result = {
         "ue_count": 1,
+        "n_ue_groups": 0,
         "bands": [],
         "bandwidths": [],
         "n_cells": 0,
         "imsi": None,
+        "n_imsi": 0,
         "sim_events": [],
     }
     if not cfg_path.exists():
@@ -77,17 +79,21 @@ def parse_cfg(cfg_path: Path) -> dict:
         lines.append(line)
     text = "\n".join(lines)
 
-    m = re.search(r"ue_count\s*:\s*(\d+)", text)
-    if m:
-        result["ue_count"] = int(m.group(1))
+    # A cfg can define many UE groups (one `ue_count` per imsi/group block, e.g.
+    # 500 distinct imsi entries each with ue_count:1). The total simulated UE
+    # count is the SUM across all groups, not just the first match.
+    group_counts = [int(x) for x in re.findall(r"ue_count\s*:\s*(\d+)", text)]
+    result["n_ue_groups"] = len(group_counts)
+    result["ue_count"] = sum(group_counts) if group_counts else 1
 
     result["bands"] = [int(x) for x in re.findall(r"\bband\s*:\s*(\d+)", text)]
     result["bandwidths"] = [float(x) for x in re.findall(r"\bbandwidth\s*:\s*([\d.]+)", text)]
     result["n_cells"] = len(re.findall(r"\brf_port\s*:", text))
 
-    m = re.search(r'imsi\s*:\s*"([^"]+)"', text)
-    if m:
-        result["imsi"] = m.group(1)
+    imsis = re.findall(r'imsi\s*:\s*"([^"]+)"', text)
+    result["n_imsi"] = len(imsis)
+    if imsis:
+        result["imsi"] = imsis[0]
 
     seen = set()
     for m in re.finditer(r'event\s*:\s*"([^"]+)"', text):
@@ -302,8 +308,11 @@ def summarize(path_str: str):
     print("=== UE Configuration ===")
     mode = "multi-UE" if cfg["ue_count"] > 1 else "single-UE"
     print(f"  UE count    : {cfg['ue_count']} ({mode})")
+    if cfg["n_ue_groups"] > 1:
+        print(f"  UE groups   : {cfg['n_ue_groups']} (imsi/ue_count blocks summed for the total above)")
     if cfg["imsi"]:
-        print(f"  IMSI        : {cfg['imsi']}")
+        suffix = f" (first of {cfg['n_imsi']})" if cfg["n_imsi"] > 1 else ""
+        print(f"  IMSI        : {cfg['imsi']}{suffix}")
     if cfg["bands"]:
         print(f"  Bands       : {', '.join('n' + str(b) for b in sorted(set(cfg['bands'])))}")
     if cfg["bandwidths"]:

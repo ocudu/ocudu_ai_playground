@@ -38,10 +38,15 @@ The dispatcher runs `scripts/amari-ue/resolve.py`, which accepts a `ue.log`
 file, a run directory, an `amarisoft-ue-N/` component dir, or a Retina
 `test_gnb[...]` dir, and resolves to the latest run directory holding a `ue.log`.
 It prints the resolved run dir, the analysis artifacts present (`ue.log`,
-`stdout.log`, `amarisoft_ue.cfg`), and a `verdict:` line; it exits non-zero
-(`BAIL`) if no `ue.log` is found or it is empty. **Bail if the verdict is not
-OK.** (UE logs are plain text — there is nothing to validate beyond presence, so
-this is resolution + inventory, not a preflight.)
+`stdout.log`, `amarisoft_ue.cfg`), the **simulated UE count**, and a `verdict:`
+line; it exits non-zero (`BAIL`) if no `ue.log` is found or it is empty. **Bail
+if the verdict is not OK.** (UE logs are plain text — there is nothing to
+validate beyond presence, so this is resolution + inventory, not a preflight.)
+
+**UE count**: sum `ue_count` across every group in `amarisoft_ue.cfg` (one cfg
+can hold many imsi/ue_count blocks — e.g. 500 IMSIs at `ue_count: 1` = 500 UEs).
+Never infer it from the testbed's `amarisoft-ue-N` slot count — that's
+container slots, not simulated UEs, and is commonly 1 even for hundreds of UEs.
 
 **Scope** — when a `test_gnb[...]` dir holds more than one UE component (e.g.
 `amarisoft-ue-1` + `amarisoft-ue-2`), `resolve.py` reports them and notes which
