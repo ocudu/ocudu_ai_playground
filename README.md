@@ -9,8 +9,8 @@ Collection of skills, agents and other AI-related tools to use with OCUDU Projec
 Register this repo as a marketplace source:
 
 ```text
-/plugin marketplace add git@gitlab.com:ocudu/ocudu_ai_playground.git        # latest main
-/plugin marketplace add git@gitlab.com:ocudu/ocudu_ai_playground.git#1.0.0  # pin to a tag or branch
+/plugin marketplace add git@gitlab.com:ocudu/ocudu_tools.git        # latest main
+/plugin marketplace add git@gitlab.com:ocudu/ocudu_tools.git#1.0.0  # pin to a tag or branch
 ```
 
 Now you can search for OCUDU skills inside Claude Code:
@@ -22,14 +22,14 @@ Now you can search for OCUDU skills inside Claude Code:
 Or directly install **individual skills**:
 
 ```text
-/plugin install ci-triage@ocudu-ai-playground
-/plugin install analyze-pcap@ocudu-ai-playground
+/plugin install ci-triage@ocudu-tools
+/plugin install analyze-pcap@ocudu-tools
 ```
 
 To get updates after the repo changes:
 
 ```text
-/plugin marketplace update ocudu-ai-playground
+/plugin marketplace update ocudu-tools
 ```
 
 You might need to run `/reload-plugins` after install / upgrade.
@@ -39,8 +39,8 @@ You might need to run `/reload-plugins` after install / upgrade.
 Clone the repo and run the install script. Symlinks stay in sync as you pull updates.
 
 ```bash
-git clone git@gitlab.com:ocudu/ocudu_ai_playground.git
-cd ocudu_ai_playground
+git clone git@gitlab.com:ocudu/ocudu_tools.git
+cd ocudu_tools
 ./install.sh                  # installs to ~/.claude/skills/ by default
 ./install.sh /path/to/.claude # custom install target
 ```

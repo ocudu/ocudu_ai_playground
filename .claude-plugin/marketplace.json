@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
-  "name": "ocudu-ai-playground",
+  "name": "ocudu-tools",
   "description": "Skills for the OCUDU 5G CU/DU project",
   "owner": {
     "name": "ocudu",
