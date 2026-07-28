@@ -2,7 +2,7 @@
 
 Drive a root-cause investigation **at the cross-artifact level** — pick the next
 lead, correlate across sources, and converge. Single-artifact deep dives run via
-the relevant `ran-log-reference` type.
+the relevant type.
 
 ## Conduct
 
@@ -19,9 +19,9 @@ the relevant `ran-log-reference` type.
 - **Modifying OCUDU source to test a hypothesis.** The source tree is read-only by
   default. The **first time** confirming a hypothesis *requires* a source change (a
   new unit test, or a temporary log line), stop and ask the user for authorization
-  before touching anything — offering: edit the `$RAN_LOG_REFERENCE_OCUDU_PATH`
+  before touching anything — offering: edit the `$ANALYZE_RAN_LOG_OCUDU_PATH`
   checkout in place, work in a throwaway git worktree, or no authorization (stay
-  read-only). Once granted, it holds for the session. See `ran-log-reference`'s
+  read-only). Once granted, it holds for the session. See this skill's
   `references/ocudu/source-code.md` § Modifying the source.
 - **Question-asking.** Ask **after every meaningful finding** (Phase C step 5), not
   after silent intermediate checks. On *Different angle* / *Clarify*, treat the
@@ -33,11 +33,11 @@ State the symptom in one short paragraph: which run, which UE (UEID and/or
 C-RNTI), expected vs observed, and the approximate time/slot window. Run the
 inventory and `correlate/align_clocks.py` first if not already done — a clock/slot
 misalignment invalidates every later correlation. (All `correlate/…` paths are
-under `ran-log-reference`.)
+under this skill.)
 
 ## Phase B — first hypothesis → a cross-artifact trace
 
-Match the symptom to a cross-artifact procedure trace in `ran-log-reference`'s
+Match the symptom to a cross-artifact procedure trace in this skill's
 `correlate` subtree — attach, handover, radio-link failure, identity mismatch,
 no-data / PUSCH-PUCCH — following that skill's own correlate index to the matching
 trace and script. Each trace shows the same procedure from the UE log, the gNB
@@ -48,7 +48,7 @@ log, and the pcap, and names the join key at each step.
 Repeat until diagnosis or the user stops:
 
 1. Pick the **next smallest cross-source check** that confirms or refutes the
-   current hypothesis. Prefer `ran-log-reference` scripts and summarized metrics
+   current hypothesis. Prefer this skill's scripts and summarized metrics
    over reading raw logs. When the expected behavior or implementation is in
    question, do a `spec-explorer` or OCUDU-source lookup.
 2. Run it.
@@ -108,5 +108,5 @@ row actually pins it).
 ## Phase E — persist learnings
 
 Route per SKILL.md § Memory & self-maintenance: analysis learnings go to
-`ran-log-reference`, which decides where they land; session/playbook learnings stay
+this skill, which decides where they land; session/playbook learnings stay
 in this skill's `references/`.

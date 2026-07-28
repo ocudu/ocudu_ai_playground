@@ -42,7 +42,7 @@ find /tmp/run_artifacts -maxdepth 4 -name testbed.json
 
 ## Step 4 — Continue as a local run
 
-Point `ran-log-reference`'s `scripts/correlate/resolve.py` at the selected test's
+Point this skill's `scripts/correlate/resolve.py` at the selected test's
 directory under `/tmp/run_artifacts/...` and proceed with the chosen mode. The
-downloaded layout matches the local run layout documented in `ran-log-reference`'s
+downloaded layout matches the local run layout documented in this skill's
 `correlate` subtree.

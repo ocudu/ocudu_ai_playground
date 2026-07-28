@@ -9,17 +9,17 @@ investigation loop unless asked.
 Restate the question in one sentence. Decide:
 
 - **Single-artifact** — the answer lives entirely in one artifact type. Use the
-  owning `ran-log-reference` type (loaded via the `Skill` tool), then answer here
+  owning type (loaded via the `Skill` tool), then answer here
   using its search script (follow its `references/<type>/analysis-guide.md`
   § Answering a targeted question):
-  | Question example | ran-log-reference type |
+  | Question example | Type |
   |---|---|
   | "How many handovers did the gNB do?" | `ocudu` |
   | "What was the UE's final NAS state?" | `amari-ue` |
   | "How many NGAP UEContextRelease in the pcap?" | `pcap` |
 
 - **Cross-artifact** — the answer requires lining up ≥2 sources. Use
-  `ran-log-reference`'s `correlate` subtree (scripts under `scripts/correlate/`,
+  the `correlate` subtree (scripts under `scripts/correlate/`,
   references under `references/correlate/`):
   | Question example | Tool |
   |---|---|
@@ -35,7 +35,7 @@ inventory).
 ## Phase B — execute
 
 For cross-artifact questions, anchor on the right key (the clock/key model lives in
-`ran-log-reference`'s `correlate` subtree):
+the `correlate` subtree):
 - radio events → **(SFN.slot, RNTI)** at the PHY layer (exact);
 - UE identity → the Amarisoft UEID / C-RNTI chain (its correlate identity model);
 - CP events / pcap → wall-clock UTC (raw `frame.time_epoch`).
@@ -58,6 +58,6 @@ Question answered or marked unanswerable. Don't loop — let the user drive next
 
 ## Persist learnings
 
-If you found a reusable cross-correlation recipe, persist it into `ran-log-reference`'s
+If you found a reusable cross-correlation recipe, persist it into this skill's
 `correlate` subtree (route per its self-maintenance). If the learning is
 single-artifact, route it to that type instead (see SKILL.md § Memory).
