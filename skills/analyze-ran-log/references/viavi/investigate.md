@@ -14,12 +14,14 @@ primary leads.
 
 ## symptom → playbook
 
+Ordered **most-specific first** — take the first row that matches.
+
 | Symptom | Playbook |
 |---|---|
+| Random-access errors (`Max_Preambles_Exceeded`) | `troubleshooting/random-access.md` |
+| Reestablishments / handover churn | `troubleshooting/random-access.md` — covers the RA-triggered case only; if RA is clean, escalate to `correlate` |
 | UE never connected / `CONNECTION FAILED IND` | `troubleshooting/ue-attach.md` |
 | UE connected but never `REGISTRATION IND` | `troubleshooting/ue-attach.md` |
-| Random-access errors (`Max_Preambles_Exceeded`) | `troubleshooting/random-access.md` |
-| Reestablishments / handover churn | `troubleshooting/random-access.md` (RA-triggered reest) |
 | Low throughput / high BLER | `troubleshooting/throughput.md` |
 
 Load the matching playbook and follow its failure markers / investigation

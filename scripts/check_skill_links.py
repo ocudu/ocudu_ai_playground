@@ -115,6 +115,30 @@ def check_dead_names(path: Path, text: str) -> None:
                 errors.append(f"{rel(path)}:{line_no}: reference to removed name '{name}'")
 
 
+SCRIPT_PATH = re.compile(r"scripts/(ocudu|amari-ue|pcap|viavi|correlate)/")
+
+
+def check_script_layering(md: Path, text: str) -> None:
+    """A per-type doc must not reach into another type's scripts/ either."""
+    root = SKILLS / "analyze-ran-log" / "references"
+    try:
+        parts = md.relative_to(root).parts
+    except ValueError:
+        return
+    if len(parts) < 2:
+        return
+    subtree = parts[0]
+    if subtree not in {"ocudu", "amari-ue", "pcap", "viavi"}:
+        return
+    for m in SCRIPT_PATH.finditer(text):
+        other = m.group(1)
+        if other != subtree:
+            errors.append(
+                f"{rel(md)}: per-type doc must not reference scripts/{other}/ "
+                f"(route cross-type steps via correlate/)"
+            )
+
+
 def check_layering(md: Path, text: str) -> None:
     """One-way layering inside analyze-ran-log/references/.
 
@@ -131,6 +155,9 @@ def check_layering(md: Path, text: str) -> None:
         return
     subtree = parts[0]
     types = {"ocudu", "amari-ue", "pcap", "viavi"}
+    # correlate sits *above* the per-type subtrees, so a per-type doc linking into
+    # it is an upward reference, not a sibling one.
+    upward = {"correlate"}
 
     prose = strip_fences(text)
     link_targets = [m.group(1).split("#", 1)[0] for m in MD_LINK.finditer(strip_code(text))]
@@ -146,8 +173,48 @@ def check_layering(md: Path, text: str) -> None:
                     errors.append(
                         f"{rel(md)}: per-type doc must not link sibling type -> {target}"
                     )
+            for up in upward:
+                if f"../{up}/" in norm or f"../../{up}/" in norm:
+                    errors.append(
+                        f"{rel(md)}: per-type doc must not link up to {up}/ -> {target}"
+                    )
         if re.search(r"mode-(overview|query|investigate)\.md", norm):
             errors.append(f"{rel(md)}: must not link up to a mode playbook -> {target}")
+
+
+SECTION_CITE = re.compile(r"`([A-Za-z0-9_./-]+\.md)`\s*§\s*([^\n.,;)]+)")
+
+
+def _headings(path: Path) -> set[str]:
+    out = set()
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if line.startswith("#"):
+            out.add(line.lstrip("#").strip().lower())
+    return out
+
+
+def check_section_cites(md: Path, text: str) -> None:
+    """`other.md § Section` must name a heading that exists in other.md."""
+    skill = owning_skill(md)
+    for m in SECTION_CITE.finditer(strip_fences(text)):
+        target, section = m.group(1), m.group(2).strip().lower()
+        if "<" in target or target.endswith("SKILL.md"):
+            continue
+        for cand in (md.parent / target,
+                     *( (skill / target, skill / "references" / target) if skill else () )):
+            if cand.is_file():
+                heads = _headings(cand)
+                # The capture can run past the heading into prose, so compare on
+                # leading words rather than the whole string.
+                def lead(s, n=2):
+                    return " ".join(s.split()[:n])
+                if not any(section == h or h.startswith(section)
+                           or lead(section) == lead(h) for h in heads):
+                    errors.append(
+                        f"{rel(md)}: cites {target} § {m.group(2).strip()} "
+                        f"-- no such heading"
+                    )
+                break
 
 
 def main() -> int:
@@ -167,6 +234,8 @@ def main() -> int:
             check_backtick_docs(path, text)
             check_skill_dir_paths(path, text)
             check_layering(path, text)
+            check_script_layering(path, text)
+            check_section_cites(path, text)
 
     for path in (REPO / "README.md", REPO / ".claude-plugin" / "marketplace.json"):
         if path.exists():

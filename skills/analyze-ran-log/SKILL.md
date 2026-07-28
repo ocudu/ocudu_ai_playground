@@ -15,7 +15,7 @@ description: >
   does OCUDU log a handover").
 version: 0.2.0
 user-invocable: true
-allowed-tools: Bash(python3 *analyze-ran-log/scripts*), Bash(python3 -m zipfile *), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(git worktree:*), Bash(curl:*), Bash(glab:*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sed:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(comm:*), Bash(capinfos:*), Bash(tshark:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Skill, Edit, Write
+allowed-tools: Bash(python3 *analyze-ran-log/scripts*), Bash(python3 -m zipfile *), Bash(python3 -c:*), Bash(LC_ALL=C grep:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(git worktree:*), Bash(curl:*), Bash(glab:*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sed:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(comm:*), Bash(capinfos:*), Bash(tshark:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Skill, Edit, Write
 ---
 
 # Analyze a RAN log / capture / run
@@ -50,8 +50,33 @@ artifacts*. See `references/common/README.md`.
 |---|---|
 | A **GitLab CI job URL** | Follow `references/ci-retrieval.md` to fetch + unzip into a local dir, then continue as a local run. |
 | An **artifact or directory** (`test_gnb[...]`, `ocudu-*`, `amarisoft-*`, a single log/pcap/config) | Resolve it (§ Resolve & classify), then go to Step 2. |
-| **No artifact** — a format / semantics / procedure question ("what does this log line mean", "how does OCUDU log a handover", "which pcap carries F1AP") | Pick the type by keyword, read its `references/<type>/reference/` (plus `references/common/` for the *expected* behaviour), answer. **No resolve, no mode doc** — this is the cheap path; stop here. |
+| **No artifact** — a format / semantics / procedure question ("what does this log line mean", "how does OCUDU log a handover", "which pcap carries F1AP") | See § No-artifact questions below. **No resolve, no mode doc** — this is the cheap path. |
 | Neither, and it's not a knowledge question | Ask the user for a path or CI URL. |
+
+### No-artifact questions
+
+Split on what the question is really asking:
+
+- **"What *should* happen?"** — a procedure ladder, a message's meaning, an
+  identifier definition, a spec clause. Read `references/common/` **first**; that
+  is where artifact-agnostic semantics live. Descend into a type only if the
+  answer needs the observation surface.
+- **"How does it *look* here?"** — the question quotes a concrete log line, field,
+  filename, or tool. Pick the type by keyword, then read its
+  `references/<type>/reference/`:
+
+  | Keyword in the question | Type |
+  |---|---|
+  | `gnb.log`, `du.log`, `cu*.log`, `ocudu_*.yml`, `metrics.json`, `ue=N`, `c-rnti=`, a `[LAYER]` tag | `ocudu` |
+  | `ue.log`, `amarisoft_ue.cfg`, a 4-hex UE_ID, `5GMM-`, CBR, sim events | `amari-ue` |
+  | `.pcap`/`.pcapng`, tshark, a frame number, a dissector field, Upper-PDU | `pcap` |
+  | `*_Command_Log*`, `UE Id:`, `I: CMPI`, GETSTATS, `CU PLANE ACTIVE`, TM500 | `viavi` |
+  | joining two sources, SFN.slot, clock offset, which-side-failed | `correlate` |
+
+The same vocabulary appears in more than one type (`crc=KO` on the gNB vs
+`crc=FAIL` on the UE; four types document a handover). If the question doesn't
+disambiguate, answer from `references/common/` and name the per-type difference
+rather than guessing which side they meant.
 
 ---
 
@@ -95,6 +120,11 @@ Under `references/<type>/`:
 - **`troubleshooting/`** — symptom-first failure playbooks (failure markers +
   investigation checklist). The entry point when starting from a symptom.
 - **`scripts/<type>/`** — pre-vetted helpers that emit compact summaries.
+
+`correlate` deviates in two ways: its reference material is flat rather than under
+`reference/`, and it carries `procedures/` (cross-artifact traces) instead of
+`troubleshooting/`. Its `conventions.md` and three activity slots are the same as
+everyone else's.
 
 **Load only what the type needs** — single-artifact work pulls just that type's
 subtree, never a sibling's. Two deliberate exceptions: `references/common/` is

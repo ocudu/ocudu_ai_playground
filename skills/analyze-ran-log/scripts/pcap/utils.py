@@ -388,6 +388,10 @@ def iter_fields_cached(
     fields_list = list(fields)
     tag_str = tag or "+".join(fields_list) + ("|" + display_filter if display_filter else "")
     cf = cache_path(pcap, tag_str)
+    # Announce the cache file so the caller can quote the path instead of trying
+    # to reconstruct the hash (the docs tell it to reuse the cache).
+    print(f"cache: {cf} ({'hit' if cf.exists() and not force else 'miss'})",
+          file=sys.stderr)
     if cf.exists() and not force:
         with cf.open() as fh:
             for line in fh:

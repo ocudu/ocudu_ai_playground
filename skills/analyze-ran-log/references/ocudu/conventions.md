@@ -67,12 +67,10 @@ mean before going further.
 
 ## Efficiency rules (ocudu)
 
-- **Never** read raw `gnb.log` into context — it can be 75k–500k+ lines.
+- Size: `gnb.log` runs 75k–500k+ lines — never read it into context.
 - Skip the CONFIG echo at the top of `gnb.log` (the `[CONFIG  ] [D]` block, several
   hundred lines) unless the user explicitly asks about an effective-config value —
-  see `log-format.md` § Header (the CONFIG echo).
-- Spill larger results to `<cache-dir>/ocudu-<purpose>-<sha>.txt` (use the
-  `ocudu-` prefix) and report the path.
+  see `reference/log-format.md` § Header (the CONFIG echo).
 - `stdout.log` is short (typically 30–300 lines; longer for multi-UE runs that
   print the metrics table many times) — safe to read in full when single-UE.
   For multi-UE traffic runs, `head -n 50` plus `tail -n 30` is enough.
@@ -83,6 +81,7 @@ mean before going further.
 - `metrics.json` is a standard JSON array of per-period records — parse it with
   `python3 -c 'import json; json.load(open("metrics.json"))'`, never `cat` it
   into context. The summary script rolls it up already.
-- In multi-UE mode, scope grep queries by `ue=N` or `c-rnti=0xNNNN` early.
+- Scope by `ue=N` (CU side) or `c-rnti=0xNNNN` (DU side) — the identifier differs
+  by component, so pick the one the log you're searching actually carries.
 
 For UE-lifecycle latency questions, see `latency-profiling.md`.

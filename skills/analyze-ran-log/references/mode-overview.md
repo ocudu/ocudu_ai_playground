@@ -13,11 +13,8 @@ between calls.
 
 - **Factual, not diagnostic.** Report what the artifacts show. A suspicious
   signal is an *anomaly bullet*, not a root cause — escalating is Phase E's job.
-- Run the scripts; **never** read a raw log or pcap into context.
 - One headline per component. Don't dump per-artifact detail into the overview —
   the value is the consolidated picture.
-- Everything the scripts emit lands in the session cache. A later mode
-  (`mode-query.md` / `mode-investigate.md`) **reuses** it rather than re-running.
 
 ## Phase A — inventory
 
@@ -25,7 +22,7 @@ Resolve the input if not already done (`SKILL.md` § Resolve & classify). For a
 whole run, that is:
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/resolve.py <run-dir>
+python3 ${CLAUDE_SKILL_DIR}/scripts/resolve.py <run-dir>
 ```
 
 Note which components and artifacts are present and their clock anchors. This
@@ -50,6 +47,14 @@ registration / PDU-session / NGAP / `[E]` lines, capped at 200 lines.
 
 Capture one headline per component.
 
+**A missing or unusable artifact is itself an anomaly.** Before summarizing, check
+what resolve reported as absent: a component whose primary log is missing, empty,
+or lacks its end-of-run marker (`Workers stopped successfully` for OCUDU,
+`# Ended on` for the UE sim) is a finding in its own right. Report it, and say
+which conclusions it makes unavailable — a truncated log means "not observed", not
+"did not happen", and that distinction decides whether a later absence is
+evidence.
+
 ## Phase C — cross-source alignment
 
 Only when ≥2 components are present. Read `references/correlate/overview.md` and
@@ -67,14 +72,12 @@ For a **whole run**, present one consolidated block:
 ## RAN Run Overview
 
 **Path:** <run-dir>
-**Components:** gNB (<build>), UE (<n> UEs), 5GC (<type>), pcaps: <list>
+**Components:** <one entry per component resolve reported, with its build/count>
 **Clocks:** <from references/correlate/overview.md>
 
 ### Per-component
-- gNB:  <one-line headline>
-- UE:   <one-line headline>
-- pcap: <one-line headline>
-- 5GC:  <registration/PDU-session counts; errors>
+- <component dir>: <one-line headline>
+  ...one line per component actually present, named as resolve named it...
 
 ### Cross-source picture
 - <reconciled counts, radio summary, timeline headline>
@@ -99,5 +102,4 @@ Do not ask if the run was clean — end with the overview.
 
 ## Persist learnings
 
-Only if the session surfaced something generalisable — route it per
-`references/self-maintenance.md`.
+Only if generalisable — route per `references/self-maintenance.md`.

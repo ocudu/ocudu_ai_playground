@@ -156,6 +156,7 @@ def parse(stream) -> dict:
         "ue_ids": set(),
         "ev": Counter(),         # CMPI event tallies (keys of CMPI_EVENTS)
         "ra_results": Counter(),
+        "offender_ues": {},      # event key -> set of UE Ids seen on that event
         "getstats_dumps": 0,
         "cmd_fail": [],          # [(ts, cmd, code)] for C: <cmd> 0xNN != 0x00
         "tma_warn": 0,
@@ -197,6 +198,11 @@ def parse(stream) -> dict:
                             mr = RA_RESULT_RE.search(payload)
                             if mr:
                                 r["ra_results"][mr.group(1)] += 1
+                        if key in ("ra_err", "conn_fail"):
+                            # Record which UEs hit it -- a count alone can't be scoped.
+                            mo = UE_ID_RE.search(payload)
+                            if mo:
+                                r["offender_ues"].setdefault(key, set()).add(int(mo.group(1)))
                         break
                 mu = UE_ID_RE.search(payload)
                 if mu:
@@ -361,12 +367,21 @@ def summarize(path_str: str) -> None:
 
     # ----- Anomalies -----
     anomalies = []
+
+    def offenders(key):
+        ids = sorted(r["offender_ues"].get(key, ()))
+        if not ids:
+            return ""
+        shown = ", ".join(str(i) for i in ids[:10])
+        return f" [UE Ids: {shown}" + (f" +{len(ids) - 10} more]" if len(ids) > 10 else "]")
+
     if err:
         anomalies.append(f"{err} random-access errors"
                          + (f" ({', '.join(f'{n} {res}' for res, n in r['ra_results'].most_common())})"
-                            if r["ra_results"] else ""))
+                            if r["ra_results"] else "")
+                         + offenders("ra_err"))
     if ev["conn_fail"]:
-        anomalies.append(f"{ev['conn_fail']} NR CONNECTION FAILED IND")
+        anomalies.append(f"{ev['conn_fail']} NR CONNECTION FAILED IND" + offenders("conn_fail"))
     if ev["rlc_max"]:
         anomalies.append(f"{ev['rlc_max']} RLC max-retransmission events")
     if r["cmd_fail"]:

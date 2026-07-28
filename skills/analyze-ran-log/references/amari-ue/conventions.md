@@ -54,10 +54,7 @@ one it resolved to; scope explicitly to the UE you mean before going further.
 
 ## Efficiency rules (amari-ue)
 
-- **Never** read raw `ue.log` into context — it can be more than 100k lines.
-  Always grep for specific patterns or use a helper script.
-- Spill larger results to `<cache-dir>/amari-<purpose>-<sha>.txt` (use the
-  `amari-` prefix) and report the path.
+- Size: `ue.log` can exceed 100k lines — never read it into context.
 - `stdout.log` is short (30–100 lines) — safe to read in full.
 - `amarisoft_ue.cfg` is short (100–150 lines) — safe to read in full.
-- In multi-UE mode (`ue_count > 1`), scope grep queries by UE ID early.
+- Scope by the 4-char hex UE ID when `ue_count > 1`.

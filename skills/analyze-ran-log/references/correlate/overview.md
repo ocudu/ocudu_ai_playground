@@ -12,12 +12,14 @@ Read `cross-correlation.md` first if not already loaded.
 python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/align_clocks.py <run-dir>
 ```
 
-Checks log↔pcap (expected Δ≈0 — same process) and UE↔gNB PHY slot alignment, and
-distinguishes decode latency from genuine clock skew.
+Checks log↔pcap (expected Δ≈0 — same process, so this is a sanity / display-TZ
+guard rather than a measurement), UE↔gNB PHY slot alignment, and whether `slot_rx=`
+is available. Surface a non-zero log↔pcap Δ or any PHY slot offset as an anomaly.
 
-Off-host sources (VIAVI tester, remote 5GC, a UE sim on another box) may be
-genuinely offset — surface a non-trivial Δ as an anomaly rather than silently
-correcting for it. The `(SFN.slot, RNTI)` join does not depend on it.
+**Scope limit:** it does not check off-host sources (VIAVI tester, remote 5GC),
+and check 2 needs a `ue.log` — for a gNB+VIAVI run it degrades to the one
+same-process line. Report an off-host source as "offset not measured" rather than
+implying it was verified; the `(SFN.slot, RNTI)` join doesn't depend on it.
 
 ## radio reconciliation (optional)
 

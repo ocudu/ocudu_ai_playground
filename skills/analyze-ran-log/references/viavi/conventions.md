@@ -45,15 +45,13 @@ cross-product over a multi-hour run is large.
 
 ## Efficiency rules (viavi)
 
-- **Never** read the raw `.txt` into context — it can be hundreds of thousands of
-  lines (this example: 655k lines / 55 MB). Use the helper scripts or grep.
+- Size: hundreds of thousands of lines (observed: 655k lines / 55 MB) — never read
+  it into context.
 - The file has **CRLF** endings and some **non-UTF-8 bytes** — always grep with
   `LC_ALL=C grep -a`; the helper scripts already strip CR and use
   `errors="replace"`.
 - Read the `.zip` in place (the scripts do, via `zipfile`); don't extract a
   55 MB `.txt` to disk just to grep it.
-- Spill larger results to `<cache-dir>/viavi-<purpose>-<sha>.txt` (use the
-  `viavi-` prefix) and report the path.
 - Most of the file is **continuation lines** (GETSTATS rows, `Cell Info:`
   bodies); use `viavi_log_search.py` (block-aware) rather than line greps when
   you need whole records.

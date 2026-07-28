@@ -47,13 +47,13 @@ hand.
 
 - **Never** run `tshark -V` without `-c 1` or a single-frame filter
   (`-Y 'frame.number == N'`). Full verbose dumps blow up context.
-- **Never** pipe an unbounded `tshark -T fields` result into context. Cap at 200
-  rows with `head -n 200`; spill the rest into the cache dir as
-  `pcap-cache-<sha>.tsv` and report the path.
-- **Reuse** the cache: if `pcap-cache-<sha>.tsv` already exists for a given pcap
-  and column set, do not re-invoke tshark — post-filter the cached file instead.
+- **Caching is automatic** for the helper scripts: `iter_fields_cached` keys on
+  the pcap path plus the column set, so re-running the same query is nearly free
+  and needs no manual cache bookkeeping. The scripts print `cache: <path> (hit|
+  miss)` on stderr — quote that path rather than reconstructing the hash. For a
+  *hand-crafted* tshark chain there is no cache; spill it yourself.
 - **AppArmor**: on Ubuntu the Canonical AppArmor profile on tshark restricts
   reads to `/tmp`. The helper scripts auto-stage pcaps into the cache dir's
   `pcap-stage/` subfolder — see `reference/pcap-format.md` § AppArmor.
-- For run directories with multiple UEs, scope tshark queries by UE identifier
-  early — the cross-product of 5 pcaps × many UEs is large.
+- Scope by the protocol's own UE identifier (`mac-nr.rnti`, `rlc-nr.ueid`, the
+  F1AP/NGAP/E1AP UE IDs) — the cross-product of 5 pcaps × many UEs is large.

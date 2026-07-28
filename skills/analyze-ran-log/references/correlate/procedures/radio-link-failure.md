@@ -50,12 +50,16 @@ failure tail of a HO) and `ue-identity-map.md` to track whether the gNB reused
 the UE context (direct RLF: CU `ue=` stable, new C-RNTI) or created a new one
 (post-HO T304 expiry).
 
-## Diagnosis template
+## What to report
 
-```
-Failure window: rnti 0x<RNTI>, slots <a>..<b>, ~<ts>
-UL verdict: <DTX | gNB-decode-miss | channel-degradation | clean-stop>
-  evidence: <correlate_radio rows; sinr trend; UE TX present/absent>
-DL toward UE: <PDCCH/PDSCH present? ss_id anomaly?>
-Conclusion: <which side failed and why, in NR terms>
-```
+Fill the driving playbook's Phase D Diagnosis block — don't invent a second
+format. This trace supplies its **What failed** and **Key evidence** content:
+
+- the failure window as `rnti 0x<RNTI>, slots <a>..<b>, ~<ts>`;
+- the UL verdict (`DTX` | `gNB-decode-miss` | `channel-degradation` |
+  `clean-stop`) taken from the `correlate_radio` status table above, with the rows,
+  the sinr trend, and whether a UE TX was present as its evidence;
+- whether anything was scheduled toward the UE on DL (PDCCH/PDSCH present,
+  `ss_id` anomaly);
+- which side failed, in NR terms — this is the **Root cause** line, and it is
+  `confirmed` only once a status row actually pins the side.

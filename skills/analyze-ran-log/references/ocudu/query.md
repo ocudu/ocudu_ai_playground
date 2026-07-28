@@ -26,32 +26,49 @@ Use the search script first when it fits:
 
 ```bash
 python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py <gnb.log> \
-  [--layer <RRC|NGAP|F1AP|E1AP|MAC|SCHED|PHY|PDCP|CU-CP|CU-UP|DU|...>] \
+  [--layer <exact tag>] \
   [--ue <N>] \
   [--rnti <hex>] \
   [--pci <N>] \
   [--after <HH:MM:SS.mmm>] \
   [--before <HH:MM:SS.mmm>] \
   [--pattern <regex>] \
-  [--level <D|I|W|E|C>] \
+  [--level <regex over D|I|W|E|C>] \
   [--count] \
   [--max-lines 200]
+```
+
+`--layer` is an **exact** tag match, not a substring — pass a tag that really
+appears in the log. There is **no `F1AP` or `E1AP` tag**; F1AP/E1AP traffic is
+split by endpoint. The full set (`reference/log-format.md` § Layer tags):
+
+```
+ALL CONFIG GNB RRC NGAP SCTP-GW PDCP SDAP SEC MAC SCHED PHY FAPI METRICS
+CU-CP CU-CP-F1 CU-CP-E1 CU-UEMNG CU-UP CU-UP-E1 CU-F1-U
+DU DU-F1 DU-F1-U DU-MNG GTPU UDP-GW IO-EPOLL
 ```
 
 | Question | Command |
 |---|---|
 | "How many handovers?" | `--pattern reconfigurationWithSync --count` |
 | "When did the UE attach?" | `--layer RRC --pattern "DCCH UL rrcSetupComplete"` |
-| "When did NGAP connect to AMF?" | `--pattern "NGSetupResponse\|NGSetupFailure"` |
 | "All PRACH events" | `--layer SCHED --pattern "prach\("` |
 | "Cells configured?" | `--pattern "Cell creation idx="` |
 | "Final RRC release?" | `--layer RRC --pattern "rrcRelease"` |
 | "Bearer setups?" | `--pattern "BearerContextSetupResponse" --count` |
 | "Which band/BW used?" | read `ocudu_gnb.yml` or `grep "^Cell pci=" stdout.log` |
-| "How long did the run last?" | `--pattern "Built in\|Workers stopped successfully"` |
-| "Any errors or warnings?" | `--level "E\|W\|C"` |
 | "Did the UE complete attach?" | `--layer CU-CP --pattern '"Initial Context Setup Routine" finished'` |
 | "Reestablishment seen?" | `--pattern "rrcReestablishment"` |
+| "UE's first RRC msg across F1?" | `--layer CU-CP-F1 --pattern "InitialULRRCMessageTransfer"` |
+
+Regex alternation can't be written inside a markdown table cell, so these live
+here — copy them verbatim, the pipe must **not** be backslash-escaped:
+
+```bash
+--pattern "NGSetupResponse|NGSetupFailure"              # NGAP connect to AMF
+--pattern "Built in|Workers stopped successfully"       # run duration
+--level "E|W|C"                                         # errors and warnings
+```
 
 Otherwise use targeted grep with the canonical recipes in
 `reference/log-format.md` § Key grep recipes. Cap with `| head -n 200`; if larger,

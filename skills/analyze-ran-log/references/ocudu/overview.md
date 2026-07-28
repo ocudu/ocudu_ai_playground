@@ -81,18 +81,23 @@ For multi-UE runs `stdout.log` reprints the metrics table many times — use
 - <time>  gNB stopped (clean)
 
 ### Procedures
-- UE attaches:    N
+- UE attaches:    N    Initial Context Setup OK: K/N
 - RRC reconfig:   N
-- Handovers:      N
+- Handovers:      N    (NGAP handover msgs: N)
 - Reestablishments: N
-- Bearer setups:  N    releases: N
+- Bearer setups:  N    modifications: N    releases: N
 - PRACH events:   N    PHY CRC failures: N
 - Warnings:       N    Errors: N
 
-### Traffic (peak per cell)
-- pci=1: DL <X> Mbps · UL <Y> Mbps · BLER DL <Z>% UL <Z>%
-- pci=2: ...
+### Traffic
+- Peak DL/UL per UE: <X>/<Y> Mbps · max latency <L> us
+- Late DL/UL HARQs: N/N · failed PDCCH/UCI allocs: N/N
+- Msg3 ok/nok: N/N
 
 ### Anomalies
 - <bullet per anomaly, or "None">
 ```
+
+The traffic figures are **per-UE peaks, not per-cell**, and the script computes
+**no BLER** — don't invent either. `Initial Context Setup OK: K/N` is the single
+most useful multi-UE health signal; carry it even when K == N.

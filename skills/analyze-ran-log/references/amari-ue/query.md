@@ -11,7 +11,9 @@ Identify:
 - Which grep pattern or script flag answers it.
 - Whether to scope by UE ID or cell ID.
 
-Candidate-listing recipe when scope is ambiguous — UE IDs are 4-char hex:
+Candidate-listing recipe when scope is ambiguous — UE IDs are 4-char hex. The
+summary script already names the UEs that never reached 5GMM-REGISTERED, so prefer
+its Anomalies block; to enumerate all of them:
 
 ```bash
 grep -oE ' [0-9a-f]{4} New state' ue.log | sort -u
@@ -39,11 +41,17 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/amari-ue/ue_log_search.py <ue.log> \
 | "When did UE attach?" | `--layer NAS --pattern "REGISTERED\s+CM-CONNECTED"` |
 | "All PRACH attempts" | `--layer PHY --pattern "PRACH:"` |
 | "What cells did the UE see?" | `--layer PHY --pattern "PSS:"` |
-| "Was there packet loss?" | grep `CBR_RECV\|CBR_SEND` in `stdout.log` |
 | "What was the final NAS state?" | `--layer NAS` then tail |
 | "Did the UE reestablish?" | `--pattern "reestablishment" --layer RRC` |
 | "What band/BW was used?" | read `amarisoft_ue.cfg` (fields: `reference/config-format.md`) or `grep "^RF" stdout.log` |
-| "How long did the run last?" | `grep -E "^# (Started\|Ended)" ue.log` |
+
+Regex alternation can't be written inside a markdown table cell, so these live
+here — copy them verbatim, the pipe must **not** be backslash-escaped:
+
+```bash
+grep -aE "CBR_RECV|CBR_SEND" stdout.log     # packet loss / throughput
+grep -aE "^# (Started|Ended)" ue.log        # run duration
+```
 
 Otherwise use targeted grep with the canonical recipes in
 `reference/log-format.md` § Key grep recipes. Cap with `| head -n 200`; if larger,

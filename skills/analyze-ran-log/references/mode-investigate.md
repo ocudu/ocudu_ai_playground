@@ -17,8 +17,6 @@ to which troubleshooting playbook) live in `references/<kind>/investigate.md`.
   is a lead, not a conclusion; cross-source correlation raises confidence but
   still name what would break the hypothesis. Definitive wording is earned only
   after the confirming test has run and agreed.
-- **Never** read a raw log or pcap into context. Use the type's search/summary
-  scripts and reuse cached output from any prior overview.
 - **Modifying OCUDU source to test a hypothesis.** The source tree is read-only by
   default. The **first time** confirming a hypothesis *requires* a source change
   (a new unit test, or a temporary log line), stop and ask the user for
@@ -49,9 +47,16 @@ correlation.
 ## Phase B — first hypothesis
 
 Read `references/<kind>/investigate.md` and use its **symptom → playbook**
-dispatch table to pick the matching `troubleshooting/*.md` (failure markers +
-investigation checklist). Each playbook cites the expected message sequence in its
-`reference/` sibling — compare observed against expected.
+dispatch table to pick a `troubleshooting/*.md` (failure markers + investigation
+checklist). Rows are ordered **most-specific first**: take the first match. When
+two rows still match, prefer the one whose failure marker you have *actually
+observed* in the log over the one that merely describes the outcome — a
+`ra-ContentionResolutionTimer` expiry you can point at beats "UE never attached".
+Symptoms overlap by construction (high BLER *causes* throughput regression), so
+picking the narrower row first is what keeps the loop from re-deriving it.
+
+Each playbook cites the expected message sequence in its `reference/` sibling —
+compare observed against expected.
 
 At the whole-run altitude, `references/correlate/investigate.md` instead maps the
 symptom to a cross-artifact procedure trace, which shows the same procedure from
@@ -64,6 +69,18 @@ If no dispatch row matches, fall back to the layered approach:
 3. The gap is your hypothesis space.
 
 ## Phase C — investigation loop
+
+Keep a **live hypothesis list**, max 3, each paired with the single check that
+would discriminate it. This is what makes the loop terminate:
+
+- A check that neither confirms nor refutes any live hypothesis is a
+  **non-result**. **Two consecutive non-results = plateau** → widen per
+  § Escalating beyond one artifact. That is the operational definition of
+  "clues plateau"; don't widen before it, don't keep drilling after it.
+- Drop a hypothesis the moment its check refutes it. Add one only with its
+  discriminating check named.
+- If the list empties, go back to Phase B's last-successful / first-divergent
+  bisect on the gap you just narrowed.
 
 Repeat until diagnosis or the user stops:
 
@@ -84,11 +101,17 @@ Repeat until diagnosis or the user stops:
    ```
    **Found:** <one sentence — source(s), layer/protocol, timestamp or slot/frame, the matched evidence>
    **Clues so far:**
-     - <bullet>
+     - [confirmed] <a check ran and agreed>
+     - [hypothesis: <the check that would settle it>] <not yet tested>
      - <up to 5 total>
+   **Live hypotheses:** <up to 3, each with its discriminating check>
    **Next:** <the exact script/filter/grep you intend to run>
    **Why:** <one sentence — which hypothesis this supports or refutes>
    ```
+
+   Tag **every** clue `[confirmed]` or `[hypothesis: …]`. This is what makes the
+   § Conduct rule enforceable rather than aspirational — Phase D reads these tags
+   back, so an untagged clue block makes the final diagnosis unsupportable.
 
 5. Immediately follow with `AskUserQuestion` offering:
    - **Continue** — proceed with the planned **Next**.
@@ -105,7 +128,8 @@ Repeat until diagnosis or the user stops:
 ## Escalating beyond one artifact
 
 When the symptom points at another side of the interface, one artifact is
-insufficient — widen, but only **when clues plateau, not before**:
+insufficient — widen, but only on **plateau** as Phase C defines it (two
+consecutive non-results), not before:
 
 - a sibling `amarisoft-ue-*/` exists → the `amari-ue` type shows MIB/SIB decode,
   PRACH transmission, the UE RRC/NAS state machine.
@@ -126,7 +150,8 @@ insufficient — widen, but only **when clues plateau, not before**:
   the specific message / counter / config knob. At the whole-run altitude, name
   the failing side — UE TX vs gNB decode vs CN. Mark **confirmed** only if a test
   pinned it; otherwise mark **hypothesis** and give the check that would confirm>
-- **Key evidence:**
+- **Key evidence:** *(only `[confirmed]` clues belong here — anything still
+  `[hypothesis]` goes under Suggested next steps instead)*
   - `<source> <timestamp|slot|frame#> <excerpt>` — <why it matters>
   - <the correlation row that pinned which side failed, if cross-artifact>
 - **Suggested next steps:** <config knob, type deep-dive, spec/source check,
@@ -146,5 +171,5 @@ once the correlation row actually pins it.
 
 ## Phase E — persist learnings
 
-Only if the session surfaced something generalisable — route it per
-`references/self-maintenance.md`. Never persist the run-specific verdict.
+Only if generalisable — route per `references/self-maintenance.md`. **Never**
+persist the run-specific verdict.

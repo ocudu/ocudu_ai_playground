@@ -37,10 +37,15 @@ one side's parsing detail. This is the one type permitted to reach into siblings
 
 ## Efficiency deltas
 
-- **Never assume a shared wall-clock.** Measure the offset per run
-  (`align_clocks.py`) before comparing timestamps across sources. Same-process
-  sources (a `gnb.log` and the pcaps that process wrote) are Δ≈0 by construction;
-  off-host sources (VIAVI tester, a remote 5GC, a UE sim on another box) are not.
+- **Never assume a shared wall-clock.** Same-process sources (a `gnb.log` and the
+  pcaps that process wrote) are Δ≈0 by construction; off-host sources (VIAVI
+  tester, a remote 5GC, a UE sim on another box) are not. `align_clocks.py`
+  *verifies* the same-clock sources and the UE↔gNB PHY slot alignment — it does
+  **not** measure an off-host offset, and there is no tool that does. For an
+  off-host source, either avoid wall-clock entirely (preferred) or derive Δ by
+  hand from one event pair joined on a clock-independent key — for VIAVI, the
+  `Random Access Complete` TC-RNTI ↔ the gNB's `c-rnti=` (see
+  `ue-identity-map.md` § Joining via the VIAVI log).
 - **Prefer the clock-independent key.** For radio events, `(SFN.slot, RNTI)` is
   exact and immune to clock skew — use it over wall-clock whenever both sides
   report slots.

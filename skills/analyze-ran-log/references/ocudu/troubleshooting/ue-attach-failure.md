@@ -70,11 +70,12 @@ When `Initial Context Setup OK : K/N` shows K < N, the gap is the most
 useful single signal. Find which UEs missed it:
 
 ```bash
+C="${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}"; mkdir -p "$C"
 python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern "UE created" \
-    | grep -oE "ue=[0-9]+" | sort -u > /tmp/created.txt
+    | grep -oE "ue=[0-9]+" | sort -u > "$C/ocudu-created.txt"
 python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --pattern '"Initial Context Setup Routine" finished' \
-    | grep -oE "ue=[0-9]+" | sort -u > /tmp/done.txt
-comm -23 /tmp/created.txt /tmp/done.txt
+    | grep -oE "ue=[0-9]+" | sort -u > "$C/ocudu-ics-done.txt"
+comm -23 "$C/ocudu-created.txt" "$C/ocudu-ics-done.txt"
 ```
 
 ## Cross-references

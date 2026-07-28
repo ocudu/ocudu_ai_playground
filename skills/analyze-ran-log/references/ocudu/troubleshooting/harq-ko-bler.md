@@ -85,8 +85,9 @@ How to see it:
   cycling 0→2→3→1…) until context removal (`f0f1_invalid_harqs` climbs alongside
   `dl_nof_nok` in that UE's final interval). This is the *symptom* of missing UL
   feedback, not proof the UE went silent by choice.
-- RLC confirmation (rlc.pcap, enable the `rlc_nr_udp` heuristic — the `pcap` type's
-  RLC protocol reference documents it): the RRCRelease is an SRB1 RLC-AM PDU with the
+- RLC confirmation (rlc.pcap, enable the `rlc_nr_udp` heuristic): this step leaves
+  the gNB log, so it is a **cross-artifact** escalation — hand it to the `correlate`
+  type, which owns joining the two sources and reaching into the pcap side. The RRCRelease is an SRB1 RLC-AM PDU with the
   Poll bit set. A clean release = a single transmission plus a UL STATUS PDU
   whose `ACK_SN` advances past it, ~tens of ms later. A failed one = the same PDU
   poll-retransmitted with **no** STATUS ever, because the UE's STATUS can't get a
@@ -97,6 +98,7 @@ How to see it:
   delay shrinks as UEs leave. That pattern *is* the "PUSCH not scheduled fast
   enough" diagnosis.
 
-This is expected under load, not a link/PHY fault. Confirm the trigger in the
-F1AP pcap (`UEContextReleaseCommand` carrying `rrcRelease`) with
-`scripts/pcap/f1ap_messages.py`.
+This is expected under load, not a link/PHY fault. Confirming the trigger means
+reading the F1AP pcap (`UEContextReleaseCommand` carrying `rrcRelease`) — another
+cross-artifact step, so hand it to the `correlate` type rather than reaching into
+the pcap subtree from here.

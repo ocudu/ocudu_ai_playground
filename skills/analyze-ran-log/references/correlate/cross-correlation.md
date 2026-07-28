@@ -98,6 +98,6 @@ Notes and caveats:
 | Script | Purpose |
 |---|---|
 | `resolve.py` | Components, artifacts, testbed map, clock anchors (the `correlate` resolver) |
-| `align_clocks.py` | Measure the log↔pcap / UE↔gNB clock offset (don't assume 0) + PHY slot alignment; report decode latency vs genuine clock skew |
+| `align_clocks.py` | Verify the same-process log↔pcap relationship (sanity/display-TZ guard, not an offset measurement) + UE↔gNB PHY slot alignment + `slot_rx=` availability. Does **not** check off-host sources |
 | `correlate_radio.py` | Join UE↔gNB PHY events on `(SFN.slot, RNTI)`; flag rx-ko/missing/contention; DTX vs degradation |
 | `map_ue_ids.py` | Per-pcap UE-identifier lifecycle (f1ap/ngap/e1ap); feeds `ue-identity-map.md` |

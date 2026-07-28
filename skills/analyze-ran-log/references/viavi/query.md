@@ -7,6 +7,16 @@ in.
 
 Identify the `UE Id` (decimal) / event / time window to scope by.
 
+Candidate-listing recipes when scope is ambiguous — the summary script already
+names the UE Ids behind RA errors and connection failures, so prefer its Anomalies
+block; otherwise:
+
+```bash
+L=<command-log>
+LC_ALL=C grep -ao 'UE Id:[0-9]*' "$L" | sort -u | head -n 40   # all UE Ids seen
+LC_ALL=C grep -a 'Random Access Error' "$L" | head -n 40        # the failing ones
+```
+
 ## execute
 
 Use the search script first when it fits:

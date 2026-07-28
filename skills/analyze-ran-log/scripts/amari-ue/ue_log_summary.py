@@ -485,10 +485,15 @@ def summarize(path_str: str):
             seen_ues.add(uid)
             if gmm == "5GMM-REGISTERED":
                 registered_ues.add(uid)
-        never = len(seen_ues) - len(registered_ues)
+        unregistered = sorted(seen_ues - registered_ues)
+        never = len(unregistered)
         if never > 0:
+            # Name the offenders: "scope by UE ID early" is unusable without them.
+            shown = ", ".join(unregistered[:10])
+            more = f" (+{never - 10} more)" if never > 10 else ""
             anomalies.append(
-                f"{never} of {len(seen_ues)} UEs never reached 5GMM-REGISTERED"
+                f"{never} of {len(seen_ues)} UEs never reached 5GMM-REGISTERED: "
+                f"{shown}{more}"
             )
     if out["warnings"]:
         for w in out["warnings"]:

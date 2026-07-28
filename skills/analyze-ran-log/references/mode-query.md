@@ -25,20 +25,17 @@ Restate the question in one sentence, then decide:
   `references/correlate/query.md`, which owns the cross-artifact question→script
   table and the join-key model.
 
-Scope by UE identifier **early** in multi-UE runs — the cross-product over UEs is
-large. Ask via `AskUserQuestion` only when scoping is genuinely ambiguous (e.g. a
-multi-UE run and the question names no UE → list the candidate RNTIs/UE-IDs from
-the inventory first, using the candidate-listing recipe in the type's
-`query.md`).
+Ask via `AskUserQuestion` only when scoping is genuinely ambiguous (e.g. a
+multi-UE run and the question names no UE) — and list the candidate RNTIs/UE-IDs
+first, using the candidate-listing recipe in the type's `query.md`, so the choice
+is concrete.
 
 ## Phase B — execute
 
-Prefer the type's helper script over a hand-crafted grep/tshark chain. Reuse any
-cached output from a prior overview instead of re-running.
-
-Cap output at ~200 lines; spill anything larger to
-`<cache-dir>/<type>-query-<sha>.{txt,tsv}` and report the path (see `SKILL.md`
-§ Efficiency rules).
+Prefer the type's helper script over a hand-crafted grep/tshark chain, and scope
+before you widen — narrow by UE and time window first, then relax if the answer
+isn't there. A query returning nothing is evidence of **absence** only once you've
+confirmed the scope was right; until then it's evidence of a bad filter.
 
 ## Phase C — answer
 
@@ -58,5 +55,4 @@ sentence and offer `mode-investigate.md`; don't start investigating unprompted.
 
 ## Persist learnings
 
-Only if the session surfaced a reusable recipe — route it per
-`references/self-maintenance.md`.
+Only if generalisable — route per `references/self-maintenance.md`.

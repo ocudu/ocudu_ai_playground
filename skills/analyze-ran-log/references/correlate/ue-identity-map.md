@@ -67,6 +67,26 @@ LC_ALL=C grep -a 'TC-RNTI: 0x<RNTI>' "$L"
 `TC-RNTI` is the temporary C-RNTI from the RAR; on contention resolution it
 becomes the UE's C-RNTI, so it joins directly to the gNB's `c-rnti=0x<RNTI>`.
 
+## Joining two OCUDU components (split deployment)
+
+With CU-CP, CU-UP and DU as separate processes, each writes its own log and the
+join is the **F1AP UE id pair** printed on both sides:
+
+```bash
+# Same UE, two logs: du_ue=N appears in [CU-CP-F1] on the CU and [DU-F1] on the DU
+LC_ALL=C grep -a 'du_ue=' cu_cp.log | head -n 40
+LC_ALL=C grep -a 'du_ue=' du.log    | head -n 40
+```
+
+`du=N tid=N du_ue=N` on a `Tx PDU`/`Rx PDU` line gives three keys at once:
+`du_ue` joins the UE context across the two logs, `du` identifies which DU, and
+**`tid` (transaction id) pairs a request with its response** — the same role it
+plays for E1AP and NGAP. Use `tid` whenever you need to prove a specific response
+belongs to a specific request rather than inferring it from ordering.
+
+The CU-CP↔CU-UP join is the E1AP pair instead (`cu_cp_ue` / `cu_up_ue`); see the
+identifier chain above.
+
 - **RNTIs are recycled.** In a churn run the same RNTI is handed out many times,
   so confirm the RA-Complete you matched is the right one: grep the RNTI, and if
   it appears more than once, disambiguate by the gNB-side event (pick the

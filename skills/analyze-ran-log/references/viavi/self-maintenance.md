@@ -17,7 +17,7 @@ Match the surrounding format; no dates/timestamps, no run-specific values.
 - protocol/procedure **semantics** shared across artifacts (a message meaning, an
   abstract procedure ladder, an identifier definition, a spec/FAPI pointer) →
   `../common/` (not here); a `reference/<name>.md` doc keeps only the VIAVI-log
-  observation and links to its `../common/procedures/<name>.md` ladder.
+  observation and links to its `../../common/procedures/<name>.md` ladder.
 - a new procedure → add the paired `reference/<name>.md` (expected sequence +
   vocabulary) and `troubleshooting/<name>.md` (failure markers + checklist), and
   add a row to `investigate.md` § symptom → playbook; a new

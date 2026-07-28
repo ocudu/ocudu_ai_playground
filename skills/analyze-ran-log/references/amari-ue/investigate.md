@@ -17,14 +17,25 @@ errors, missing `# Ended on`.
 
 ## symptom → playbook
 
+Ordered **most-specific first** — take the first row that matches.
+
 | Symptom | Playbook |
 |---|---|
-| UE never attached / stuck before 5GMM-REGISTERED | `troubleshooting/registration.md` |
+| UE attached, HO triggered, then CBR loss spike | `troubleshooting/handover.md` |
+| Reestablishment seen / UE disconnected unexpectedly | `troubleshooting/handover.md` — reestablishment is the failure tail of a HO |
 | UE attached but no data flow / CBR loss high | `troubleshooting/data-session.md` |
-| UE attached, HO triggered but CBR loss spike | `troubleshooting/handover.md` |
-| UE disconnected unexpectedly / reestablishment seen | `troubleshooting/handover.md` |
+| UE never attached / stuck before 5GMM-REGISTERED | `troubleshooting/registration.md` |
 | UE deregistered before the `power_off` sim event | `troubleshooting/registration.md` |
-| PHY failures only (`crc=FAIL`, PRACH not responding) | `troubleshooting/registration.md` |
+
+**Coverage gap — don't force these into the table above.** This type has only
+three playbooks, and two symptom classes have none:
+
+- **PHY-only failures** (`crc=FAIL`, PRACH sent with no response, no SIB decode).
+  `registration.md` does *not* cover these; it assumes the UE got that far. The UE
+  log can only show what it transmitted and what it decoded, so the real next step
+  is the gNB side: escalate to the `correlate` type and use its radio-link-failure
+  trace to establish whether the gNB saw the transmission at all.
+- **Radio-link failure without a handover.** Same escalation.
 
 Load the matching playbook and follow its investigation checklist; each cites its
 `reference/` sequence sibling for the expected message flow.

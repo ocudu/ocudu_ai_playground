@@ -41,6 +41,8 @@ sources **disagree** localises the failure.
 - When a correlation needs one side's parsing detail, load that per-artifact
   subtree in addition (`../ocudu/investigate.md`, `../amari-ue/investigate.md`,
   `../pcap/investigate.md`) — this type may reach into the siblings it joins.
-- Off-host sources (VIAVI, remote 5GC) carry a real clock offset. Never treat a
-  wall-clock gap involving them as evidence until `align_clocks.py` has quantified
-  it.
+- Off-host sources (VIAVI, remote 5GC) carry a real clock offset that **nothing
+  measures automatically** — `align_clocks.py` does not check them. Never treat a
+  wall-clock gap involving them as evidence: join on a clock-independent key
+  instead (`(SFN.slot, RNTI)`, or the VIAVI TC-RNTI bridge in
+  `ue-identity-map.md`), or derive Δ by hand from one such pair first and say so.
