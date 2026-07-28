@@ -1,6 +1,6 @@
 # Components & routing
 
-How a Retina `test_gnb[...]` directory is laid out, which ran-log-reference type
+How a Retina `test_gnb[...]` directory is laid out, which analyze-ran-log type
 analyses each artifact, and how `testbed.json` maps components to the network.
 
 ## Directory layout

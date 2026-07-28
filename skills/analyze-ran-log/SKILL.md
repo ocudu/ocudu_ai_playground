@@ -1,5 +1,5 @@
 ---
-name: ran-log-reference
+name: analyze-ran-log
 description: >
   Reference module for RAN test logs and captures — an OCUDU gNB/DU/CU
   log/config/metrics (`gnb.log`, `ocudu_gnb.yml`, `metrics.json`), an Amarisoft UE
@@ -12,7 +12,7 @@ description: >
   the caller analyzes.
 version: 0.1.0
 user-invocable: true
-allowed-tools: Bash(python3 *ran-log-reference/scripts*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sed:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(comm:*), Bash(capinfos:*), Bash(tshark:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
+allowed-tools: Bash(python3 *analyze-ran-log/scripts*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sed:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(comm:*), Bash(capinfos:*), Bash(tshark:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Edit, Write
 ---
 
 # RAN log reference
@@ -109,7 +109,7 @@ Upper-PDU dissector preflight), see `references/<type>/conventions.md`.
 These hold for every type; `references/<type>/conventions.md` adds the deltas.
 
 - **Run the helper scripts from within this skill.** The frontmatter
-  `allowed-tools` (`Bash(python3 *ran-log-reference/scripts*)`, plus the read-only
+  `allowed-tools` (`Bash(python3 *analyze-ran-log/scripts*)`, plus the read-only
   shell tools) pre-authorizes the scripts only while the skill is active. Invoke
   the skill for log/pcap analysis rather than running the scripts ad hoc from the
   main loop — that way they execute without permission prompts, and no

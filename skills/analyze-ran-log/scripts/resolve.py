@@ -5,7 +5,7 @@
 
 """Classify a RAN test artifact and delegate to its per-type resolve/preflight.
 
-This is the single entrypoint for the ran-log-reference skill. It classifies
+This is the single entrypoint for the analyze-ran-log skill. It classifies
 the input into a kind and then runs that kind's resolve script as a subprocess,
 so each per-type script keeps its own directory on sys.path for its sibling
 imports (e.g. resolve.py importing ocudu_log_summary):

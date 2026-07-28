@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
-"""Shared helpers for the ran-log-reference `correlate` scripts.
+"""Shared helpers for the analyze-ran-log `correlate` scripts.
 
 These helpers exist only for the *cross-correlation* work that spans artifact
 sources. Per-artifact parsing detail belongs in the per-type subtrees
@@ -32,7 +32,7 @@ import re
 from pathlib import Path
 
 # --------------------------------------------------------------------------
-# Per-session shared cache root (shared across the ran-log-reference type
+# Per-session shared cache root (shared across the analyze-ran-log type
 # scripts). Write cross-correlation spills here with a `correlate-` prefix. The
 # OS reaps /tmp on reboot — no manual cleanup.
 # --------------------------------------------------------------------------

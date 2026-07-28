@@ -6,11 +6,11 @@
 """
 resolve.py — resolve/inventory a multi-component OCUDU run for correlation.
 
-The `correlate` kind's resolver (the ran-log-reference dispatcher delegates here
+The `correlate` kind's resolver (the analyze-ran-log dispatcher delegates here
 when an input spans several RAN application components). Enumerates the
 components of a `test_gnb[...]` directory (OCUDU gNB/DU/CU, Amarisoft UE,
 Amarisoft 5GC), resolves each component's latest run subdir, lists the artifacts
-present, maps each to the ran-log-reference type that analyses it, parses
+present, maps each to the analyze-ran-log type that analyses it, parses
 testbed.json (component -> IP:port), and reports the per-source clock anchors
 needed for cross-correlation. Ends with a `verdict:` line.
 
@@ -27,7 +27,7 @@ from pathlib import Path
 
 import utils
 
-# Component dir prefix -> (role, ran-log-reference type for its primary log).
+# Component dir prefix -> (role, analyze-ran-log type for its primary log).
 COMPONENT_ROLES = [
     ("ocudu-cu-cp", "cu-cp", "ocudu"),
     ("ocudu-cu-up", "cu-up", "ocudu"),
@@ -156,7 +156,7 @@ def render_text(inv: dict) -> str:
     lines = [f"Test directory : {inv['test_dir']}", ""]
     lines.append("Components:")
     for c in inv["components"]:
-        lines.append(f"  [{c['role']}] {c['component']}  (ran-log-reference type: {c['type']})")
+        lines.append(f"  [{c['role']}] {c['component']}  (analyze-ran-log type: {c['type']})")
         rd = Path(c["run_dir"]).name
         lines.append(f"        run subdir : {rd}")
         if c["logs"]:
@@ -164,7 +164,7 @@ def render_text(inv: dict) -> str:
         if c["configs"]:
             lines.append(f"        configs    : {', '.join(c['configs'])}")
         if c["pcaps"]:
-            lines.append(f"        pcaps      : {', '.join(c['pcaps'])}  (ran-log-reference type: pcap)")
+            lines.append(f"        pcaps      : {', '.join(c['pcaps'])}  (analyze-ran-log type: pcap)")
         if c["metrics"]:
             lines.append("        metrics    : metrics.json")
         ca = c["clock_anchor"]

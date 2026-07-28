@@ -15,8 +15,10 @@ Typical trigger: doubt about the exact meaning of a field in `metrics.json` / th
 
 ## Where — preference order
 
-If `$RAN_LOG_REFERENCE_OCUDU_PATH` is set, use that checkout — the user saved it in
-a prior session. Otherwise, in order:
+If `$ANALYZE_RAN_LOG_OCUDU_PATH` is set, use that checkout — the user saved it in
+a prior session. (Legacy name: `$RAN_LOG_REFERENCE_OCUDU_PATH`, from before this
+skill was renamed — still honoured if the new one is unset; offer to migrate it.)
+Otherwise, in order:
 
 1. **In-project** (preferred) — a checkout vendored inside the current project as a
    git submodule or cloned directory. Check for it first (`.gitmodules`, or an
@@ -31,7 +33,7 @@ a prior session. Otherwise, in order:
 For tiers 2–3 the choice and permission are the user's to give — ask, don't assume.
 
 Once a checkout is resolved by any tier, offer to persist its path as the
-`RAN_LOG_REFERENCE_OCUDU_PATH` env var in project settings (`.claude/settings.json`
+`ANALYZE_RAN_LOG_OCUDU_PATH` env var in project settings (`.claude/settings.json`
 `env`) so future sessions reuse it without re-detecting or re-asking.
 
 ## Match the build
@@ -61,7 +63,7 @@ exception: confirming a hypothesis that *requires* a source change (adding a uni
 test, or a temporary log line). The **first time** this comes up in a session, ask
 the user for authorization before touching anything, offering:
 
-1. **Edit the `$RAN_LOG_REFERENCE_OCUDU_PATH` checkout in place** — modify their
+1. **Edit the `$ANALYZE_RAN_LOG_OCUDU_PATH` checkout in place** — modify their
    configured tree directly.
 2. **Work in a throwaway git worktree** — isolate the change at the matching build
    revision, leaving their tree untouched.
