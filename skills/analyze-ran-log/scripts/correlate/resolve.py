@@ -43,6 +43,22 @@ COMPONENT_ROLES = [
 
 RUN_SUBDIR_RE = __import__("re").compile(r"^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$")
 
+# The VIAVI tester writes a loose `*_Command_Log*.txt`/`.zip` rather than living in
+# an `ocudu-*`/`amarisoft-*` component dir, so it needs its own discovery.
+VIAVI_GLOB = "*Command_Log*"
+VIAVI_SUFFIXES = (".txt", ".zip")
+
+
+def find_viavi_logs(root: Path) -> list[Path]:
+    """VIAVI command logs at or below root, newest last, .txt preferred over .zip."""
+    hits: list[Path] = []
+    for suf in VIAVI_SUFFIXES:
+        hits += [p for p in root.rglob(VIAVI_GLOB + suf) if p.is_file()]
+    # Drop a .zip whose identical .txt sibling is also present.
+    txt_stems = {p.with_suffix("").name for p in hits if p.suffix == ".txt"}
+    hits = [p for p in hits if p.suffix != ".zip" or p.with_suffix("").name not in txt_stems]
+    return sorted(hits, key=lambda p: (p.stat().st_mtime, p.name))
+
 # Primary OCUDU app-log filenames, in preference order.
 OCUDU_LOG_NAMES = ("gnb.log", "du.log", "cu.log", "cu_cp.log", "cu_up.log")
 PCAP_NAMES = ("ngap.pcap", "f1ap.pcap", "e1ap.pcap", "mac.pcap", "rlc.pcap")
@@ -86,7 +102,13 @@ def resolve_test_dir(path: Path) -> tuple[Path, list[Path]]:
         # A run subdir inside a component dir?
         if RUN_SUBDIR_RE.match(path.name) and classify(path.parent.name)[0] is not None:
             return path.parent.parent, [path.parent]
-    raise SystemExit(f"error: no OCUDU components found under {path}")
+        # No component dirs, but a VIAVI command log below → still a valid run to
+        # correlate (tester + whatever else is here).
+        if find_viavi_logs(path):
+            return path, []
+    raise SystemExit(
+        f"error: no OCUDU/Amarisoft component dirs and no VIAVI command log under {path}"
+    )
 
 
 def inventory_component(comp_dir: Path) -> dict:
@@ -113,9 +135,7 @@ def inventory_component(comp_dir: Path) -> dict:
         primary = next((run_dir / n for n in OCUDU_LOG_NAMES if (run_dir / n).is_file()), None)
         if primary:
             info["clock_anchor"] = {"type": "gnb-utc", "first_event": utils.first_gnb_event_ts(primary)}
-        for y in ("ocudu_gnb.yml", "ocudu_du.yml", "ocudu_cu.yml"):
-            if (run_dir / y).is_file():
-                info["configs"].append(y)
+        info["configs"] += sorted(c.name for c in run_dir.glob("ocudu_*.yml"))
         for p in PCAP_NAMES:
             if (run_dir / p).is_file():
                 info["pcaps"].append(p)
@@ -142,9 +162,27 @@ def inventory_component(comp_dir: Path) -> dict:
     return info
 
 
+def viavi_pseudo_component(log: Path, test_dir: Path) -> dict:
+    """Inventory entry for a VIAVI command log (no component dir of its own)."""
+    return {
+        "component": str(log.relative_to(test_dir)) if test_dir in log.parents else log.name,
+        "role": "tester",
+        "type": "viavi",
+        "run_dir": str(log.parent),
+        "logs": [log.name],
+        "pcaps": [],
+        "configs": [],
+        "metrics": False,
+        # Tester-local timestamps: DD/MM/YY HH:MM:SS:mmm, and the host may differ
+        # from the gNB's, so this anchor is NOT comparable without measuring Δ.
+        "clock_anchor": {"type": "viavi-tester-local", "offset_measured": False},
+    }
+
+
 def build_inventory(path_str: str) -> dict:
     test_dir, comp_dirs = resolve_test_dir(Path(path_str))
     comps = [inventory_component(c) for c in comp_dirs]
+    comps += [viavi_pseudo_component(v, test_dir) for v in find_viavi_logs(test_dir)]
     testbed = {}
     tb = test_dir / "testbed.json"
     if tb.is_file():

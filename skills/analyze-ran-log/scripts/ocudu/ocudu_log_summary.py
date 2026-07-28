@@ -6,7 +6,8 @@
 """
 ocudu_log_summary.py — Summarize an OCUDU gNB run directory.
 
-Single-pass parse of gnb.log + stdout.log + ocudu_gnb.yml + metrics.json.
+Single-pass parse of the OCUDU app log (gnb/du/cu/cu_cp/cu_up) + stdout.log
++ ocudu_*.yml + metrics.json.
 Emits a compact, token-efficient summary suitable for AI context.
 
 Usage:
@@ -33,24 +34,37 @@ from pathlib import Path
 # Path resolution
 # ---------------------------------------------------------------------------
 
+# Every OCUDU app writes the same log format under a role-specific name, so all of
+# these resolve as kind `ocudu`. Order is the preference when several coexist.
+OCUDU_LOG_NAMES = ("gnb.log", "du.log", "cu.log", "cu_cp.log", "cu_up.log")
+# Matching per-role config file names.
+OCUDU_CFG_GLOB = "ocudu_*.yml"
+
+
+def primary_log_in(run_dir: Path) -> Path | None:
+    """The OCUDU app log in run_dir, by role preference, or None."""
+    return next((run_dir / n for n in OCUDU_LOG_NAMES if (run_dir / n).is_file()), None)
+
+
 def resolve_run_dir(path_str: str) -> Path:
     p = Path(path_str).resolve()
 
     if p.is_file():
         return p.parent
 
-    if (p / "gnb.log").exists():
+    if primary_log_in(p) is not None:
         return p
 
-    # Component dir or test dir: locate gnb.log under it; prefer the latest by sort.
-    candidates = sorted(
-        [d for d in p.rglob("gnb.log") if d.is_file()],
-        key=lambda f: str(f),
-    )
-    if candidates:
-        return candidates[-1].parent
+    # Component dir or test dir: locate an OCUDU app log under it; prefer the
+    # latest by sort, and the earliest role in OCUDU_LOG_NAMES on a tie.
+    for name in OCUDU_LOG_NAMES:
+        candidates = sorted((d for d in p.rglob(name) if d.is_file()), key=str)
+        if candidates:
+            return candidates[-1].parent
 
-    raise FileNotFoundError(f"No gnb.log found under {p}")
+    raise FileNotFoundError(
+        f"No OCUDU app log ({', '.join(OCUDU_LOG_NAMES)}) found under {p}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -553,14 +567,19 @@ def summarize(path_str: str) -> None:
         gnb_log, run_dir = src, src.parent      # accept any log filename (gnb (1).log, srsdu.log, ...)
     else:
         run_dir = resolve_run_dir(path_str)
-        gnb_log = run_dir / "gnb.log"
+        gnb_log = primary_log_in(run_dir) or run_dir / "gnb.log"
     stdout_log = run_dir / "stdout.log"
+    # Config name tracks the role (ocudu_gnb.yml / ocudu_du.yml / ocudu_cu_cp.yml …).
     cfg_path = run_dir / "ocudu_gnb.yml"
+    if not cfg_path.is_file():
+        cfg_path = next(iter(sorted(run_dir.glob(OCUDU_CFG_GLOB))), cfg_path)
     metrics_path = run_dir / "metrics.json"
 
     print(f"Run directory : {run_dir}")
     if gnb_log.name != "gnb.log":
         print(f"Log file      : {gnb_log.name}")
+    if cfg_path.name != "ocudu_gnb.yml" and cfg_path.is_file():
+        print(f"Config file   : {cfg_path.name}")
     print()
 
     cfg = parse_cfg(cfg_path, gnb_log)
@@ -766,7 +785,7 @@ def summarize(path_str: str) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <gnb.log | run-dir | component-dir | test-dir>",
+        print(f"Usage: {sys.argv[0]} <gnb.log|du.log|cu*.log | run-dir | component-dir | test-dir>",
               file=sys.stderr)
         sys.exit(1)
     try:

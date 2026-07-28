@@ -27,6 +27,7 @@ for the sibling resolve.py and viavi_log_search.py scripts.
 from __future__ import annotations
 
 import io
+import itertools
 import re
 import sys
 import zipfile
@@ -89,8 +90,10 @@ def is_viavi_head(path: Path, n_lines: int = 60) -> bool:
     """True if the first lines carry the VIAVI command-log signature."""
     try:
         with open_log(path) as f:
-            head = "".join(next(f) for _ in range(n_lines))
-    except (StopIteration, OSError, zipfile.BadZipFile):
+            # islice, not next() in a genexpr: under PEP 479 a short file would
+            # surface as RuntimeError and escape the handler below.
+            head = "".join(itertools.islice(f, n_lines))
+    except (OSError, zipfile.BadZipFile):
         head = ""
         try:
             with open_log(path) as f:

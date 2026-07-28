@@ -127,8 +127,13 @@ def classify(path: Path) -> tuple[str | None, str]:
         return "amari-ue", "directory contains ue.log"
     if sum((path / n).is_file() for n in PCAP_NAMES) >= 1:
         return "pcap", "directory contains Upper-PDU pcaps"
-    if any("Command_Log" in p.name and p.is_file()
-           for suf in VIAVI_SUFFIXES for p in path.glob(VIAVI_GLOB + suf)):
+    direct_viavi = any("Command_Log" in p.name and p.is_file()
+                       for suf in VIAVI_SUFFIXES for p in path.glob(VIAVI_GLOB + suf))
+    # A Retina test dir keeps the tester log at its root *beside* component dirs, so
+    # holding one is only unambiguous when no other RAN component lives below.
+    other_components = (_has_any_under(path, GNB_LOGS) or _has_under(path, UE_LOG)
+                        or _has_any_under(path, CORE_LOGS))
+    if direct_viavi and not other_components:
         return "viavi", "directory contains a VIAVI command log"
 
     # Component / test directory: detect by what lives beneath it.
@@ -136,19 +141,31 @@ def classify(path: Path) -> tuple[str | None, str]:
     has_ue = _has_under(path, UE_LOG)
     has_core = _has_any_under(path, CORE_LOGS)
     has_pcap = _has_any_under(path, PCAP_NAMES)
-    # A directory spanning ≥2 RAN application components (gNB / UE / 5GC) is a
-    # whole-run directory → cross-artifact correlation.
-    apps = [("OCUDU app", has_gnb), ("Amarisoft UE", has_ue), ("5GC", has_core)]
-    present = [name for name, ok in apps if ok]
-    if len(present) >= 2:
-        return "correlate", f"directory spans multiple RAN components ({', '.join(present)})"
+    has_viavi = _has_viavi_under(path)
+    # A directory spanning ≥2 RAN application components is a whole-run directory
+    # → cross-artifact correlation. Count each OCUDU *role* separately: a split
+    # CU-CP + CU-UP + DU deployment is several components that need joining, even
+    # though they are all "the OCUDU app".
+    ocudu_roles = sorted({n[:-4] for n in GNB_LOGS if _has_under(path, n)})
+    apps: list[str] = []
+    if ocudu_roles:
+        apps.append("OCUDU " + "+".join(ocudu_roles))
+    if has_ue:
+        apps.append("Amarisoft UE")
+    if has_core:
+        apps.append("5GC")
+    if has_viavi:
+        apps.append("VIAVI tester")
+    n_components = len(ocudu_roles) + has_ue + has_core + has_viavi
+    if n_components >= 2:
+        return "correlate", f"directory spans multiple RAN components ({', '.join(apps)})"
     if has_gnb:
         return "ocudu", "OCUDU app log found below the directory"
     if has_ue:
         return "amari-ue", "ue.log found below the directory"
     if has_pcap:
         return "pcap", "Upper-PDU pcaps found below the directory"
-    if _has_viavi_under(path):
+    if has_viavi:
         return "viavi", "VIAVI command log found below the directory"
     return None, "no gnb.log / ue.log / *.pcap / command log found"
 

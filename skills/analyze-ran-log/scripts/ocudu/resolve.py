@@ -3,12 +3,15 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
-"""Resolve and inventory an OCUDU gNB-log input in one shot.
+"""Resolve and inventory an OCUDU app-log input in one shot.
 
-Locates the run directory (a gnb.log file → its parent; a directory containing
-gnb.log → itself; a component dir `ocudu-gnb-N-M/` or a Retina `test_gnb[...]`
-dir → the latest `YYYY-MM-DD_HH-MM-SS/` subdir that has a gnb.log), confirms the
-gnb.log is present and non-empty, lists the analysis artifacts found, and warns
+Handles every OCUDU app role — `gnb.log`, `du.log`, `cu.log`, `cu_cp.log`,
+`cu_up.log` — since they share one log format and differ only by name.
+
+Locates the run directory (a log file → its parent; a directory containing one →
+itself; a component dir `ocudu-{gnb,du,cu,cu-cp,cu-up}-*/` or a Retina
+`test_gnb[...]` dir → the latest `YYYY-MM-DD_HH-MM-SS/` subdir that has one),
+confirms the log is present and non-empty, lists the analysis artifacts found, and warns
 when a test directory holds more than one OCUDU app component (so the caller can
 scope to one rather than silently taking the latest). Prints a compact verdict
 and exits non-zero if no usable gnb.log can be found.
@@ -31,8 +34,10 @@ from pathlib import Path
 
 import ocudu_log_summary  # reuse resolve_run_dir()
 
-PRIMARY = "gnb.log"
-ARTIFACTS = ("gnb.log", "stdout.log", "ocudu_gnb.yml", "metrics.json")
+# All five OCUDU app log names resolve as kind `ocudu` -- same format, different
+# role. Sourced from the summary module so the two can't drift apart.
+OCUDU_LOG_NAMES = ocudu_log_summary.OCUDU_LOG_NAMES
+SIDECARS = ("stdout.log", "metrics.json")
 # OCUDU app component directory names that can appear under a test_gnb[...] dir.
 COMPONENT_GLOBS = ("ocudu-gnb-*", "ocudu-cu-*", "ocudu-cu-cp-*", "ocudu-cu-up-*", "ocudu-du-*")
 
@@ -49,15 +54,16 @@ def find_components(root: Path) -> list[str]:
     `root` is at or below a single run/component (no ambiguity to flag).
     """
     comps: set[str] = set()
-    for log in root.rglob(PRIMARY):
-        if not log.is_file():
-            continue
-        for anc in log.parents:
-            if _is_component_name(anc.name):
-                comps.add(anc.name)
-                break
-            if anc == root:
-                break
+    for name in OCUDU_LOG_NAMES:
+        for log in root.rglob(name):
+            if not log.is_file():
+                continue
+            for anc in log.parents:
+                if _is_component_name(anc.name):
+                    comps.add(anc.name)
+                    break
+                if anc == root:
+                    break
     return sorted(comps)
 
 
@@ -74,14 +80,23 @@ def build_report(given: Path) -> dict:
         return {**report, "ok": False, "bail": str(e)}
 
     report["run_dir"] = str(run_dir)
-    primary = run_dir / PRIMARY
-    if not primary.is_file():
-        return {**report, "ok": False, "bail": f"{PRIMARY} missing in {run_dir}"}
+    primary = ocudu_log_summary.primary_log_in(run_dir)
+    if primary is None:
+        return {
+            **report, "ok": False,
+            "bail": f"no OCUDU app log ({', '.join(OCUDU_LOG_NAMES)}) in {run_dir}",
+        }
     if primary.stat().st_size == 0:
-        return {**report, "ok": False, "bail": f"{PRIMARY} is empty (0 bytes)"}
+        return {**report, "ok": False, "bail": f"{primary.name} is empty (0 bytes)"}
 
-    report["present"] = [a for a in ARTIFACTS if (run_dir / a).is_file()]
-    report["missing"] = [a for a in ARTIFACTS if not (run_dir / a).is_file()]
+    report["primary_log"] = primary.name
+    report["role"] = primary.stem.replace("_", "-")
+    cfgs = sorted(c.name for c in run_dir.glob(ocudu_log_summary.OCUDU_CFG_GLOB))
+    artifacts = (primary.name, *SIDECARS)
+    report["present"] = [a for a in artifacts if (run_dir / a).is_file()] + cfgs
+    report["missing"] = [a for a in artifacts if not (run_dir / a).is_file()]
+    if not cfgs:
+        report["missing"].append(ocudu_log_summary.OCUDU_CFG_GLOB)
     if len(components) > 1:
         report["components"] = components
         report["resolved_component"] = next(
@@ -96,6 +111,8 @@ def render_text(r: dict) -> str:
     if r.get("bail"):
         return "\n".join(lines + [f"verdict: BAIL — {r['bail']}"])
     lines.append(f"run dir: {r['run_dir']}")
+    if r.get("primary_log"):
+        lines.append(f"role:    {r['role']}  (log: {r['primary_log']})")
     present = ", ".join(r["present"]) if r["present"] else "none"
     line = f"present: {present}"
     if r["missing"]:
@@ -116,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    ap.add_argument("path", help="gnb.log, a run dir, a component dir, or a test_gnb[...] dir")
+    ap.add_argument("path", help="an OCUDU app log (gnb/du/cu/cu_cp/cu_up), a run dir, a component dir, or a test_gnb[...] dir")
     ap.add_argument("--json", action="store_true", help="emit JSON")
     args = ap.parse_args(argv)
 
