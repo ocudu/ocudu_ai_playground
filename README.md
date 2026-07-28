@@ -1,6 +1,6 @@
-# OCUDU AI Playground
+# OCUDU Tools
 
-Collection of skills, agents and other AI-related tools to use with OCUDU Project.
+Collection of scripts, skills, other AI-related tools to use with OCUDU Project.
 
 ## Installation
 
@@ -22,14 +22,14 @@ Now you can search for OCUDU skills inside Claude Code:
 Or directly install **individual skills**:
 
 ```text
-/plugin install ci-triage@ocudu-tools
-/plugin install analyze-pcap@ocudu-tools
+/plugin install ci-triage@ocudu_tools
+/plugin install ran-log-reference@ocudu_tools
 ```
 
 To get updates after the repo changes:
 
 ```text
-/plugin marketplace update ocudu-tools
+/plugin marketplace update ocudu_tools
 ```
 
 You might need to run `/reload-plugins` after install / upgrade.
