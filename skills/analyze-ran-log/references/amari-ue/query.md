@@ -1,6 +1,7 @@
 # Amarisoft UE — query slot
 
-Type-specific part of `references/mode-query.md` (which drives).
+Type-specific slot for the **query** activity; the driving playbook pulls this
+in.
 
 ## restate and scope
 

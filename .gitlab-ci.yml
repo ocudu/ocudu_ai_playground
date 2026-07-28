@@ -52,3 +52,17 @@ yaml lint:
         paths:
           - "**/*.yml"
           - "**/*.yaml"
+
+skill links:
+  stage: static
+  image: python:3.12-alpine
+  script:
+    - python3 scripts/check_skill_links.py
+  rules:
+    - if: $ON_MR
+      changes:
+        paths:
+          - "skills/**/*"
+          - "scripts/check_skill_links.py"
+          - ".claude-plugin/marketplace.json"
+          - "README.md"

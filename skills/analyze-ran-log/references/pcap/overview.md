@@ -1,7 +1,8 @@
 # pcap — overview slot
 
-Type-specific part of `references/mode-overview.md` (which drives). Preflight
-(`SKILL.md` § Resolve & classify) already confirmed each file's format.
+Type-specific slot for the **overview** activity; the driving playbook pulls this
+in. Preflight (`SKILL.md` § Resolve & classify) already confirmed each file's
+format.
 
 ## single pcap
 

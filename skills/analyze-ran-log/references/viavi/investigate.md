@@ -1,7 +1,8 @@
 # VIAVI — investigate slot
 
-Type-specific part of `references/mode-investigate.md` (which drives the loop, the
-Found/Clues/Next block, and the Diagnosis template).
+Type-specific slot for the **investigate** activity. The driving playbook owns
+the loop, the Found/Clues/Next block, and the Diagnosis template; this file only
+supplies what is specific to this artifact.
 
 ## symptom — how to identify things here
 

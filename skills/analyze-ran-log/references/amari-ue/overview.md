@@ -1,6 +1,7 @@
 # Amarisoft UE — overview slot
 
-Type-specific part of `references/mode-overview.md` (which drives).
+Type-specific slot for the **overview** activity; the driving playbook pulls
+this in.
 
 ## inventory
 

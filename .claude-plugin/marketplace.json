@@ -13,9 +13,9 @@
       "source": "./skills/ci-triage"
     },
     {
-      "name": "analyze-pcap",
-      "description": "Analyze packet captures produced by OCUDU applications (gnb, du, cu, cu_cp, cu_up).",
-      "source": "./skills/analyze-pcap"
+      "name": "analyze-ran-log",
+      "description": "Analyze, summarize, query, or root-cause RAN test artifacts — OCUDU gnb/du/cu logs and configs, Amarisoft UE logs, VIAVI RU-simulator logs, NGAP/F1AP/E1AP/MAC/RLC pcaps — and correlate them across a whole run.",
+      "source": "./skills/analyze-ran-log"
     }
   ]
 }

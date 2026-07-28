@@ -22,14 +22,14 @@ Now you can search for OCUDU skills inside Claude Code:
 Or directly install **individual skills**:
 
 ```text
-/plugin install ci-triage@ocudu_tools
-/plugin install ran-log-reference@ocudu_tools
+/plugin install ci-triage@ocudu-tools
+/plugin install analyze-ran-log@ocudu-tools
 ```
 
 To get updates after the repo changes:
 
 ```text
-/plugin marketplace update ocudu_tools
+/plugin marketplace update ocudu-tools
 ```
 
 You might need to run `/reload-plugins` after install / upgrade.

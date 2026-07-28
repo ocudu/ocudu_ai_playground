@@ -1,8 +1,8 @@
 # correlate — overview slot
 
-Type-specific part of `references/mode-overview.md` (which drives). This is the
-cross-source layer added **on top of** the per-component summaries, and it is the
-value-add of a whole-run overview: things no single artifact can see.
+Type-specific slot for the **overview** activity; the driving playbook pulls this
+in. It is the cross-source layer added **on top of** the per-component summaries,
+and the value-add of a whole-run overview: things no single artifact can see.
 
 Read `cross-correlation.md` first if not already loaded.
 
@@ -33,8 +33,8 @@ when the per-component summaries already flagged PHY anomalies.
 
 ## cross-source block
 
-Feeds the *Clocks*, *Cross-source picture* and *Anomalies* parts of
-`mode-overview.md` Phase D:
+Feeds the *Clocks*, *Cross-source picture* and *Anomalies* parts of the driving
+playbook's consolidated block:
 
 ```
 **Clocks:** all UTC; log↔pcap Δ <x> ms; UE↔gNB PHY slots aligned | offset <n> slots

@@ -1,8 +1,9 @@
 # correlate — investigate slot
 
-Type-specific part of `references/mode-investigate.md` (which drives the loop, the
-Found/Clues/Next block, and the Diagnosis template). This is the whole-run
-altitude, where the goal is **attributing the failure to the right side**.
+Type-specific slot for the **investigate** activity. The driving playbook owns the
+loop, the Found/Clues/Next block, and the Diagnosis template; this file supplies
+only what is specific here. This is the whole-run altitude, where the goal is
+**attributing the failure to the right side**.
 
 ## symptom — how to identify things here
 

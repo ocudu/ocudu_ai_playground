@@ -1,7 +1,8 @@
 # OCUDU — overview slot
 
-Type-specific part of `references/mode-overview.md` (which drives). Assumes the
-input is resolved to a run directory and the § Efficiency rules apply.
+Type-specific slot for the **overview** activity; the driving playbook pulls this
+in. Assumes the input is resolved to a run directory and that the § Efficiency
+rules apply.
 
 ## inventory
 

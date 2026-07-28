@@ -8,7 +8,8 @@ ordinary analysis it is not needed.
 
 - Edit **only** files inside this skill's own `references/<type>/` and
   `scripts/<type>/` trees (`ocudu`, `amari-ue`, `pcap`, `viavi`, `correlate`),
-  the shared `references/common/` subtree, plus the shared `references/*.md`.
+  the shared `references/common/` subtree, plus the shared `references/*.md`
+  (the `mode-*.md` playbooks, `ci-retrieval.md`, this file).
 - **Never** touch files elsewhere in the repo or the user's project.
 - **Never** `git add`/`commit`/`push` — leave edits as working-tree diffs for the
   user to review.
@@ -45,7 +46,10 @@ do not edit the skill.
   `references/<type>/self-maintenance.md` names the exact file and section for a
   new grep/tshark recipe, log marker, config field, failure signature, etc.
   Observation-surface detail (a log line, a tshark filter, a UE marker) stays in
-  the type subtree even if it observes a shared procedure.
+  the type subtree even if it observes a shared procedure. Within a type, the
+  three activity slots take: a summary-script field or summary-block row →
+  `overview.md`; a search flag or question→command row → `query.md`; a
+  symptom→playbook dispatch row or a type-specific check → `investigate.md`.
 - **Artifact-agnostic learning** (protocol/procedure *semantics* shared across
   types, an identifier definition, a 3GPP spec pointer, a FAPI message) →
   `references/common/` (`protocols/<proto>.md`, `procedures/<name>.md`,
@@ -56,6 +60,13 @@ do not edit the skill.
   (`cross-correlation.md`, `ue-identity-map.md`, or `correlate/procedures/*.md`);
   a correlation-script fix → `scripts/correlate/`.
 - **Script bug/feature** → the matching `scripts/<type>/*.py`.
+- **Playbook / session-conduct learning** — how to run an activity *regardless of
+  artifact type*: a loop refinement, a reporting-format change, a conduct rule
+  (confidence wording, when to ask), an escalation path →
+  `references/mode-{overview,query,investigate}.md`. If it only holds for one
+  type, it belongs in that type's activity slot instead.
+- **CI retrieval learning** (fetching a job, parsing the job log, the artifact
+  layout) → `references/ci-retrieval.md`.
 
 ### Layering — the dependency direction is one-way
 
@@ -68,7 +79,11 @@ common/            (base: artifact-agnostic semantics, spec, FAPI, identifiers)
 per-type subtrees  (ocudu / pcap / amari-ue / viavi — observation of common)
    ▲
 correlate/         (composes per-type observations)
+   ▲
+mode-*.md          (generic playbooks, parametric over <kind>)
 ```
+
+(`ci-retrieval.md` is operational, not knowledge — it sits outside this stack.)
 
 - A `references/common/` doc must **not** reference `ocudu` / `pcap` / `amari-ue`
   / `viavi` / `correlate` (no `../../<type>/…` or `../correlate/…` paths). It may
@@ -79,6 +94,10 @@ correlate/         (composes per-type observations)
   an observation cites its semantics/ladder), but not into a sibling per-type
   subtree.
 - `correlate/` may link into both `common/` and the per-type subtrees it joins.
+- A `mode-*.md` playbook may link **down** to anything, but always *parametrically*
+  — `references/<kind>/investigate.md`, not a hard-coded type. Nothing links **up**
+  to a `mode-*.md`: a type subtree must never reference a playbook, because the
+  playbook is what loaded it.
 
 When adding to `common/`, the observation mapping lives on the artifact side: the
 per-type doc links up to the common ladder, not the other way round.
@@ -100,3 +119,9 @@ For every edit:
 On "reorganize <type> knowledge" (e.g. "reorganize pcap knowledge"): re-read all
 of `references/<type>/`, dedupe, fix stale tshark/grep syntax and dead pointers,
 and report a one-paragraph summary — each edit under the confirm flow above.
+
+On "reorganize the mode playbooks": re-read `references/mode-*.md` and
+`ci-retrieval.md`, dedupe against the per-type activity slots (generic mechanics
+belong in the playbook, type-specific detail in the slot — drift between them is
+the failure mode this split exists to prevent), fix dead pointers, and report the
+same way.

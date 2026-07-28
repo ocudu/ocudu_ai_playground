@@ -1,7 +1,7 @@
 # correlate — query slot
 
-Type-specific part of `references/mode-query.md` (which drives). Use this when the
-answer requires lining up ≥2 sources.
+Type-specific slot for the **query** activity; the driving playbook pulls this in.
+Use it when the answer requires lining up ≥2 sources.
 
 Read `cross-correlation.md` first if not already loaded — the join-key model below
 is only a summary of it.
