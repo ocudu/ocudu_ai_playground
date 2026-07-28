@@ -92,7 +92,7 @@ CFG_KEYS = (
 
 
 def _extract_cfg_echo(gnb_log) -> str:
-    """Pull the `[CONFIG] [D] Input configuration` YAML echo out of a gnb.log.
+    """Pull the `[CONFIG] [D] gNB input configuration` YAML echo out of a gnb.log.
     Used when no standalone ocudu_gnb.yml is present (e.g. a bare log file).
     Requires log.config_level: debug (else the echo is absent)."""
     if not gnb_log or not gnb_log.exists():
@@ -102,7 +102,7 @@ def _extract_cfg_echo(gnb_log) -> str:
     with open(gnb_log, encoding="utf-8", errors="replace") as f:
         for ln in f:
             if not capturing:
-                if "[CONFIG" in ln and "Input configuration" in ln:
+                if "[CONFIG" in ln and "gnb input configuration" in ln.lower():
                     capturing = True
                 continue
             if ts.match(ln):            # next real log line => echo ended

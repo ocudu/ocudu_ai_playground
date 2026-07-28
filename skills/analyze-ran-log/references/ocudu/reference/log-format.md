@@ -6,7 +6,7 @@
 
 ```
 2026-05-18T18:18:27.405677 [GNB     ] [I] Built in RelWithDebInfo mode using commit <sha> on branch <branch>
-2026-05-18T18:18:27.407955 [CONFIG  ] [D] Input configuration (all values):
+2026-05-18T18:18:27.407955 [CONFIG  ] [D] gNB input configuration (all values):
 gnb_id: 411
 gnb_id_bit_length: 32
 ran_node_name: ocudugnb01

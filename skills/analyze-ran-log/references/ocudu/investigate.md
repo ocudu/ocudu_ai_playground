@@ -56,5 +56,5 @@ work its checklist.
   deployment means the next check belongs in the *other* component's log, not
   deeper in this one.
 - Config-driven behaviour: compare `ocudu_gnb.yml` against the
-  `[CONFIG  ] [D] Input configuration` echo before blaming the code — the
+  `[CONFIG  ] [D] gNB input configuration` echo before blaming the code — the
   effective value after merges is what ran (see `query.md`).

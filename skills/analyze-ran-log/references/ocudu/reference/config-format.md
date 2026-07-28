@@ -10,7 +10,7 @@ document and **later keys override earlier ones**.
 
 This is what the user sees on disk — it is the **input**, not the effective
 config. The effective config (with defaults filled in) is echoed at the top of
-`gnb.log` under the `[CONFIG  ] [D] Input configuration (all values):` block.
+`gnb.log` under the `[CONFIG  ] [D] gNB input configuration (all values):` block.
 
 ### Reading shortcut
 
@@ -73,7 +73,7 @@ the `[CONFIG  ] [D]` echo at the top of `gnb.log`.
 | `log.phy_level: info` | info | PDCCH/PDSCH/PUCCH/PUSCH per-slot lines (very chatty) |
 | `log.sec_level: info` | warning | Logs K_gNB and derived keys (often blank when `hex_max_size: 0`) |
 | `log.hex_max_size: N` | 0 | Bytes of hex dump shown per PDU; 0 = none, 32 = trimmed, large = full |
-| `log.config_level: debug` | info | Includes the giant `[CONFIG  ] [D] Input configuration` echo |
+| `log.config_level: debug` | info | Includes the giant `[CONFIG  ] [D] gNB input configuration` echo |
 | `metrics.enable_log: true` | false | Emits `[METRICS]` rows in `gnb.log` |
 | `metrics.enable_json: true` | false | Writes `metrics.json` |
 | `metrics.autostart_stdout_metrics: true` | false | Prints the metrics table in `stdout.log` |

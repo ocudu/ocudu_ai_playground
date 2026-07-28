@@ -76,7 +76,7 @@ narrow (time window, UE id, cell) or spill to `ocudu-query-<sha>.txt`.
 
 **YAML/config questions** — look at **both** `ocudu_gnb.yml` (what the
 user/Retina supplied; search top-to-bottom because of duplicate-key, last-wins
-behaviour) **and** the `[CONFIG  ] [D] Input configuration` echo at the top of
+behaviour) **and** the `[CONFIG  ] [D] gNB input configuration` echo at the top of
 `gnb.log` (the effective value after defaults and merges). Mention both if they
 differ.
 
