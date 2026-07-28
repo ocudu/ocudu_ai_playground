@@ -20,10 +20,10 @@ Debugging is symptom-first, so the procedure docs split by role (mirroring the
   `general.md`), and the expected across-pcaps sequences + vocabulary for the
   procedures (sequence + cause-IE / trigger vocabulary **only**; failure markers
   live in the paired `troubleshooting/` doc).
-- top level — the entry point (`conventions.md`) and the methodology + failure
-  dispatch (`analysis-guide.md`).
+- top level — the entry point (`conventions.md`) and the three activity slots
+  (`overview.md`, `query.md`, `investigate.md`) that the mode playbooks pull from.
 
-The `analysis-guide.md` § Investigating a failure dispatch table maps each symptom
+The `investigate.md` § symptom → playbook dispatch table maps each symptom
 to the `troubleshooting/` doc to load.
 
 ## Resolve & scope

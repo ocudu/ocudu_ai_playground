@@ -20,7 +20,7 @@ Match the surrounding format; no dates/timestamps, no run-specific values.
   observation and links to its `../common/procedures/<name>.md` ladder.
 - a new procedure → add the paired `reference/<name>.md` (expected sequence +
   vocabulary) and `troubleshooting/<name>.md` (failure markers + checklist), and
-  add a row to `analysis-guide.md` § Investigating a failure; a new
-  `scripts/viavi/<name>.py` → document it in `analysis-guide.md` and/or the
+  add a row to `investigate.md` § symptom → playbook; a new
+  `scripts/viavi/<name>.py` → document it in `overview.md` / `query.md` and/or the
   procedure file
 - a script bug → fix it in `scripts/viavi/*.py`

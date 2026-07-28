@@ -1,63 +1,62 @@
-# Query mode
+# Query mode (playbook)
 
-Answer one specific question about the run. Classify it as **single-artifact**
-(delegate) or **cross-artifact** (correlate here). Stay tight; do not enter the
-investigation loop unless asked.
+Answer one specific question about the artifact(s). Stay tight; **do not** enter
+the investigation loop unless asked.
+
+Generic mechanics live here; the per-type specifics (search-script flags, the
+question→command table, which files to search) live in
+`references/<kind>/query.md`.
 
 ## Phase A — classify and scope
 
-Restate the question in one sentence. Decide:
+Restate the question in one sentence, then decide:
 
-- **Single-artifact** — the answer lives entirely in one artifact type. Use the
-  owning type (loaded via the `Skill` tool), then answer here
-  using its search script (follow its `references/<type>/analysis-guide.md`
-  § Answering a targeted question):
-  | Question example | Type |
+- **Single-artifact** — the answer lives entirely in one artifact type. Read
+  `references/<kind>/query.md` and use its search script / recipes.
+
+  | Question example | Kind |
   |---|---|
   | "How many handovers did the gNB do?" | `ocudu` |
   | "What was the UE's final NAS state?" | `amari-ue` |
   | "How many NGAP UEContextRelease in the pcap?" | `pcap` |
+  | "Did any random access fail on the tester?" | `viavi` |
 
-- **Cross-artifact** — the answer requires lining up ≥2 sources. Use
-  the `correlate` subtree (scripts under `scripts/correlate/`,
-  references under `references/correlate/`):
-  | Question example | Tool |
-  |---|---|
-  | "Did every PRACH/PUSCH the UE sent reach the gNB?" | `correlate/correlate_radio.py --kind pusch` (and `--kind prach`) |
-  | "Is the UE↔gNB↔pcap on the same clock?" | `correlate/align_clocks.py` |
-  | "Trace UE 0003 end to end" | `correlate/map_ue_ids.py` + `correlate/correlate_radio.py --rnti`, guided by the attach trace in the `correlate` subtree |
-  | "Which UE owns C-RNTI 0x4607 across the logs and pcap?" | `correlate/map_ue_ids.py`, guided by the identity model in the `correlate` subtree |
+- **Cross-artifact** — the answer requires lining up ≥2 sources. Read
+  `references/correlate/query.md`, which owns the cross-artifact question→script
+  table and the join-key model.
 
-Ask via `AskUserQuestion` only when scoping is genuinely ambiguous (e.g. a
-multi-UE run and the question names no UE → list candidate RNTIs/UE-IDs from the
-inventory).
+Scope by UE identifier **early** in multi-UE runs — the cross-product over UEs is
+large. Ask via `AskUserQuestion` only when scoping is genuinely ambiguous (e.g. a
+multi-UE run and the question names no UE → list the candidate RNTIs/UE-IDs from
+the inventory first, using the candidate-listing recipe in the type's
+`query.md`).
 
 ## Phase B — execute
 
-For cross-artifact questions, anchor on the right key (the clock/key model lives in
-the `correlate` subtree):
-- radio events → **(SFN.slot, RNTI)** at the PHY layer (exact);
-- UE identity → the Amarisoft UEID / C-RNTI chain (its correlate identity model);
-- CP events / pcap → wall-clock UTC (raw `frame.time_epoch`).
+Prefer the type's helper script over a hand-crafted grep/tshark chain. Reuse any
+cached output from a prior overview instead of re-running.
 
-Scope by `--rnti` early in multi-UE runs. Cap output; spill large tables to the
-`correlate-` prefixed cache file and report its path.
+Cap output at ~200 lines; spill anything larger to
+`<cache-dir>/<type>-query-<sha>.{txt,tsv}` and report the path (see `SKILL.md`
+§ Efficiency rules).
 
 ## Phase C — answer
 
-- Direct answer first sentence.
-- Evidence: the script/type used, the matched rows (slot, rnti, timestamps,
-  frame numbers), and which sources agreed.
-- If a single-artifact type answered it, attribute that and add any cross-source
-  caveat (e.g. "the gNB decoded it; the pcap confirms the F1AP forward at T+δ").
+- **Direct answer in the first sentence.**
+- Evidence: the script/filter used, and the matched rows — timestamps, line
+  numbers, frame numbers, slot/RNTI, whichever the type keys on.
+- If a single type answered it, attribute that, and add any cross-source caveat
+  worth stating (e.g. "the gNB decoded it; the pcap confirms the F1AP forward at
+  T+δ").
 - If unanswerable from the artifacts, say so and list what was tried.
 
 ## Exit criteria
 
-Question answered or marked unanswerable. Don't loop — let the user drive next.
+Question answered or marked unanswerable. **Don't loop** — let the user drive
+what's next. If the answer itself exposes a failure worth chasing, say so in one
+sentence and offer `mode-investigate.md`; don't start investigating unprompted.
 
 ## Persist learnings
 
-If you found a reusable cross-correlation recipe, persist it into this skill's
-`correlate` subtree (route per its self-maintenance). If the learning is
-single-artifact, route it to that type instead (see SKILL.md § Memory).
+Only if the session surfaced a reusable recipe — route it per
+`references/self-maintenance.md`.

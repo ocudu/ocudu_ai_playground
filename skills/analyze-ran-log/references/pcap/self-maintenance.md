@@ -20,8 +20,8 @@ Match the surrounding format; no dates/timestamps.
   sequence and points to its `troubleshooting/` sibling for diagnosis.
 - cross-protocol correlation pattern → `reference/cross-pcap-correlation.md`
 - a new procedure → add the `reference/<name>.md` + `troubleshooting/<name>.md`
-  pair and a dispatch row to `analysis-guide.md` § Investigating a failure
+  pair and a dispatch row to `investigate.md` § Investigating a failure
   pointing at the `troubleshooting/<name>.md`; a new `scripts/pcap/<name>.py` →
-  document it in `analysis-guide.md`, the `troubleshooting/` doc, and
+  document it in `overview.md` / `query.md`, the `troubleshooting/` doc, and
   `reference/protocols/<proto>.md` § Parsing script
 - a script bug → fix it in `scripts/pcap/*.py`

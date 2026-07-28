@@ -24,10 +24,10 @@ control/observation channel for an OCUDU test, not an OCUDU app log. See
   the expected-sequence / vocabulary procedure refs (sequence + vocabulary
   **only**; failure content lives in the paired `troubleshooting/` doc). Note
   `throughput.md` is a diagnostic with no `reference/` sibling.
-- top level — the entry point (`conventions.md`) and the methodology + failure
-  dispatch (`analysis-guide.md`).
+- top level — the entry point (`conventions.md`) and the three activity slots
+  (`overview.md`, `query.md`, `investigate.md`) that the mode playbooks pull from.
 
-The `analysis-guide.md` § Investigating a failure dispatch table maps each symptom
+The `investigate.md` § symptom → playbook dispatch table maps each symptom
 to the `troubleshooting/` doc to load.
 
 ## Resolve & scope

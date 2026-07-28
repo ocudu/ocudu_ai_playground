@@ -22,7 +22,7 @@ Match the surrounding format; no dates/timestamps.
   `../common/` (not here); a `reference/<name>.md` doc keeps only the UE-log
   observation and links to its `../../common/procedures/<name>.md` ladder.
 - a new procedure → add the `reference/<name>.md` + `troubleshooting/<name>.md`
-  pair and a dispatch row in `analysis-guide.md` § Investigating a failure
+  pair and a dispatch row in `investigate.md` § Investigating a failure
   pointing at `troubleshooting/<name>.md`; a new `scripts/amari-ue/<name>.py` →
-  document it in `analysis-guide.md` and/or the relevant doc
+  document it in `overview.md` / `query.md` and/or the relevant doc
 - a script bug → fix it in `scripts/amari-ue/*.py`

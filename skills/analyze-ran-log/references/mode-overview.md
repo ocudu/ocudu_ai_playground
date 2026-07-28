@@ -1,85 +1,103 @@
-# Overview mode
+# Overview mode (playbook)
 
-Produce one consolidated, factual overview of the whole run by summarizing each
-artifact through its own type and adding the cross-source (`correlate`) layer on
-top. Do not enter the investigation loop. Ask `AskUserQuestion` only at the end
-(escalation). Substitute `${CLAUDE_SKILL_DIR}` inline in the commands below — the
-shell doesn't persist env vars between calls.
+Produce one consolidated, factual overview: summarize each artifact through its
+own type, then add the cross-source layer on top. **Do not** enter the
+investigation loop. Ask `AskUserQuestion` only at the end (escalation).
+
+Generic mechanics live here; the per-type specifics (which summary script, which
+summary-block template) live in `references/<kind>/overview.md`. Substitute
+`${CLAUDE_SKILL_DIR}` inline in commands — the shell doesn't persist env vars
+between calls.
+
+## Conduct
+
+- **Factual, not diagnostic.** Report what the artifacts show. A suspicious
+  signal is an *anomaly bullet*, not a root cause — escalating is Phase E's job.
+- Run the scripts; **never** read a raw log or pcap into context.
+- One headline per component. Don't dump per-artifact detail into the overview —
+  the value is the consolidated picture.
+- Everything the scripts emit lands in the session cache. A later mode
+  (`mode-query.md` / `mode-investigate.md`) **reuses** it rather than re-running.
 
 ## Phase A — inventory
+
+Resolve the input if not already done (`SKILL.md` § Resolve & classify). For a
+whole run, that is:
 
 ```bash
 python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/resolve.py <run-dir>
 ```
 
 Note which components and artifacts are present and their clock anchors. This
-drives everything below.
+drives everything below. A single-artifact input skips straight to Phase B for
+its one type.
 
 ## Phase B — per-artifact summaries
 
-For each component present, use the matching type, then produce
-the per-artifact overview here using that type's summary script (follow its
-`references/<type>/analysis-guide.md` § Producing an overview):
+For **each component present**, read that type's slot and follow it:
 
-- OCUDU app component → `ocudu` (run
-  `${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_summary.py` on the `gnb.log`/run dir)
-- `amarisoft-ue-*` → `amari-ue` (run `${CLAUDE_SKILL_DIR}/scripts/amari-ue/ue_log_summary.py`)
-- `*.pcap` present → `pcap` (run `${CLAUDE_SKILL_DIR}/scripts/pcap/pcap_overview.py` on the run dir's pcaps)
-- `amarisoft-5gc-*` → light-touch here: grep `mme.log` for registration /
-  PDU-session / NGAP / `[E]` lines (cap at 200 lines); note the future
-  `amari-5gc` type.
+```
+references/<kind>/overview.md
+```
 
-Capture one headline per component; don't dump raw per-artifact detail.
+It names the summary script to run and the summary-block template to fill.
+Map component → kind with the table in `SKILL.md` § Resolve & classify
+(`ocudu-*` → `ocudu`, `amarisoft-ue-*` → `amari-ue`, `*.pcap` → `pcap`,
+`*_Command_Log*` → `viavi`).
+
+`amarisoft-5gc-*` has no type yet — light-touch only: grep `mme.log` for
+registration / PDU-session / NGAP / `[E]` lines, capped at 200 lines.
+
+Capture one headline per component.
 
 ## Phase C — cross-source alignment
 
-```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/align_clocks.py <run-dir>
-```
-
-`align_clocks` checks log↔pcap (Δ≈0, same process) and UE↔gNB PHY slot alignment.
-Off-host sources (VIAVI tester, remote 5GC, a UE sim on another box) may be
-offset — surface a non-trivial Δ as an anomaly; the (SFN.slot, RNTI) join doesn't
-depend on it. (Clock model: the `correlate` subtree.)
+Only when ≥2 components are present. Read `references/correlate/overview.md` and
+follow it — it owns the clock/slot alignment step and the list of cross-source
+anomalies that no single artifact can reveal.
 
 ## Phase D — consolidated overview block
 
-Present one block:
+For a **single artifact**, present that type's own summary block from
+`references/<kind>/overview.md` and stop.
+
+For a **whole run**, present one consolidated block:
 
 ```
-## OCUDU Run Overview
+## RAN Run Overview
 
 **Path:** <run-dir>
 **Components:** gNB (<build>), UE (<n> UEs), 5GC (<type>), pcaps: <list>
-**Clocks:** all UTC; log↔pcap Δ <x> ms; UE↔gNB PHY slots aligned
+**Clocks:** <from references/correlate/overview.md>
 
 ### Per-component
-- gNB:  <one-line headline from ocudu>
-- UE:   <one-line headline from amari-ue>
-- pcap: <one-line headline from pcap>
+- gNB:  <one-line headline>
+- UE:   <one-line headline>
+- pcap: <one-line headline>
 - 5GC:  <registration/PDU-session counts; errors>
 
 ### Cross-source picture
-- Attach/release counts reconciled across UE ↔ gNB ↔ pcap
-- Radio: <PUSCH rx-ok / rx-ko / contention from correlate_radio.py, if run>
-- Timeline headline: first PRACH → attach → traffic → release
+- <reconciled counts, radio summary, timeline headline>
 
-### Cross-source anomalies
+### Anomalies
 - <bullet per anomaly, or "None">
 ```
 
-Cross-source anomalies are the value-add — things no single artifact type can see:
-- UE reached REGISTERED but the gNB has no matching UE context (or vice-versa).
-- pcap shows a release/cause the logs don't, or counts disagree.
-- gNB PUSCH `crc=KO` where the UE logged a transmission (real decode issue, not DTX).
-- Clock/slot misalignment from `align_clocks.py`.
-- UE count vs gNB `UE created` count vs NGAP `InitialUEMessage` count disagree.
+Per-component headlines come from Phase B; the cross-source picture and its
+anomalies come from Phase C.
 
 ## Phase E — optional escalation
 
 If anomalies were found, end with a single `AskUserQuestion`:
-- **Investigate** — enter investigation mode on the first anomaly.
-- **Query** — ask a specific question.
+
+- **Investigate** — read `mode-investigate.md` and enter it on the first anomaly,
+  reusing the cached script output from Phase B/C (don't re-run).
+- **Query** — read `mode-query.md` and answer a specific question.
 - **Done** — no further analysis.
 
 Do not ask if the run was clean — end with the overview.
+
+## Persist learnings
+
+Only if the session surfaced something generalisable — route it per
+`references/self-maintenance.md`.

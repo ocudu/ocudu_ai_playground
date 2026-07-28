@@ -31,11 +31,12 @@ Debugging is symptom-first, so the docs split by role:
   reestablishment, release). Procedure docs hold the **sequence + vocabulary
   only**; their failure markers and checklists live in the paired
   `troubleshooting/` doc.
-- top level — the entry point (`conventions.md`), the methodology + failure
-  dispatch (`analysis-guide.md`), the latency profiler (`latency-profiling.md`),
+- top level — the entry point (`conventions.md`), the three activity slots
+  (`overview.md`, `query.md`, `investigate.md`) that the mode playbooks pull from,
+  the latency profiler (`latency-profiling.md`),
   and how to escalate to the OCUDU source tree (`source-code.md`).
 
-The `analysis-guide.md` § Investigating a failure dispatch table maps each symptom
+The `investigate.md` § symptom → playbook dispatch table maps each symptom
 to the doc to load.
 
 ## Deeper knowledge — the OCUDU source docs

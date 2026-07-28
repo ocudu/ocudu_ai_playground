@@ -26,10 +26,10 @@ Debugging is symptom-first, so the docs split by role:
   `config-format.md`) and the expected-sequence procedure refs (sequence +
   vocabulary **only**; failure content lives in the paired `troubleshooting/`
   doc).
-- top level — the entry point (`conventions.md`) and the methodology + failure
-  dispatch (`analysis-guide.md`).
+- top level — the entry point (`conventions.md`) and the three activity slots
+  (`overview.md`, `query.md`, `investigate.md`) that the mode playbooks pull from.
 
-The `analysis-guide.md` § Investigating a failure dispatch table maps each symptom
+The `investigate.md` § symptom → playbook dispatch table maps each symptom
 to the `troubleshooting/` doc to load.
 
 ## Resolve & scope

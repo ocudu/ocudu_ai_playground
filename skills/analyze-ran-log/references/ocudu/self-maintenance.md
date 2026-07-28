@@ -22,10 +22,10 @@ Match the surrounding format; no dates/timestamps.
   `../common/` (not here); a `reference/<name>.md` doc keeps only the gNB-log
   observation and links to its ladder there — from the `reference/` subdir that is
   `../../common/procedures/<name>.md`.
-- a new symptom-reachable playbook → add a dispatch row to `analysis-guide.md`
-  § Investigating a failure pointing at the `troubleshooting/<name>.md` (which in
+- a new symptom-reachable playbook → add a dispatch row to `investigate.md`
+  § symptom → playbook pointing at the `troubleshooting/<name>.md` (which in
   turn cites its `reference/` sequence sibling); a new `scripts/ocudu/<name>.py` →
-  document it in `analysis-guide.md` and/or the relevant doc
+  document it in `overview.md` / `query.md` and/or the relevant doc
 - how/where to load the OCUDU source tree (locations, permission model,
   navigation) → `source-code.md`
 - a script bug → fix it in `scripts/ocudu/*.py`
