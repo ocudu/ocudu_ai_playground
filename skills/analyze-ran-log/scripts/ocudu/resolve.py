@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     report = build_report(Path(args.path))
-    print(json.dumps(report, indent=2) if args.json else render_text(report))
+    print(json.dumps({**report, "verdict": "OK" if report.get("ok") else "BAIL"}, indent=2) if args.json else render_text(report))
     return 0 if report["ok"] else 1
 
 

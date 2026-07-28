@@ -191,11 +191,7 @@ def main(argv: list[str]) -> int:
 
     print(f"kind: {kind} ({reason})")
     print(f"-> read references/{kind}/")
-    if kind == "correlate":
-        # The correlate subtree has no conventions.md; point at its entry doc.
-        print("-> start at: references/correlate/cross-correlation.md")
-    else:
-        print(f"-> conventions: references/{kind}/conventions.md")
+    print(f"-> conventions: references/{kind}/conventions.md")
     print()
     sys.stdout.flush()  # ensure the headline precedes the delegate's output when piped
 

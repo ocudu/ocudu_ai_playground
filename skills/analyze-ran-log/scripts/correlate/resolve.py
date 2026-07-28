@@ -196,9 +196,11 @@ def render_text(inv: dict) -> str:
                              f"({len(ue_items)} testbed slots — NOT simulated-UE count, "
                              f"see amari-ue resolve for that)")
     lines.append("")
-    lines.append("Clock note: all logs (gnb/ue/mme) and pcap frame.time_epoch are UTC and")
-    lines.append("directly comparable. capinfos/tshark DISPLAY in local TZ — use raw")
-    lines.append("frame.time_epoch. PHY (SFN.slot, RNTI) is the exact cross-source radio key.")
+    lines.append("Clock note: same-process sources (a component's log and the pcaps it")
+    lines.append("wrote) share a clock, Δ≈0. Off-host sources (VIAVI tester, a remote 5GC, a")
+    lines.append("UE sim on another box) may be genuinely offset — do NOT compare wall-clocks")
+    lines.append("until Δ is known. capinfos/tshark DISPLAY in local TZ — use raw")
+    lines.append("frame.time_epoch. PHY (SFN.slot, RNTI) is the exact, clock-independent key.")
     return "\n".join(lines)
 
 
@@ -221,7 +223,9 @@ def main(argv=None) -> int:
         print("verdict: BAIL")
         return 1
     if args.json:
-        print(json.dumps(inv, indent=2))
+        # Mirror the text render's verdict line so both modes honour the
+        # documented "bail if the verdict is not OK" contract.
+        print(json.dumps({**inv, "verdict": "OK"}, indent=2))
     else:
         print(render_text(inv))
         print("\nverdict: OK")

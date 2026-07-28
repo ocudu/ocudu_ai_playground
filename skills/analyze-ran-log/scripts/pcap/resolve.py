@@ -160,7 +160,7 @@ def main(argv: list[str] | None = None) -> int:
     res = resolve(given)
     if res.get("bail"):
         report.update(bail=res["bail"], ok=False)
-        print(json.dumps(report, indent=2) if args.json else render_text(report))
+        print(json.dumps({**report, "verdict": "OK" if report.get("ok") else "BAIL"}, indent=2) if args.json else render_text(report))
         return 1
     report.update(res)
 
@@ -168,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
         report["tshark"] = tshark_version()
     except utils.TsharkError as e:
         report.update(ok=False, bail=str(e), files=[])
-        print(json.dumps(report, indent=2) if args.json else render_text(report))
+        print(json.dumps({**report, "verdict": "OK" if report.get("ok") else "BAIL"}, indent=2) if args.json else render_text(report))
         return 1
 
     files = [check_pcap(t) for t in res["targets"]]
@@ -177,7 +177,7 @@ def main(argv: list[str] | None = None) -> int:
     report["files"] = files
     report["ok"] = all(f["ok"] for f in files)
 
-    print(json.dumps(report, indent=2) if args.json else render_text(report))
+    print(json.dumps({**report, "verdict": "OK" if report.get("ok") else "BAIL"}, indent=2) if args.json else render_text(report))
     return 0 if report["ok"] else 1
 
 

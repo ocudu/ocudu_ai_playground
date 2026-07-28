@@ -21,6 +21,7 @@ Usage:
 
 from __future__ import annotations
 
+import datetime
 import json
 import re
 import sys
@@ -532,8 +533,11 @@ def ts_delta_seconds(t1: str, t2: str) -> float | None:
     try:
         def to_sec(t):
             date, tod = t.split("T")
+            y, mo, d = (int(x) for x in date.split("-"))
             h, m, s = tod.split(":")
-            return int(h) * 3600 + int(m) * 60 + float(s)
+            # Days-since-epoch keeps the delta correct across a midnight boundary.
+            days = datetime.date(y, mo, d).toordinal()
+            return days * 86400 + int(h) * 3600 + int(m) * 60 + float(s)
         return to_sec(t2) - to_sec(t1)
     except Exception:
         return None

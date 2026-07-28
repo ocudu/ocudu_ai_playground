@@ -18,6 +18,9 @@ UL kinds (PUSCH/PUCCH/PRACH — UE transmits, gNB receives):
                              channel issue or ZMQ sample misalignment (NOT a DTX)
   - rx-ko/ue-silent        : gNB crc=KO, sinr=inf, UE logged no TX -> DTX
   - rx-ko/ue-missing       : gNB crc=KO, finite sinr, no UE TX matched
+  - ue-missing-tx          : gNB decoded a transmission (crc=OK) the UE has no
+                             record of sending -> suspect the join, the ref-date,
+                             or a truncated ue.log; re-check before concluding
   - gnb-missing            : UE transmitted but no gNB event near it in time
   - ue-extra-tx/contention : a 2nd UE TX on a (slot,rnti) the gNB already paired
                              (RACH contention; expected, not an anomaly)
@@ -213,7 +216,7 @@ def correlate(gnb_log, ue_log, kind, rnti_filter, ref_date):
         for g in g_only:
             if is_ul:
                 # gNB event with no matching UE TX in window
-                status = "ue-missing" if g.get("crc") in ("OK", None) else classify_ko(g, None)
+                status = "ue-missing-tx" if g.get("crc") in ("OK", None) else classify_ko(g, None)
             else:
                 # DL: gNB transmitted but the UE logged no reception -> UE missed it.
                 status = "ue-missing-rx"
@@ -244,7 +247,7 @@ def correlate(gnb_log, ue_log, kind, rnti_filter, ref_date):
 # multi-UE RACH and is NOT listed here (it's normal contention, not a fault).
 ANOMALY_STATUSES = {
     "gnb-missing", "rx-ko/ue-tx", "rx-ko/ue-silent", "rx-ko/ue-missing",
-    "ue-missing-rx",
+    "ue-missing-tx", "ue-missing-rx",
 }
 
 
@@ -307,7 +310,7 @@ def main(argv=None) -> int:
     rows, counts = correlate(gnb_log, ue_log, args.kind, rnti_filter, ref_date)
     print(f"\n{args.kind.upper()} correlation on (SFN.slot, RNTI):")
     total = sum(counts.values())
-    print(f"  total joined slots: {total}")
+    print(f"  total correlated events: {total}")
     for status, n in counts.most_common():
         print(f"    {n:6d}  {status}")
 

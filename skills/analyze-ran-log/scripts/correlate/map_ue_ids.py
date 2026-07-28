@@ -97,7 +97,7 @@ def _detect_protocol(orig_name, probe_path=None):
             if proto in line.lower():
                 return proto
     raise SystemExit(
-        f'Cannot detect protocol in {pcap_file!r}. '
+        f'Cannot detect protocol in {orig_name!r}. '
         'File name or content must contain ngap, f1ap, or e1ap.'
     )
 
