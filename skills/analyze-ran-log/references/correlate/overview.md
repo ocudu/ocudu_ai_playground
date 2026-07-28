@@ -1,0 +1,62 @@
+# correlate — overview slot
+
+Type-specific part of `references/mode-overview.md` (which drives). This is the
+cross-source layer added **on top of** the per-component summaries, and it is the
+value-add of a whole-run overview: things no single artifact can see.
+
+Read `cross-correlation.md` first if not already loaded.
+
+## clock / slot alignment
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/align_clocks.py <run-dir>
+```
+
+Checks log↔pcap (expected Δ≈0 — same process) and UE↔gNB PHY slot alignment, and
+distinguishes decode latency from genuine clock skew.
+
+Off-host sources (VIAVI tester, remote 5GC, a UE sim on another box) may be
+genuinely offset — surface a non-trivial Δ as an anomaly rather than silently
+correcting for it. The `(SFN.slot, RNTI)` join does not depend on it.
+
+## radio reconciliation (optional)
+
+When the run has PHY-level data on both sides and the overview should state
+whether the air interface was healthy:
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/correlate_radio.py <run-dir> --kind pusch
+```
+
+Reports rx-ok / rx-ko / missing / contention. Skip for a quick overview; include
+when the per-component summaries already flagged PHY anomalies.
+
+## cross-source block
+
+Feeds the *Clocks*, *Cross-source picture* and *Anomalies* parts of
+`mode-overview.md` Phase D:
+
+```
+**Clocks:** all UTC; log↔pcap Δ <x> ms; UE↔gNB PHY slots aligned | offset <n> slots
+
+### Cross-source picture
+- Attach/release counts reconciled across UE ↔ gNB ↔ pcap
+- Radio: <PUSCH rx-ok / rx-ko / contention, if correlate_radio.py was run>
+- Timeline headline: first PRACH → attach → traffic → release
+```
+
+## cross-source anomalies
+
+The ones worth calling out, because no single type can see them:
+
+- UE reached REGISTERED but the gNB has no matching UE context (or vice-versa).
+- pcap shows a release/cause the logs don't, or the counts disagree.
+- gNB PUSCH `crc=KO` where the UE logged a transmission — a real decode issue, not
+  UE DTX.
+- Clock or PHY-slot misalignment reported by `align_clocks.py`.
+- UE count vs gNB `UE created` count vs NGAP `InitialUEMessage` count disagree.
+  For "how many UEs", use `amari-ue`'s cfg-derived count, **not** the testbed map's
+  `amarisoft-ue-N` slot range (slots ≠ simulated UEs).
+
+Count disagreement localises *where* UEs are lost — that pointer is the useful
+output, not the raw tallies.
