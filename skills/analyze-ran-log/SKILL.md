@@ -15,7 +15,7 @@ description: >
   does OCUDU log a handover").
 version: 0.2.0
 user-invocable: true
-allowed-tools: Bash(python3 *analyze-ran-log/scripts*), Bash(python3 -m zipfile *), Bash(python3 -c:*), Bash(LC_ALL=C grep:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(git worktree:*), Bash(curl:*), Bash(glab:*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sed:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(comm:*), Bash(capinfos:*), Bash(tshark:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Skill, Edit, Write
+allowed-tools: Bash(python3 *analyze-ran-log/scripts*), Bash(python3 -m zipfile *), Bash(LC_ALL=C grep:*), Bash(git log:*), Bash(git show:*), Bash(git diff:*), Bash(git status:*), Bash(git rev-parse:*), Bash(git worktree:*), Bash(curl:*), Bash(glab:*), Bash(ls:*), Bash(grep:*), Bash(find:*), Bash(file:*), Bash(stat:*), Bash(wc:*), Bash(head:*), Bash(tail:*), Bash(sed:*), Bash(sort:*), Bash(uniq:*), Bash(awk:*), Bash(comm:*), Bash(capinfos:*), Bash(tshark:*), Bash(realpath:*), Bash(sha256sum:*), Bash(cat:*), Skill, Edit, Write
 ---
 
 # Analyze a RAN log / capture / run
