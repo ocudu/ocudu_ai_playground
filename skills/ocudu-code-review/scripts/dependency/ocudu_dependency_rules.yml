@@ -11,11 +11,38 @@ version: 1
 
 rules:
   - id: mac-must-not-depend-on-du
-    from: "lib/mac/**"
-    to: "include/ocudu/du/**"
+    from:
+      - "lib/mac/**"
+      - "include/ocudu/mac/**"
+    to:
+      - "include/ocudu/du/**"
+      - "lib/du/**"
     reason: >
       MAC sits below the DU manager. Including DU headers inverts the layering
       and drags DU configuration types into the cell-processing path.
+
+  - id: rlc-must-not-depend-on-du
+    from:
+      - "lib/rlc/**"
+      - "include/ocudu/rlc/**"
+    to:
+      - "include/ocudu/du/**"
+      - "lib/du/**"
+    reason: >
+      RLC sits below the DU manager. Including DU headers inverts the layering
+      and couples per-bearer processing to DU-level configuration types.
+
+  - id: f1ap-must-not-depend-on-du
+    from:
+      - "lib/f1ap/**"
+      - "include/ocudu/f1ap/**"
+    to:
+      - "include/ocudu/du/**"
+      - "lib/du/**"
+    reason: >
+      F1AP is a transport-facing subsystem driven by the DU manager, not a
+      consumer of it. Including DU headers inverts that direction and prevents
+      F1AP from being built or tested without the DU manager.
 
   - id: subsystem-private-headers-are-private
     kind: peer-isolation
@@ -53,3 +80,11 @@ rules:
       Applications compose subsystems through their public interfaces under
       include/ocudu/. Reaching into lib/ pins an app to one subsystem's
       internal layout.
+
+  - id: apps-must-not-depend-on-tests
+    from: "apps/**"
+    to: "tests/**"
+    reason: >
+      Shipped applications must not include test fixtures or doubles: it drags
+      test-only code into the release build and makes the app unbuildable when
+      testing is disabled.
