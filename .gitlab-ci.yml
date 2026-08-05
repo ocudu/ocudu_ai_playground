@@ -66,3 +66,17 @@ skill links:
           - "scripts/check_skill_links.py"
           - ".claude-plugin/marketplace.json"
           - "README.md"
+
+script tests:
+  stage: static
+  image: python:3.12-alpine
+  before_script:
+    - pip install pyyaml
+  script:
+    - python3 -m unittest discover -s tests -p "test_*.py" -v
+  rules:
+    - if: $ON_MR
+      changes:
+        paths:
+          - "skills/**/*"
+          - "tests/**/*"

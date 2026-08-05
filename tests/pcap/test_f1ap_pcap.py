@@ -17,6 +17,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import unittest
@@ -36,6 +37,7 @@ def run_json(script: str, *args: str) -> list:
     return json.loads(proc.stdout[proc.stdout.find("["):])
 
 
+@unittest.skipUnless(shutil.which("tshark"), "tshark not installed")
 class F1apPcapTest(unittest.TestCase):
     def test_f1ap_messages(self):
         records = run_json("f1ap_messages.py")
