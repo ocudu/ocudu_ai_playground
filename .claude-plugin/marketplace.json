@@ -16,6 +16,11 @@
       "name": "analyze-ran-log",
       "description": "Analyze, summarize, query, or root-cause RAN test artifacts — OCUDU gnb/du/cu logs and configs, Amarisoft UE logs, VIAVI RU-simulator logs, NGAP/F1AP/E1AP/MAC/RLC pcaps — and correlate them across a whole run.",
       "source": "./skills/analyze-ran-log"
+    },
+    {
+      "name": "ocudu-code-review",
+      "description": "Review OCUDU C++ changes — a diff, a branch or a GitLab MR — for correctness and conventions, real-time-path safety, security, and forbidden include dependencies.",
+      "source": "./skills/ocudu-code-review"
     }
   ]
 }
