@@ -87,6 +87,3 @@ comm -23 "$C/ocudu-created.txt" "$C/ocudu-ics-done.txt"
 - `phy-issues.md` — PRACH / MSG3 radio-side failures.
 - `../../common/procedures/random-access.md` § 2-step RA type — MsgA/MsgB ladder
   and the two spec-legal MsgB formats.
-- `../../correlate/procedures/attach-end-to-end.md` § 2-step RA notes —
-  cross-artifact attribution when the UE never receives the follow-up C-RNTI
-  PDSCH after MsgB.

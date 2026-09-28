@@ -53,8 +53,7 @@ cleanly but then never receives the follow-up C-RNTI-addressed PDSCH, do not
 assume the network's choice of `S=0` was the defect** — check which format the
 gNB actually used (its `tbs` — 12 bytes is the fixed successRAR-only size) before
 concluding anything, and treat "UE never resumes PDCCH monitoring under the new
-C-RNTI" as a live, equally-likely hypothesis on the **UE** side (see
-`../../correlate/procedures/attach-end-to-end.md` § 2-step RA notes).
+C-RNTI" as a live, equally-likely hypothesis on the **UE** side.
 
 ## Observation notes
 

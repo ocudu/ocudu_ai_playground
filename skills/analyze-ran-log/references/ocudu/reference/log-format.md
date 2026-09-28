@@ -129,7 +129,7 @@ state transitions:
 | `reconfigurationWithSync` *(in RRC body, multi-line)* | Handover command body |
 | `HandoverRequired` / `HandoverCommand` / `HandoverRequest` / `HandoverRequestAcknowledge` *(NGAP)* | Inter-gNB handover signaling |
 | `reestablishmentRequest` / `rrcReestablishment` / `rrcReestablishmentComplete` *(RRC)* | RRC reestablishment (post-RLF) |
-| `RLF detected. Cause: N consecutive undecoded CSIs` *(in `[MAC]`)* / `RLF detected with cause "..."` *(in `[DU-MNG]`)* | Explicit RLF marker (this build logs it — don't assume it's absent; see `../../correlate/procedures/radio-link-failure.md`). Two distinct triggers exist: UL HARQ-KO (`max_consecutive_kos`, PUSCH) and consecutive undecoded PUCCH format-2 CSI reports — name which one fired |
+| `RLF detected. Cause: N consecutive undecoded CSIs` *(in `[MAC]`)* / `RLF detected with cause "..."` *(in `[DU-MNG]`)* | Explicit RLF marker (this build logs it — don't assume it's absent). Two distinct triggers exist: UL HARQ-KO (`max_consecutive_kos`, PUSCH) and consecutive undecoded PUCCH format-2 CSI reports — name which one fired |
 
 ### Common structured fields
 
