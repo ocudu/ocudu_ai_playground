@@ -28,6 +28,7 @@ ever emitted:
 | Step 6 missing (MSG4/ConRes never scheduled) | UE created but no `CON_RES` DL PDU; `ra-ContentionResolutionTimer` expires | Fallback scheduling → `ue-fallback-scheduling-issues.md` |
 | Step 8 missing | `InitialULRRCMessageTransfer` arrived but `UE created` not logged | CU-CP rejected the UE — check warnings; could be `max_nof_ues` hit |
 | Step 11 missing (but Msg4 was sent) | `rrcSetupComplete` never seen | UE didn't decode/ACK Msg4, or NAS PDU encoding failed (UE/UL side) |
+| Step 11 missing, **2-step RA** (`MsgB: ... tbs=12` in `[SCHED]`, not a 4-step `RAR`) | UE ACKed MsgB/successRAR (PUCCH `ack=1`) but the follow-up PDSCH under the new `c-rnti` (carrying `RRCSetup`) is HARQ-retransmitted and discarded, never ACKed | See `../../common/procedures/random-access.md` § 2-step RA type before concluding anything — `S=0` (successRAR without piggybacked RRC) is a spec-legal MsgB format, **not** itself the bug; check whether the UE/test-rig resumes PDCCH monitoring under the fresh C-RNTI (UE/test-rig-side candidate) vs. the gNB's search-space config for that C-RNTI (gNB-side candidate) |
 | Step 15 missing | NAS exchange stalls between RRC and `InitialContextSetupRequest` | AMF auth failure (check `amf_ue` ID transition), 5GC issue |
 | Step 30 missing | `"Initial Context Setup Routine"` logged `initialized` but never `finished successfully` | UE didn't reply to securityMode / Reconfiguration; or bearer setup failed in E1AP → `no-user-plane.md` |
 | Step 31 then immediate UEContextRelease from AMF | NAS rejected the request | Check `cause` IE in `UEContextReleaseCommand` → `ue-release-issues.md` |
@@ -84,3 +85,8 @@ comm -23 "$C/ocudu-created.txt" "$C/ocudu-ics-done.txt"
 - `ue-fallback-scheduling-issues.md` — MSG4/ConRes never scheduled (step 6).
 - `no-user-plane.md` — attach reached RRC but DRBs/data never came up.
 - `phy-issues.md` — PRACH / MSG3 radio-side failures.
+- `../../common/procedures/random-access.md` § 2-step RA type — MsgA/MsgB ladder
+  and the two spec-legal MsgB formats.
+- `../../correlate/procedures/attach-end-to-end.md` § 2-step RA notes —
+  cross-artifact attribution when the UE never receives the follow-up C-RNTI
+  PDSCH after MsgB.

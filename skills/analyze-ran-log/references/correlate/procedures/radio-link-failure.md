@@ -8,12 +8,28 @@ this — `gnb.log` alone cannot tell a UE DTX from a gNB decode miss.
 ## Step 1 — locate the failure window
 
 Get the RNTI and the approximate time from the symptom (or from
-`ocudu` flagging a reestablishment). In these builds the gNB does **not** print an
-explicit "RLF detected" line — the failure is inferred from the reestablishment it
-triggers: the UE logs `CCCH UL rrcReestablishmentRequest` and the gNB logs
-`"RRC Reestablishment Procedure" for old c-rnti=0x<RNTI> ... started`. The
-HARQ-KO threshold that drives this is the `max_consecutive_kos` config value
-(commonly 100), not a logged event.
+`ocudu` flagging a reestablishment). Some builds print an explicit RLF marker —
+check for it first, it names the trigger directly:
+
+```text
+[MAC     ] [I] ue=N: RLF detected. Cause: <N> consecutive undecoded CSIs
+[DU-MNG  ] [W] ue=N rnti=0x<RNTI>: RLF detected with cause "MAC max consecutive undecoded CSIs reached". Timer of 1000 msec to release UE started...
+```
+
+(there is an equivalent UL-HARQ-KO cause line too — grep `RLF detected` broadly,
+don't assume the wording). If no such line is present (older builds may not log
+it), fall back to inferring the failure from the reestablishment it triggers:
+the UE logs `CCCH UL rrcReestablishmentRequest` and the gNB logs
+`"RRC Reestablishment Procedure" for old c-rnti=0x<RNTI> ... started`. Either
+way, note **which** consecutive-failure counter tripped — UL HARQ KOs
+(`max_consecutive_kos`, PUSCH) and consecutive undecoded CSI reports (PUCCH
+format 2) are two distinct RLF triggers with different implications: a HARQ-KO
+RLF means the UE's UL PUSCH stopped landing; an undecoded-CSI RLF means the
+gNB stopped receiving *any* PUCCH format-2 report from the UE at all — which is
+also what you'll see if the UE never completed RRC connection in the first
+place (e.g. it never got the DL message that would have told it to keep
+transmitting) rather than a mid-call radio drop. Don't conflate the two just
+because both end in "RLF".
 
 ## Step 2 — classify the UL failure across sources
 

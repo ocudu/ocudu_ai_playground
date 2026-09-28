@@ -16,6 +16,29 @@ naming the join key at each hop. Per-side detail lives in the per-type subtrees
 | Security + caps | — | `[RRC] securityModeCommand/Complete`, `ueCapabilityEnquiry/Information` | `f1ap` DL/UL RRC transfer | C-RNTI |
 | ICS + bearer | `[PHY]` DRB traffic begins | `[CU-CP] "Initial Context Setup Routine" finished`; `[CU-CP-E1] BearerContextSetup` | `e1ap` BearerContextSetup; `ngap` ICSResponse | `cu_cp_ue` ↔ `cu_up_ue` |
 
+## 2-step RA (MsgA/MsgB) notes
+
+If PRACH/Msg3 rows above don't match (the run uses `two_step_rach`/`msgA`/`msgB`
+config), see `../../common/procedures/random-access.md` § 2-step RA type for the
+message ladder and the MAC PDU formats. Cross-artifact join keys:
+
+| Step | UE log (`ue.log`) | gNB log (`gnb.log`) | Join key |
+|---|---|---|---|
+| MsgA | `[PHY] UL <ueid> 00 - <slot> PRACH: ... two_steps=1` + `[MAC] UL ... LCID:52` (CCCH) | `[SCHED] ...: MsgB: msgb-rnti=0xM ... tbs=T` (T=12 → successRAR-only, no piggybacked SDU) | msgb-rnti |
+| MsgB | `[MAC] DL - 00 MSGB: uecri=0x... mac_sdu=0` (0 = no SDU, `S=0` path) + `[PHY] UL ... PUCCH format=1 ... ack=1` (UE ACKed it) | `[RRC] CCCH DL rrcSetup` logged, then a **separate** PDSCH scheduled under the new `c-rnti` (`[MAC] DL PDU: ue=N rnti=0x... size=... SDU: lcid=0`) | c-rnti (freshly assigned in the successRAR) |
+
+**Attribution caution:** if the UE ACKs MsgB/successRAR but then shows **no**
+PDCCH/PDSCH activity at all for the new C-RNTI across the gNB's retransmissions
+(not just a near-miss on one slot), that is a clean one-sided signal — the gNB
+transmitted, the UE never received. Before blaming the gNB's choice of MsgB
+format: `S=0` (successRAR-only, `tbs=12`) is spec-legal per TS 38.321 §6.1.5a,
+*not* a defect (see the ladder doc). The live hypotheses are instead: (a) the
+UE/test-rig (e.g. a specific Amarisoft build — check the pinned version in the
+CI job trace) fails to resume PDCCH monitoring under a freshly-applied C-RNTI
+after successRAR, or (b) the gNB's search-space/CORESET config for that C-RNTI
+in the immediately-following slot is wrong. Don't conclude which without
+checking both.
+
 ## How to drive it
 
 1. Pick the UE: Amarisoft UEID (UE log) or C-RNTI. Use `ue-identity-map.md` to
@@ -39,3 +62,4 @@ naming the join key at each hop. Per-side detail lives in the per-type subtrees
 | RRC stops after setup, no NGAP InitialUEMessage | gNB has rrcSetupComplete but NGAP pcap lacks InitialUEMessage | gNB↔AMF (NGAP) — delegate to `pcap` |
 | InitialUEMessage but no ICS | NGAP has no InitialContextSetupRequest back | 5GC — check `mme.log` (light-touch) |
 | RACH contention (multi-UE) | `ue-extra-tx/contention` rows | expected; not a fault |
+| 2-step RA: UE ACKs MsgB but follow-up C-RNTI PDSCH (RRCSetup) never received, UE `T300` expires | gNB retransmits the PDSCH (HARQ retx up to max, then discards); UE log shows zero PDCCH/PDSCH for the new C-RNTI | UE-side PDCCH-monitoring-on-new-C-RNTI bug (check UE/test-rig build) **or** gNB search-space config — not simply "the gNB used `S=0`" (see § 2-step RA notes above) |

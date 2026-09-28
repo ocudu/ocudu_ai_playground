@@ -106,7 +106,8 @@ state transitions:
 | `SIB1 cell=N: { ... }` | Cell broadcast config dumped (one big JSON block per cell) |
 | `==== gNB started ===` *(in stdout.log only)* | Service ready to accept UEs |
 | `Cell creation idx=N` *(in `[SCHED]`)* | First slot tick for that cell |
-| `prach(ra-rnti=0xN preamble=N tc-rnti=0xN)` *(in `[SCHED]`)* | RA preamble detected → MSG2 scheduled |
+| `prach(ra-rnti=0xN preamble=N tc-rnti=0xN)` *(in `[SCHED]`)* | RA preamble detected → MSG2 scheduled (4-step) |
+| `MsgB: msgb-rnti=0xN ... tbs=T` *(in `[SCHED]`)* | 2-step RA MsgB scheduled. `tbs=12` = successRAR-only (`S=0`, spec-legal — see `../../common/procedures/random-access.md` § 2-step RA type); a following separate PDSCH under the new `c-rnti` then carries the RRC response |
 | `Rx PDU du=N tid=N du_ue=N: InitialULRRCMessageTransfer` *(in `[CU-CP-F1]`)* | UE's first RRC msg crossed F1 |
 | `UE created` *(in `[CU-CP]`)* | UE context entered CU-CP |
 | `CCCH UL rrcSetupRequest` / `CCCH DL rrcSetup` / `DCCH UL rrcSetupComplete` | Initial RRC connection establishment |
@@ -128,6 +129,7 @@ state transitions:
 | `reconfigurationWithSync` *(in RRC body, multi-line)* | Handover command body |
 | `HandoverRequired` / `HandoverCommand` / `HandoverRequest` / `HandoverRequestAcknowledge` *(NGAP)* | Inter-gNB handover signaling |
 | `reestablishmentRequest` / `rrcReestablishment` / `rrcReestablishmentComplete` *(RRC)* | RRC reestablishment (post-RLF) |
+| `RLF detected. Cause: N consecutive undecoded CSIs` *(in `[MAC]`)* / `RLF detected with cause "..."` *(in `[DU-MNG]`)* | Explicit RLF marker (this build logs it — don't assume it's absent; see `../../correlate/procedures/radio-link-failure.md`). Two distinct triggers exist: UL HARQ-KO (`max_consecutive_kos`, PUSCH) and consecutive undecoded PUCCH format-2 CSI reports — name which one fired |
 
 ### Common structured fields
 
