@@ -30,6 +30,8 @@
 #   FANOUT 1 if --fanout was passed
 #   FILE   `<changed-lines> <path>`, largest first; only when BIG=1
 #   GROUP  `<n> <path>...`, the fan-out grouping; only when FANOUT=1
+#   COMMENT, COMMENTS_FILE, COMMENTS_MORE
+#          reviewer threads already on the MR, from mr_comments.py
 #
 # Then a PLAN block: the branch of the procedure that actually applies, as
 # imperative lines. Only the applicable branch is printed, so the caller pays
@@ -37,8 +39,12 @@
 
 set -euo pipefail
 
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 readonly DEFAULT_BASE="origin/dev"
 readonly BIG_BYTES=61440
+# Past this, reviewing inline costs enough context to be worth asking about.
+readonly FANOUT_BYTES=204800
 # A fan-out group is capped by both, whichever binds first.
 readonly GROUP_FILES=5
 readonly GROUP_LINES=1500
@@ -63,7 +69,8 @@ ref, a range `A..B`/`A...B`, a GitLab MR URL. One commit alone: `abc123^..abc123
 --fanout      emit GROUP= lines splitting a large diff across subagents.
 
 keys: BASE TIP CMD DIRTY EMPTY FILES LINES LINES_NOWS BYTES BIG FANOUT,
-      FILE=<churn> <path> (when BIG=1), GROUP=<n> <path>... (when FANOUT=1).
+      FILE=<churn> <path> (when BIG=1), GROUP=<n> <path>... (when FANOUT=1),
+      COMMENT=/COMMENTS_FILE= (an MR's existing review threads).
 USAGE
 }
 
@@ -121,6 +128,18 @@ mr_project() {
     local path
     path=$(printf '%s' "$1" | sed -E 's#^[a-z]+://[^/]+/##; s#/-/merge_requests/.*$##')
     printf '%s' "${path//\//%2F}"
+}
+
+# Digests the MR's existing review threads. Sets `comments` to the count and
+# prints their COMMENT= lines, so a review can avoid repeating them.
+read_mr_comments() {
+    local out lines
+    out="$(git rev-parse --absolute-git-dir)/ocudu-code-review/mr-${2}-comments.md"
+    lines=$("${script_dir}/mr_comments.py" --project "$1" --iid "$2" --out "$out" 2>/dev/null) || return 1
+    [ -n "$lines" ] || return 0
+    printf '%s\n' "$lines"
+    comments=$(printf '%s\n' "$lines" | grep -c '^COMMENT=' || true)
+    comments_file="$out"
 }
 
 # Prints the MR's target branch, or nothing when glab can't answer.
@@ -252,6 +271,13 @@ printf 'BYTES=%s\n' "$bytes"
 printf 'BIG=%s\n' "$big"
 printf 'FANOUT=%s\n' "$fanout"
 
+comments=0
+comments_file=""
+if [ "$kind" = "mr" ] && [ "$empty" -eq 0 ]; then
+    read_mr_comments "$(mr_project "$target")" "$mr_iid" ||
+        notes+=("MR !${mr_iid}: glab could not read its review threads; check them yourself before reporting.")
+fi
+
 plan=()
 
 if [ "$empty" -eq 1 ]; then
@@ -262,6 +288,11 @@ else
     fi
     if [ "$lines_nows" -lt $((lines / 2)) ]; then
         plan+=("Most of this diff is reformatting (${lines} changed lines, ${lines_nows} ignoring whitespace): append \`--ignore-all-space\` and review what survives.")
+    fi
+    if [ "$comments" -gt 0 ]; then
+        local_threads="reviewer threads are"
+        [ "$comments" -gt 1 ] || local_threads="reviewer thread is"
+        plan+=("${comments} ${local_threads} already on this MR (COMMENT= lines above, full text in ${comments_file}). Read them before reporting and drop any finding they already make; where you disagree with one or can extend it, say so naming the commenter.")
     fi
     if [ "$big" -eq 0 ]; then
         plan+=("Read the whole diff: \`${diff_args[*]/#diff/git diff}\`")
@@ -276,7 +307,9 @@ else
     else
         ranked_files | awk '{ n = $1; $1 = ""; sub(/^ /, ""); printf "FILE=%d %s\n", n, $0 }'
         plan+=("Large diff (${files} files, ${lines} lines, $((bytes / 1024)) KB): do not read it whole. Review the FILE= list above in order, heaviest first, with \`${diff_args[*]/#diff/git diff} -- <path>\`, slicing a single huge file hunk by hunk. Drop generated or test-vector churn on sight.")
-        plan+=("Mention in one line that \`--fanout\` would review this through subagents instead, then carry on.")
+        if [ "$bytes" -gt "$FANOUT_BYTES" ]; then
+            plan+=("At $((bytes / 1024)) KB this diff is big enough that reviewing it here will eat most of the context. Ask the user whether to re-run with \`--fanout\`, which reviews it through subagents instead, and say that is why you are asking. Say nothing about \`--fanout\` beyond that question.")
+        fi
     fi
 fi
 

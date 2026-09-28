@@ -17,7 +17,9 @@ compatibility: >
   MR URL resolves through `origin` (`refs/merge-requests/<iid>/head`), so
   `origin` must point at the same gitlab.com/ocudu project as the MR. An
   authenticated `glab` is optional: with it, an MR is compared against its
-  real target branch; without it, against `origin/dev`.
+  real target branch and its existing review threads are digested so the
+  review doesn't repeat them; without it, against `origin/dev` and blind to
+  the threads.
 allowed-tools: Bash(*ocudu-code-review/scripts/resolve_diff.sh*), Bash(git diff:*), Bash(git log:*), Bash(git show:*), Bash(git rev-parse:*), Bash(git branch:*), Read, Grep, Glob, Agent, ReportFindings
 ---
 

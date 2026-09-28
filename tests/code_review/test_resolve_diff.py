@@ -8,6 +8,7 @@ Run from the repo root:
     python3 tests/code_review/test_resolve_diff.py
 """
 
+import json
 import os
 import subprocess
 import tempfile
@@ -157,12 +158,23 @@ class ResolveDiffTest(unittest.TestCase):
         head = git(self.root, "rev-parse", "origin/dev").strip()
         self.assertEqual(head, git(other.name, "rev-parse", "HEAD").strip())
 
-    def make_glab(self, body, status=0):
-        """Put a `glab` stub first on PATH; returns the env to run with."""
+    def make_glab(self, body, status=0, discussions=None):
+        """Put a `glab` stub first on PATH; returns the env to run with.
+
+        `discussions` answers the review-thread endpoint; without it that
+        endpoint reports no threads.
+        """
         bindir = tempfile.TemporaryDirectory()
         self.addCleanup(bindir.cleanup)
+        threads = "[]" if discussions is None else discussions
         stub = Path(bindir.name) / "glab"
-        stub.write_text(f'#!/bin/sh\nprintf \'%s\' \'{body}\'\nexit {status}\n')
+        stub.write_text(
+            "#!/bin/sh\n"
+            'case "$*" in\n'
+            f"  *discussions*page=1*) printf '%s' '{threads}'; exit 0 ;;\n"
+            "  *discussions*) printf '[]'; exit 0 ;;\n"
+            f"esac\nprintf '%s' '{body}'\nexit {status}\n"
+        )
         stub.chmod(0o755)
         return {**GIT_ENV, "PATH": f"{bindir.name}:{GIT_ENV['PATH']}"}
 
@@ -215,6 +227,59 @@ class ResolveDiffTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("BASE=origin/dev", result.stdout)
+
+    def test_merge_request_review_threads_reach_the_plan(self):
+        url, _ = self.make_mr(iid=9)
+        threads = json.dumps([{"notes": [{
+            "body": "Bounds check missing",
+            "author": {"username": "ana"},
+            "system": False,
+            "resolved": False,
+            "position": {"new_path": "mr.txt", "new_line": 1},
+        }]}])
+        env = self.make_glab('{"target_branch":"dev"}', discussions=threads)
+        result = subprocess.run(
+            ["bash", str(SCRIPT), url], cwd=self.root, env=env,
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("COMMENT=mr.txt:1 @ana: Bounds check missing", result.stdout)
+        self.assertIn("- 1 reviewer thread is already on this MR", result.stdout)
+        digest = Path(self.root) / ".git" / "ocudu-code-review" / "mr-9-comments.md"
+        self.assertIn("Bounds check missing", digest.read_text())
+
+    def test_merge_request_without_review_threads_says_nothing(self):
+        url, _ = self.make_mr(iid=9)
+        env = self.make_glab('{"target_branch":"dev"}')
+        result = subprocess.run(
+            ["bash", str(SCRIPT), url], cwd=self.root, env=env,
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("COMMENT=", result.stdout)
+        self.assertNotIn("reviewer thread", result.stdout)
+
+    def test_unreadable_review_threads_are_flagged(self):
+        url, _ = self.make_mr(iid=9)
+        # `glab` answers the MR itself but not its discussions.
+        bindir = tempfile.TemporaryDirectory()
+        self.addCleanup(bindir.cleanup)
+        stub = Path(bindir.name) / "glab"
+        stub.write_text(
+            "#!/bin/sh\n"
+            'case "$*" in\n'
+            "  *discussions*) echo 'no token' >&2; exit 1 ;;\n"
+            "esac\n"
+            "printf '%s' '{\"target_branch\":\"dev\"}'\n"
+        )
+        stub.chmod(0o755)
+        env = {**GIT_ENV, "PATH": f"{bindir.name}:{GIT_ENV['PATH']}"}
+        result = subprocess.run(
+            ["bash", str(SCRIPT), url], cwd=self.root, env=env,
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("could not read its review threads", result.stdout)
 
     def test_merge_request_url_resolves_to_its_head(self):
         url, mr_head = self.make_mr(iid=7)
@@ -282,7 +347,17 @@ class ResolveDiffTest(unittest.TestCase):
         self.assertEqual(out["BIG"], "1")
         self.assertEqual([f.split(" ", 1)[1] for f in out["FILE"]], ["big.txt", "small.txt"])
         self.assertTrue(any("do not read it whole" in step for step in out["PLAN"]), out["PLAN"])
-        self.assertTrue(any("--fanout" in step for step in out["PLAN"]), out["PLAN"])
+        # A merely large diff is reviewed inline without mentioning --fanout.
+        self.assertFalse(any("--fanout" in step for step in out["PLAN"]), out["PLAN"])
+
+    def test_plan_asks_about_fanout_only_for_a_huge_diff(self):
+        base = self.make_local_base()
+        git(self.root, "checkout", "-q", "-b", "feature")
+        commit(self.root, "huge.txt", "".join(f"a fairly long line of text {i}\n" for i in range(10000)))
+        out = self.resolve(base)
+        self.assertGreater(int(out["BYTES"]), 204800)
+        self.assertTrue(any("Ask the user whether to re-run with `--fanout`" in step
+                            for step in out["PLAN"]), out["PLAN"])
 
     def test_plan_groups_files_when_fanout_is_on(self):
         base = self.make_local_base()
