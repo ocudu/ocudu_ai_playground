@@ -33,10 +33,11 @@ Defaults: `target` = current branch, `--base` = the MR's target branch else
 
 ## Guidelines
 
-- Explain to me succintly what the diff/change is about.
-- Finds problems, code smells, etc.; do not fix them. It is also possible that the diff is fine and there are no issues.
-- The CI jobs should be enough most of the time. Do not build or test locally without asking the user first, and only do it to confirm a hypothesis.
-- Do not launch other code review skills and do not launch sub-agents without requesting the user first.
+- Summarize the change succinctly.
+- Find problems; do not fix them. No findings is a valid outcome.
+- Do not build or test locally without asking the user first; rely on CI.
+- Do not launch other code review skills, or subagents beyond what the PLAN
+  says, without asking the user first.
 
 ## Step 1 — Resolve and plan
 
@@ -44,38 +45,29 @@ Defaults: `target` = current branch, `--base` = the MR's target branch else
 ${CLAUDE_SKILL_DIR}/scripts/resolve_diff.sh "<arguments>"
 ```
 
-It resolves the target, fetches the base, sizes the diff without putting it in
-context, and prints `KEY=value` lines followed by a `PLAN:` block covering
-this diff specifically. Follow the PLAN, then Step 2. Run `--help` for the
-accepted targets and keys.
+It prints `KEY=value` lines and a `PLAN:` block. Follow the PLAN, then Step 2.
+`--help` lists accepted targets and keys.
 
-Never trim the diff's context lines below the default three to save tokens:
-reachability and real-time judgement need them.
+Never trim diff context below the default three lines.
 
 ## Step 2 — Review
 
-Check every hunk against every checklist in [REFERENCE.md](REFERENCE.md),
-judging it on its merits with enough surrounding context (`Read` the touched
-files, `git log -p`/`git show` for a hunk's earlier revisions) — a hunk alone
-often isn't enough to tell whether a pattern is safe. Skip stylistic nits that
-match no checklist item; this is not a linter pass over what the compiler or
-formatter already catches.
+Check every hunk against every checklist in [REFERENCE.md](REFERENCE.md). Skip stylistic nits
+that match no checklist item.
 
 ## Step 3 — Report findings
 
 Merge and dedupe any subagent findings first, then call `ReportFindings` once
-with the full list (empty if nothing survived), ranked most-severe-first —
-that order *is* the severity signal: a memory-safety or untrusted-input bug,
-or a new allocation/blocking call on a real-time path, outranks a correctness
-nit, which outranks a convention or comment-style finding.
+with the full list, ranked most-severe-first: memory-safety, untrusted-input
+and real-time findings, then correctness, then conventions and comment style.
 
 - `category` — kebab slug: `correctness`, `realtime-alloc`,
   `realtime-blocking`, `memory-safety`, `untrusted-input`.
 - `failure_scenario` — required: the concrete inputs/state that lead to the
-  wrong outcome. Convention and comment-style findings have none, so list them
-  instead under a `### Conventions` heading, one `file:line — issue` per line.
-- `verdict` — `CONFIRMED` when traced end to end, else `PLAUSIBLE`. Below
-  plausible, don't report it.
+  wrong outcome. List convention and comment-style findings instead under a
+  `### Conventions` heading, one `file:line — issue` per line.
+- `verdict` — `CONFIRMED` when traced end to end, else `PLAUSIBLE`. Drop
+  anything weaker.
 
 Without `ReportFindings`: one markdown table, columns `File:Line`, `Type`,
 `Severity`, `Summary`, same order, then a one-line note on what was reviewed

@@ -303,7 +303,7 @@ else
               printf "%s%s", (n > 1 ? " " : ""), path }
             END { print "" }' |
             awk 'NF { printf "GROUP=%d %s\n", ++g, $0 }'
-        plan+=("Large diff (${files} files, ${lines} lines, $((bytes / 1024)) KB). Give each GROUP above to its own subagent: pass it the group's paths, the command prefix \`${diff_args[*]/#diff/git diff}\`, and REFERENCE.md. Each returns findings only, never diff text.")
+        plan+=("Large diff (${files} files, ${lines} lines, $((bytes / 1024)) KB). Give each GROUP above to its own subagent: pass it the group's paths, the command prefix \`${diff_args[*]/#diff/git diff}\`, and REFERENCE.md, realtime.md and security.md. Each returns findings only, never diff text.")
     else
         ranked_files | awk '{ n = $1; $1 = ""; sub(/^ /, ""); printf "FILE=%d %s\n", n, $0 }'
         plan+=("Large diff (${files} files, ${lines} lines, $((bytes / 1024)) KB): do not read it whole. Review the FILE= list above in order, heaviest first, with \`${diff_args[*]/#diff/git diff} -- <path>\`, slicing a single huge file hunk by hunk. Drop generated or test-vector churn on sight.")
