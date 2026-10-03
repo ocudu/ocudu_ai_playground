@@ -41,6 +41,25 @@ Records are flat dicts with `timestamp`, `layer`, the line context fields (e.g. 
 - `[k=v ...]` blocks and `<section>:` groups are flattened as `<block>_<key>`.
 - Number lists stay lists, and `{...}` record lists become lists of dicts.
 
+Supported layers (keys of `metrics.LAYER_PATTERNS`), matching the current OCUDU log format:
+
+| Layer            | Log line prefix            |
+|------------------|----------------------------|
+| `du_manager`     | `DU manager metrics:`      |
+| `mac`            | `MAC cell pci=N metrics:`  |
+| `sched`          | `Scheduler cell pci=N metrics:` |
+| `sched_ue`       | `Scheduler UE ue=N pci=N rnti=X metrics:` |
+| `rlc`            | `RLC Metrics:`             |
+| `phy`            | `PHY metrics:` (first line only) |
+| `ofh_timing`     | `OFH timing metrics:`      |
+| `ofh_sector`     | `OFH sector#N metrics:`    |
+| `pdcp`           | `PDCP Metrics:`            |
+| `nrup`           | `NRUP Metrics:`            |
+| `e1ap`           | `CU-UP E1AP metrics:`      |
+| `exec`           | `Executor metrics "name":` |
+| `resource_usage` | `App resource usage:`      |
+| `buffer_pool`    | `Buffer pool:`             |
+
 Unit conflicts and unknown units are reported once per field on the `parsers` logger.
 
 ## Tests

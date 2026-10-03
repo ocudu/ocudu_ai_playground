@@ -26,13 +26,20 @@ logger = logging.getLogger("parsers")
 
 # Metric layer name to the pattern of its log context.
 LAYER_PATTERNS = {
+    "du_manager": re.compile(r"^DU manager metrics:"),
     "mac": re.compile(r"^MAC cell pci=(?P<pci>\d+) metrics:"),
-    "rlc": re.compile(r"^RLC Metrics:"),
     "sched": re.compile(r"^Scheduler cell pci=(?P<pci>\d+) metrics:"),
     "sched_ue": re.compile(r"^Scheduler UE ue=(?P<ue>\d+) pci=(?P<pci>\d+) rnti=(?P<rnti>\S+) metrics:"),
+    "rlc": re.compile(r"^RLC Metrics:"),
+    "phy": re.compile(r"^PHY metrics:"),
+    "ofh_timing": re.compile(r"^OFH timing metrics:"),
+    "ofh_sector": re.compile(r"^OFH sector#(?P<sector>\d+) metrics: pci=(?P<pci>\d+) received messages stats:"),
+    "pdcp": re.compile(r"^PDCP Metrics:"),
+    "nrup": re.compile(r"^NRUP Metrics:"),
+    "e1ap": re.compile(r"^CU-UP E1AP metrics:"),
     "exec": re.compile(r'^Executor metrics\s+"(?P<executor>[^"]+)"[^:]*:'),
-    "upper_phy": re.compile(r"^Upper\ PHY.*sector#(?P<sector>\d+) metrics:"),
-    "ofh": re.compile(r"^OFH metrics: timing metrics:"),
+    "resource_usage": re.compile(r"^App resource usage:"),
+    "buffer_pool": re.compile(r"^Buffer pool:"),
 }
 
 _SI_PREFIX = {
@@ -40,6 +47,7 @@ _SI_PREFIX = {
     "p": Decimal("1e-12"),
     "n": Decimal("1e-9"),
     "u": Decimal("1e-6"),
+    "\u00b5": Decimal("1e-6"),
     "m": Decimal("1e-3"),
     "k": Decimal("1e3"),
     "M": Decimal("1e6"),
@@ -49,16 +57,23 @@ _SECONDS_TO_US = Decimal("1e6")
 # Units printed apart from the value, mapped to their canonical name.
 _SPACED_UNITS = {"MB": "MB", "Watts": "W", "segments": "segments"}
 
-_key_re = re.compile(r"(?P<key>[A-Za-z_]\w*)= ?")
-_section_re = re.compile(r"(?P<section>[A-Za-z_]\w*):(?=\s|$)")
-_value_re = re.compile(
+_VALUE = (
     r"(?P<hex>0x[0-9a-fA-F]+)\b"
     r"|(?P<na>n/a|\{na\}|NaN|ovl)"
-    r"|(?P<num>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(?P<unit>[A-Za-z%]+)?"
+    r"|(?P<num>[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)(?P<unit>[A-Za-z%\u00b5]+)?"
     r"(?: (?P<spaced_unit>" + "|".join(_SPACED_UNITS) + r")\b)?"
     r"|(?P<word>[A-Za-z_][\w.-]*)"
 )
-_slot_value_re = re.compile(r"\d+\.\d+|n/a")
+_value_re = re.compile(_VALUE)
+# One token of a metrics text: a ';', a key=value field, a "<section>:" token, or free text.
+_token_re = re.compile(
+    r"[\s,]*(?:"
+    r"(?P<semi>;)"
+    r"|(?P<key>[A-Za-z_]\w*)= ?(?:(?P<list>\[)|" + _VALUE + r")?"
+    r"|(?P<section>[A-Za-z_]\w*):(?=\s|$)"
+    r"|[^\s;,]+"
+    r")"
+)
 _slots_range_re = re.compile(r"^\s*(?P<start>\d+\.\d+),\s*(?P<end>\d+\.\d+)(?:\(\+(?P<hfn>\d+) HFNs\))?\s*$")
 _remaining_re = re.compile(r"\((?P<count>\d+) remaining \w+\)")
 _list_item_sep_re = re.compile(r"[,\s]+")
@@ -67,7 +82,7 @@ _list_item_sep_re = re.compile(r"[,\s]+")
 def parse_number(text: str) -> int | float | str:
     """Converts a numeric string to int or float, returning it unchanged on failure."""
     try:
-        if any(c in text for c in ".eE"):
+        if "." in text or "e" in text or "E" in text:
             return float(text)
         return int(text)
     except ValueError:
@@ -81,7 +96,7 @@ def parse_slot(slot: str) -> tuple[int, int]:
 
 
 def _is_slot_key(key: str) -> bool:
-    return key == "slot" or key.endswith("_slot")
+    return key == "slot" or (key.endswith("_slot") and not key.endswith("_per_slot"))
 
 
 def _normalize(num: str, unit: str | None) -> tuple[int | float, str | None, bool]:
@@ -103,7 +118,7 @@ def _normalize(num: str, unit: str | None) -> tuple[int | float, str | None, boo
         return parse_number(num), unit, False
 
     scaled = Decimal(num) * _SI_PREFIX[prefix] * factor
-    printed_as_int = not any(c in num for c in ".eE")
+    printed_as_int = not ("." in num or "e" in num or "E" in num)
     if printed_as_int and scaled == scaled.to_integral_value():
         return int(scaled), base, True
     return float(scaled), base, True
@@ -166,7 +181,7 @@ def _parse_list(key: str, body: str, sink: _FieldSink) -> None:
             sink.add("slots_hfn_wraps", int(m.group("hfn") or 0))
             return
 
-    if "{" in body:
+    if body.lstrip().startswith("{"):
         items = []
         pos = 0
         while (open_idx := body.find("{", pos)) >= 0:
@@ -197,34 +212,21 @@ def _parse_list(key: str, body: str, sink: _FieldSink) -> None:
     sink.add(key, values)
 
 
-def _parse_value(key: str, text: str, pos: int, sink: _FieldSink) -> int:
-    """Parses the value of key starting at text[pos], returning the position after it."""
-    if pos < len(text) and text[pos] == "[":
-        end = _find_list_end(text, pos)
-        _parse_list(key, text[pos + 1:end], sink)
-        return end + 1
-
-    if _is_slot_key(key):
-        m = _slot_value_re.match(text, pos)
-        if m:
-            sink.add(key, None if m.group() == "n/a" else m.group())
-            return m.end()
-
-    m = _value_re.match(text, pos)
-    if not m:
-        return pos
-    if m.group("hex"):
-        sink.add(key, m.group("hex"))
-    elif m.group("na"):
-        sink.add(key, None)
-    elif m.group("num") is not None:
-        if m.group("spaced_unit"):
-            sink.add(key, parse_number(m.group("num")), _SPACED_UNITS[m.group("spaced_unit")])
+def _add_value(sink: _FieldSink, name: str, key: str, m: re.Match) -> None:
+    """Adds the scalar value matched by the _VALUE groups of m, if any."""
+    if m.group("num") is not None:
+        if _is_slot_key(key):
+            sink.add(name, m.group("num"))
+        elif m.group("spaced_unit"):
+            sink.add(name, parse_number(m.group("num")), _SPACED_UNITS[m.group("spaced_unit")])
         else:
-            sink.add(key, *_normalize(m.group("num"), m.group("unit")))
-    else:
-        sink.add(key, m.group("word"))
-    return m.end()
+            sink.add(name, *_normalize(m.group("num"), m.group("unit")))
+    elif m.group("na"):
+        sink.add(name, None)
+    elif m.group("hex"):
+        sink.add(name, m.group("hex"))
+    elif m.group("word"):
+        sink.add(name, m.group("word"))
 
 
 def _parse_into(text: str, sink: _FieldSink) -> None:
@@ -236,39 +238,28 @@ def _parse_into(text: str, sink: _FieldSink) -> None:
     section = ""
     in_free_text = False
     pos = 0
-    while pos < len(text):
-        c = text[pos]
-        if c == ";":
-            section = ""
+    while (m := _token_re.match(text, pos)) is not None and m.end() > pos:
+        pos = m.end()
+        key = m.group("key")
+        if key:
             in_free_text = False
-            pos += 1
-            continue
-        if c.isspace() or c == ",":
-            pos += 1
-            continue
-
-        m = _key_re.match(text, pos)
-        if m:
-            sub = _FieldSink()
-            pos = _parse_value(m.group("key"), text, m.end(), sub)
-            sink.merge(sub, section)
-            in_free_text = False
-            # Skips text that could not be parsed as a value.
-            if pos == m.end():
-                pos += 1
-            continue
-
-        m = _section_re.match(text, pos)
-        if m:
+            if m.group("list"):
+                end = _find_list_end(text, pos - 1)
+                sub = _FieldSink()
+                _parse_list(key, text[pos:end], sub)
+                sink.merge(sub, section)
+                pos = end + 1
+            else:
+                _add_value(sink, f"{section}_{key}" if section else key, key, m)
+        elif m.group("section"):
             if not in_free_text:
                 section = m.group("section")
             in_free_text = False
-            pos = m.end()
-            continue
-
-        in_free_text = True
-        while pos < len(text) and not text[pos].isspace() and text[pos] not in ";,":
-            pos += 1
+        elif m.group("semi"):
+            section = ""
+            in_free_text = False
+        else:
+            in_free_text = True
 
 
 def extract_metric_fields(text: str) -> dict[str, Any]:
