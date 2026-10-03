@@ -279,7 +279,22 @@ class ResolveDiffTest(unittest.TestCase):
             capture_output=True, text=True,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("could not read its review threads", result.stdout)
+        self.assertIn("could not read its review threads (glab api failed: no token)", result.stdout)
+
+    def test_merge_request_from_another_project_names_both(self):
+        remote = tempfile.TemporaryDirectory()
+        self.addCleanup(remote.cleanup)
+        git(remote.name, "init", "-q", "--bare", "-b", "dev", ".")
+        git(self.root, "remote", "add", "origin", remote.name)
+        git(self.root, "push", "-q", "origin", "dev")
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "https://gitlab.com/ocudu/ocudu/-/merge_requests/7",
+             "--base=origin/dev"],
+            cwd=self.root, env=GIT_ENV, capture_output=True, text=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn(f"origin is {remote.name} ", result.stderr)
+        self.assertIn("but the MR is in ocudu/ocudu", result.stderr)
 
     def test_merge_request_url_resolves_to_its_head(self):
         url, mr_head = self.make_mr(iid=7)

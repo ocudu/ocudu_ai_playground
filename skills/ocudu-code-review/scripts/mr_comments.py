@@ -36,7 +36,9 @@ import sys
 from pathlib import Path
 
 PAGE_SIZE = 100
+# Caps API calls; 500 discussions is more than any MR needs.
 MAX_PAGES = 5
+# Keeps each digest line to about one terminal line.
 BODY_CHARS = 220
 
 
@@ -49,6 +51,7 @@ def fetch_discussions(project, iid):
     """Every discussion of the MR, following pagination."""
     encoded = project if "%2F" in project else project.replace("/", "%2F")
     discussions = []
+    truncated = False
     for page in range(1, MAX_PAGES + 1):
         endpoint = (
             f"projects/{encoded}/merge_requests/{iid}/discussions"
@@ -71,7 +74,9 @@ def fetch_discussions(project, iid):
         discussions.extend(batch)
         if len(batch) < PAGE_SIZE:
             break
-    return discussions
+    else:
+        truncated = True
+    return discussions, truncated
 
 
 def anchor(note):
@@ -135,10 +140,12 @@ def main():
     parser.add_argument("--project", required=True)
     parser.add_argument("--iid", required=True)
     parser.add_argument("--out", required=True)
+    # Threads printed inline; the rest go to the --out file.
     parser.add_argument("--max", type=int, default=40)
     args = parser.parse_args()
 
-    threads = digest(fetch_discussions(args.project, args.iid))
+    discussions, truncated = fetch_discussions(args.project, args.iid)
+    threads = digest(discussions)
     if not threads:
         return
 
@@ -157,6 +164,8 @@ def main():
     print(f"COMMENTS_FILE={out}")
     if len(threads) > args.max:
         print(f"COMMENTS_MORE={len(threads) - args.max}")
+    if truncated:
+        print("COMMENTS_TRUNCATED=1")
 
 
 if __name__ == "__main__":

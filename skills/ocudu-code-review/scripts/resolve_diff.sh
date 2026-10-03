@@ -30,7 +30,7 @@
 #   FANOUT 1 if --fanout was passed
 #   FILE   `<changed-lines> <path>`, largest first; only when BIG=1
 #   GROUP  `<n> <path>...`, the fan-out grouping; only when FANOUT=1
-#   COMMENT, COMMENTS_FILE, COMMENTS_MORE
+#   COMMENT, COMMENTS_FILE, COMMENTS_MORE, COMMENTS_TRUNCATED
 #          reviewer threads already on the MR, from mr_comments.py
 #
 # Then a PLAN block: the branch of the procedure that actually applies, as
@@ -42,10 +42,12 @@ set -euo pipefail
 script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 readonly DEFAULT_BASE="origin/dev"
+# Past this (~15k tokens), review file by file instead of reading the whole diff.
 readonly BIG_BYTES=61440
 # Past this, reviewing inline costs enough context to be worth asking about.
 readonly FANOUT_BYTES=204800
-# A fan-out group is capped by both, whichever binds first.
+# A fan-out group is capped by both, whichever binds first, sized so one
+# subagent can review its group closely.
 readonly GROUP_FILES=5
 readonly GROUP_LINES=1500
 
@@ -119,8 +121,9 @@ fetch_base() {
     local ref="$1" remote="${1%%/*}" branch="${1#*/}"
     [ "$remote" != "$ref" ] || return 0
     git remote | grep -qx -- "$remote" || return 0
-    git fetch --quiet -- "$remote" "$branch" 2>/dev/null ||
-        notes+=("could not fetch $ref; falling back to the local copy, which may be stale")
+    local err
+    err=$(git fetch --quiet -- "$remote" "$branch" 2>&1 >/dev/null) ||
+        notes+=("could not fetch $ref (${err%%$'\n'*}); falling back to the local copy, which may be stale")
 }
 
 # The MR's project path, percent-encoded for the GitLab API.
@@ -130,16 +133,28 @@ mr_project() {
     printf '%s' "${path//\//%2F}"
 }
 
+# The project path a remote URL points at, for https, ssh and scp-style URLs.
+remote_project() {
+    printf '%s' "$1" | sed -E 's#^[a-z+]+://[^/]+/##; s#^[^/:]+@[^:]+:##; s#\.git$##; s#/$##'
+}
+
 # Digests the MR's existing review threads. Sets `comments` to the count and
 # prints their COMMENT= lines, so a review can avoid repeating them.
 read_mr_comments() {
-    local out lines
+    local out err lines
     out="$(git rev-parse --absolute-git-dir)/ocudu-code-review/mr-${2}-comments.md"
-    lines=$("${script_dir}/mr_comments.py" --project "$1" --iid "$2" --out "$out" 2>/dev/null) || return 1
+    err="${out%.md}.err"
+    mkdir -p "$(dirname "$out")"
+    if ! lines=$("${script_dir}/mr_comments.py" --project "$1" --iid "$2" --out "$out" 2>"$err"); then
+        comments_error=$(head -n 1 "$err")
+        comments_error="${comments_error#mr_comments: }"
+        return 1
+    fi
     [ -n "$lines" ] || return 0
     printf '%s\n' "$lines"
     comments=$(printf '%s\n' "$lines" | grep -c '^COMMENT=' || true)
     comments_file="$out"
+    ! printf '%s\n' "$lines" | grep -q '^COMMENTS_TRUNCATED=' || comments_truncated=1
 }
 
 # Prints the MR's target branch, or nothing when glab can't answer.
@@ -215,8 +230,14 @@ case "$kind" in
         # GitLab exposes every MR head under refs/merge-requests/<iid>/head,
         # so no API token is needed.
         tip="refs/ocudu-code-review/mr-${mr_iid}"
-        git fetch --quiet origin "refs/merge-requests/${mr_iid}/head:${tip}" ||
+        if ! git fetch --quiet origin "refs/merge-requests/${mr_iid}/head:${tip}"; then
+            want=$(mr_project "$target")
+            want="${want//%2F//}"
+            have=$(remote_project "$(git remote get-url origin 2>/dev/null)")
+            [ "$have" = "$want" ] ||
+                die "could not fetch MR !${mr_iid}: origin is ${have:-unset} but the MR is in ${want}"
             die "could not fetch MR !${mr_iid} from origin"
+        fi
         diff_args=(diff "${base}...${tip}")
         ;;
     ref)
@@ -273,9 +294,13 @@ printf 'FANOUT=%s\n' "$fanout"
 
 comments=0
 comments_file=""
+comments_truncated=0
+comments_error=""
 if [ "$kind" = "mr" ] && [ "$empty" -eq 0 ]; then
     read_mr_comments "$(mr_project "$target")" "$mr_iid" ||
-        notes+=("MR !${mr_iid}: glab could not read its review threads; check them yourself before reporting.")
+        notes+=("MR !${mr_iid}: glab could not read its review threads (${comments_error:-no reason given}); check them yourself before reporting.")
+    [ "$comments_truncated" -eq 0 ] ||
+        notes+=("MR !${mr_iid}: only its first review threads were fetched; check the rest yourself before reporting.")
 fi
 
 plan=()
@@ -303,7 +328,7 @@ else
               printf "%s%s", (n > 1 ? " " : ""), path }
             END { print "" }' |
             awk 'NF { printf "GROUP=%d %s\n", ++g, $0 }'
-        plan+=("Large diff (${files} files, ${lines} lines, $((bytes / 1024)) KB). Give each GROUP above to its own subagent: pass it the group's paths, the command prefix \`${diff_args[*]/#diff/git diff}\`, and REFERENCE.md, realtime.md and security.md. Each returns findings only, never diff text.")
+        plan+=("Large diff (${files} files, ${lines} lines, $((bytes / 1024)) KB). Give each GROUP above to its own subagent: pass it the group's paths, the command prefix \`${diff_args[*]/#diff/git diff}\`, and references/REFERENCE.md, references/realtime.md and references/security.md. Each returns only findings as \`file:line | category | verdict | summary | failure scenario\`, plus convention issues as \`file:line — issue\`; never diff text. Categories: correctness, memory-safety, untrusted-input, realtime-alloc, realtime-blocking, realtime-latency.")
     else
         ranked_files | awk '{ n = $1; $1 = ""; sub(/^ /, ""); printf "FILE=%d %s\n", n, $0 }'
         plan+=("Large diff (${files} files, ${lines} lines, $((bytes / 1024)) KB): do not read it whole. Review the FILE= list above in order, heaviest first, with \`${diff_args[*]/#diff/git diff} -- <path>\`, slicing a single huge file hunk by hunk. Drop generated or test-vector churn on sight.")

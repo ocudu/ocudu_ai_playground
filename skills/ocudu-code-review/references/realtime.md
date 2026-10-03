@@ -11,7 +11,6 @@ reachability" below.
 - **New unbounded-latency operation**: a loop bounded by external input,
   logging that allocates or locks, RTTI, or new virtual dispatch in a very hot
   inner loop.
-- **New exception path**: a `throw`, or a call that can throw.
 
 ## Determining reachability
 

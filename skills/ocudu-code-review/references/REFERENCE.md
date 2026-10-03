@@ -1,18 +1,11 @@
 # OCUDU Code Review — Checklists
 
-Working defaults until OCUDU has a canonical style/contribution doc; update
-them in place once it does.
-
 ## Contents
 
 - [Correctness](#correctness): OCUDU-specific bug patterns.
 - [OCUDU C++ conventions](#ocudu-c-conventions): member ordering and error
   handling.
 - [Comment style](#comment-style): rules for comments the diff adds or changes.
-- [Real-time paths](realtime.md): allocations, blocking and unbounded latency on
-  hot paths, and how to tell if code is on one.
-- [Security](security.md): untrusted input reaching sizes, indices, casts and
-  memory ops.
 
 ## Correctness
 
@@ -27,7 +20,7 @@ them in place once it does.
   on, which come first.
 - **Error handling**: return values (status/`expected`-style) over exceptions.
   Flag a new `throw`, or a fallible function returning `void` or swallowing the
-  error. A `throw` reachable from a real-time path is a real-time finding.
+  error.
 
 ## Comment style
 

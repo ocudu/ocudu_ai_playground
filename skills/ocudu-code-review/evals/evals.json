@@ -1,0 +1,53 @@
+{
+  "skill_name": "ocudu-code-review",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run `bash evals/files/setup_repo.sh rt_alloc <scratch>/rt_alloc`, then from that directory run /ocudu-code-review working.",
+      "expected_output": "One realtime-alloc finding on the new local std::vector in slot_handler::collect_grants, traced to mac_cell::handle_slot_indication.",
+      "files": ["evals/files/setup_repo.sh", "evals/files/rt_alloc"],
+      "expectations": [
+        "Reports a finding with category realtime-alloc at lib/mac/slot_handler.cpp on the new `pending` vector",
+        "Establishes reachability by tracing collect_grants -> process_slot -> handle_slot_indication, not from the directory name",
+        "Reports no untrusted-input, memory-safety or correctness findings",
+        "Output follows the order: summary, findings, then the reviewed files and diff range"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Run `bash evals/files/setup_repo.sh asn1_len <scratch>/asn1_len`, then from that directory run /ocudu-code-review working.",
+      "expected_output": "An untrusted-input finding on the new extended-container branch, which copies a wire length into a 64-byte buffer without checking it.",
+      "files": ["evals/files/setup_repo.sh", "evals/files/asn1_len"],
+      "expectations": [
+        "Reports a finding with category untrusted-input in lib/f1ap/rrc_container_decoder.cpp on the extended_container_tag branch",
+        "Names the source as the length read from pdu[1] and pdu[2] and the sink as the memcpy into out.bytes",
+        "Notes that pdu[2] is read when pdu_len may be 2, or that ie_len is not checked against the remaining buffer",
+        "Does not flag the unchanged non-extended branch, which validates ie_len"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Run `bash evals/files/setup_repo.sh clean_refactor <scratch>/clean_refactor`, then from that directory run /ocudu-code-review working.",
+      "expected_output": "A one-line summary saying a pure helper was extracted and locals renamed, and no findings.",
+      "files": ["evals/files/setup_repo.sh", "evals/files/clean_refactor"],
+      "expectations": [
+        "Summarizes the change as extracting format_ue_line and renaming locals, with no behavior change",
+        "Reports zero findings",
+        "Does not raise realtime-alloc on the std::string building, since the code is not on a real-time path",
+        "Does not invent stylistic nits that match no checklist item"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Run `bash evals/files/setup_repo.sh conventions <scratch>/conventions`, then from that directory run /ocudu-code-review working.",
+      "expected_output": "No ReportFindings entries; a Conventions list naming the private member before the public section and the end-of-line comment.",
+      "files": ["evals/files/setup_repo.sh", "evals/files/conventions"],
+      "expectations": [
+        "Lists under a `### Conventions` heading that the data member nof_added in lib/cu_cp/cell_registry.h sits before the public section",
+        "Lists under `### Conventions` the end-of-line comment on `++nof_added`",
+        "Puts neither convention issue in ReportFindings or the findings table",
+        "Reports no correctness, memory-safety, untrusted-input or realtime findings"
+      ]
+    }
+  ]
+}

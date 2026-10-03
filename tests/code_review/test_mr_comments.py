@@ -120,6 +120,25 @@ class MrCommentsTest(unittest.TestCase):
         self.assertEqual(self.keys(result.stdout, "COMMENTS_MORE"), ["3"])
         self.assertEqual(self.out.read_text().count("## "), 5)
 
+    def test_full_last_page_is_flagged_truncated(self):
+        bindir = Path(self.tmp.name) / "bin"
+        bindir.mkdir(exist_ok=True)
+        page = json.dumps([{"notes": [note("n", path="a.cpp", line=1)]}] * 100)
+        stub = bindir / "glab"
+        stub.write_text(f"#!/bin/sh\nprintf '%s' '{page}'\n")
+        stub.chmod(0o755)
+        result = subprocess.run(
+            [str(SCRIPT), "--project", "ocudu/ocudu", "--iid", "42", "--out", str(self.out)],
+            capture_output=True, text=True,
+            env={**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}"},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.keys(result.stdout, "COMMENTS_TRUNCATED"), ["1"])
+
+    def test_short_last_page_is_not_truncated(self):
+        result = self.run_script([{"notes": [note("n", path="a.cpp", line=1)]}])
+        self.assertEqual(self.keys(result.stdout, "COMMENTS_TRUNCATED"), [])
+
     def test_glab_failure_exits_two(self):
         bindir = Path(self.tmp.name) / "bin"
         bindir.mkdir(exist_ok=True)
