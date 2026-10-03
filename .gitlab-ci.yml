@@ -86,7 +86,7 @@ parser tests:
   stage: static
   image: python:3.12-alpine
   before_script:
-    - pip install ./tools/parsers
+    - pip install "./tools/parsers[pandas]"
   script:
     - python3 -m unittest discover -s tools/parsers/tests -t tools/parsers -v
   rules:

@@ -12,5 +12,8 @@ description = "Parsers and decoders for OCUDU artifacts (logs, pcaps, traces)."
 requires-python = ">=3.10"
 dependencies = []
 
+[project.optional-dependencies]
+pandas = ["pandas"]
+
 [tool.setuptools.packages.find]
 include = ["parsers*"]

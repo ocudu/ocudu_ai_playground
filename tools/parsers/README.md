@@ -13,7 +13,8 @@ Standard-library only, so it can be imported by visualization or analysis tools 
 ## Installation
 
 ```bash
-pip install -e tools/parsers
+pip install -e tools/parsers            # core, standard library only
+pip install -e "tools/parsers[pandas]"  # adds to_dataframe()
 ```
 
 ## Usage
@@ -21,15 +22,26 @@ pip install -e tools/parsers
 ```python
 from parsers.log import metrics
 
+parser = metrics.MetricsParser()        # all layers, or e.g. MetricsParser(["sched", "mac"])
 with open("gnb.log") as f:
     for line in f:
-        fields = metrics.parse_fields(line, "sched")
-        if fields:
-            print(fields["timestamp"][0], fields["total_dl_brate"])
+        rec = parser.parse(line)
+        if rec and rec["layer"] == "sched":
+            print(rec["timestamp"], rec["total_dl_brate"], parser.units["sched"]["total_dl_brate"])
+
+df = metrics.to_dataframe(open("gnb.log"), "mac")  # units in df.attrs["units"]
 ```
 
-`parse_fields` returns `{name: (value, unit)}`, or `None` if the line is not a metric of the given layer.
-Supported layers are the keys of `metrics.LAYER_PATTERNS` (`mac`, `rlc`, `sched`, `sched_ue`, `exec`, `upper_phy`, `ofh`).
+Records are flat dicts with `timestamp`, `layer`, the line context fields (e.g. `pci`) and the metric fields:
+
+- Units are normalized: times to `us`, bitrates to `bps`, SI-prefixed unitless values (`5.74k`) to plain numbers.
+  The unit of each field is in `parser.units[layer][field]`.
+- `n/a`, `NaN` and `ovl` become `None`.
+- Slot fields (`sfn.slot`) stay strings. Use `metrics.parse_slot()` to split them.
+- `[k=v ...]` blocks and `<section>:` groups are flattened as `<block>_<key>`.
+- Number lists stay lists, and `{...}` record lists become lists of dicts.
+
+Unit conflicts and unknown units are reported once per field on the `parsers` logger.
 
 ## Tests
 
