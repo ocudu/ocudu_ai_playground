@@ -4,7 +4,7 @@
 """Parsing of the METRICS logger lines into flat records with normalized units.
 
 Times are normalized to "us", bitrates to "bps", and SI-prefixed unitless values
-(e.g. 1.2k) to plain numbers. Unavailable values (n/a, NaN, ovl) become None.
+(e.g. 1.2k) to plain numbers. Fields printed without a unit get the one in IMPLIED_UNITS. Unavailable values (n/a, NaN, ovl) become None.
 Slot fields (sfn.slot) are kept as strings.
 """
 
@@ -42,6 +42,28 @@ LAYER_PATTERNS = {
     "buffer_pool": re.compile(r"^Buffer pool:"),
 }
 
+# Units of fields printed without one, per layer. "s" values are normalized to "us".
+IMPLIED_UNITS = {
+    "sched": {"avg_prach_delay": "slots"},
+    "sched_ue": {
+        "dl_bs": "bytes",
+        "bsr": "bytes",
+        "dl_olla": "dB",
+        "ul_olla": "dB",
+        "last_phr": "dB",
+        "pusch_snr_db": "dB",
+        "pusch_rsrp_db": "dBFS",
+    },
+    "rlc": {"tx_pull_latency_avg": "s"},
+    "e1ap": {"release_latency_avg": "s"},
+    "ofh_sector": {
+        "earliest_msg_us": "us",
+        "latest_msg_us": "us",
+        "ether_rx_rx_bytes": "bytes",
+        "ether_tx_tx_bytes": "bytes",
+    },
+}
+
 _SI_PREFIX = {
     "": Decimal(1),
     "p": Decimal("1e-12"),
@@ -75,6 +97,7 @@ _token_re = re.compile(
     r")"
 )
 _slots_range_re = re.compile(r"^\s*(?P<start>\d+\.\d+),\s*(?P<end>\d+\.\d+)(?:\(\+(?P<hfn>\d+) HFNs\))?\s*$")
+_optional_re = re.compile(r"optional\((?P<value>[^()]*)\)")
 _remaining_re = re.compile(r"\((?P<count>\d+) remaining \w+\)")
 _list_item_sep_re = re.compile(r"[,\s]+")
 
@@ -147,38 +170,32 @@ def _find_list_end(text: str, start: int) -> int:
 class _FieldSink:
     """Accumulates the fields of one metrics text, with their units."""
 
-    def __init__(self):
+    def __init__(self, implied_units: dict[str, str] | None = None):
         self.fields: dict[str, Any] = {}
         self.units: dict[str, str] = {}
         self.unknown_units: dict[str, str] = {}
+        # Units of fields printed without one.
+        self.implied_units = implied_units or {}
 
-    def add(self, key: str, value: Any, unit: str | None = None, unit_is_known: bool = True):
-        self.fields[key] = value
+    def add(self, name: str, value: Any, unit: str | None = None, unit_is_known: bool = True):
+        self.fields[name] = value
         if unit is None:
             return
         if unit_is_known:
-            self.units[key] = unit
+            self.units[name] = unit
         else:
-            self.unknown_units[key] = unit
-
-    def merge(self, other: _FieldSink, prefix: str) -> None:
-        """Adds the fields of other, with keys prefixed by "<prefix>_" if prefix is not empty."""
-
-        def rename(k: str) -> str:
-            return f"{prefix}_{k}" if prefix else k
-
-        self.fields.update({rename(k): v for k, v in other.fields.items()})
-        self.units.update({rename(k): u for k, u in other.units.items()})
-        self.unknown_units.update({rename(k): u for k, u in other.unknown_units.items()})
+            self.unknown_units[name] = unit
 
 
-def _parse_list(key: str, body: str, sink: _FieldSink) -> None:
+def _parse_list(key: str, base: str, body: str, sink: _FieldSink) -> None:
+    """Parses the body of the list field base+key."""
+    name = base + key
     if key == "slots":
         m = _slots_range_re.match(body)
         if m:
-            sink.add("slots_start", m.group("start"))
-            sink.add("slots_end", m.group("end"))
-            sink.add("slots_hfn_wraps", int(m.group("hfn") or 0))
+            sink.add(f"{name}_start", m.group("start"))
+            sink.add(f"{name}_end", m.group("end"))
+            sink.add(f"{name}_hfn_wraps", int(m.group("hfn") or 0))
             return
 
     if body.lstrip().startswith("{"):
@@ -188,16 +205,14 @@ def _parse_list(key: str, body: str, sink: _FieldSink) -> None:
             close_idx = _find_list_end(body, open_idx)
             items.append(extract_metric_fields(body[open_idx + 1:close_idx]))
             pos = close_idx + 1
-        sink.add(key, items)
+        sink.add(name, items)
         remaining = _remaining_re.search(body, pos)
         if remaining:
-            sink.add(f"{key}_remaining", int(remaining.group("count")))
+            sink.add(f"{name}_remaining", int(remaining.group("count")))
         return
 
     if "=" in body:
-        sub = _FieldSink()
-        _parse_into(body, sub)
-        sink.merge(sub, key.lower())
+        _parse_into(body, sink, f"{base}{key.lower()}_")
         return
 
     values = []
@@ -209,7 +224,17 @@ def _parse_list(key: str, body: str, sink: _FieldSink) -> None:
             values.append(_normalize(m.group("num"), m.group("unit"))[0])
         else:
             values.append(None if m and m.group("na") else token)
-    sink.add(key, values)
+    sink.add(name, values)
+
+
+def _add_number(sink: _FieldSink, name: str, num: str, unit: str | None) -> None:
+    implied = sink.implied_units.get(name)
+    if implied is None or (unit is not None and unit not in _SI_PREFIX):
+        sink.add(name, *_normalize(num, unit))
+    elif implied == "s":
+        sink.add(name, *_normalize(num, (unit or "") + "s"))
+    else:
+        sink.add(name, _normalize(num, unit)[0], implied)
 
 
 def _add_value(sink: _FieldSink, name: str, key: str, m: re.Match) -> None:
@@ -220,7 +245,7 @@ def _add_value(sink: _FieldSink, name: str, key: str, m: re.Match) -> None:
         elif m.group("spaced_unit"):
             sink.add(name, parse_number(m.group("num")), _SPACED_UNITS[m.group("spaced_unit")])
         else:
-            sink.add(name, *_normalize(m.group("num"), m.group("unit")))
+            _add_number(sink, name, m.group("num"), m.group("unit"))
     elif m.group("na"):
         sink.add(name, None)
     elif m.group("hex"):
@@ -229,13 +254,13 @@ def _add_value(sink: _FieldSink, name: str, key: str, m: re.Match) -> None:
         sink.add(name, m.group("word"))
 
 
-def _parse_into(text: str, sink: _FieldSink) -> None:
+def _parse_into(text: str, sink: _FieldSink, prefix: str = "") -> None:
     """Scans key=value fields, prefixing the ones following a "<section>:" token.
 
     A section token only counts at the start of a ';' segment or right after a field, so that
     free-text labels like "PHY metrics:" do not become prefixes.
     """
-    section = ""
+    base = prefix
     in_free_text = False
     pos = 0
     while (m := _token_re.match(text, pos)) is not None and m.end() > pos:
@@ -245,27 +270,32 @@ def _parse_into(text: str, sink: _FieldSink) -> None:
             in_free_text = False
             if m.group("list"):
                 end = _find_list_end(text, pos - 1)
-                sub = _FieldSink()
-                _parse_list(key, text[pos:end], sub)
-                sink.merge(sub, section)
+                _parse_list(key, base, text[pos:end], sink)
                 pos = end + 1
             else:
-                _add_value(sink, f"{section}_{key}" if section else key, key, m)
+                _add_value(sink, base + key, key, m)
         elif m.group("section"):
             if not in_free_text:
-                section = m.group("section")
+                base = f"{prefix}{m.group('section')}_"
             in_free_text = False
         elif m.group("semi"):
-            section = ""
+            base = prefix
             in_free_text = False
         else:
             in_free_text = True
 
 
+def _parse_text(text: str, sink: _FieldSink) -> None:
+    # Some optional values are printed through fmt's std::optional formatter.
+    if "optional(" in text:
+        text = _optional_re.sub(r"\g<value>", text)
+    _parse_into(text, sink)
+
+
 def extract_metric_fields(text: str) -> dict[str, Any]:
     """Extracts the key=value fields of a metrics text as a flat dict with normalized values."""
     sink = _FieldSink()
-    _parse_into(text, sink)
+    _parse_text(text, sink)
     return sink.fields
 
 
@@ -306,8 +336,8 @@ class MetricsParser:
         }
         record.update({k: parse_number(v) for k, v in context_m.groupdict().items()})
 
-        sink = _FieldSink()
-        _parse_into(text, sink)
+        sink = _FieldSink(IMPLIED_UNITS.get(layer))
+        _parse_text(text, sink)
         record.update(sink.fields)
 
         layer_units = self.units[layer]

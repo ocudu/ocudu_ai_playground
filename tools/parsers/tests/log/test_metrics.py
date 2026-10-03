@@ -83,6 +83,7 @@ class MetricsParserTest(unittest.TestCase):
         ])
         self.assertEqual(rec["events_remaining"], 177)
         units = self.parser.units["sched"]
+        self.assertEqual(units["avg_prach_delay"], "slots")
         self.assertEqual(units["max_crc_delay"], "us")
         self.assertEqual(units["total_dl_brate"], "bps")
         self.assertNotIn("nof_ues", units)
@@ -101,6 +102,13 @@ class MetricsParserTest(unittest.TestCase):
         units = self.parser.units["sched_ue"]
         self.assertEqual(units["ta"], "us")
         self.assertEqual(units["dl_error_rate"], "%")
+        self.assertEqual((units["pusch_snr_db"], units["pusch_rsrp_db"], units["last_phr"]), ("dB", "dBFS", "dB"))
+        self.assertEqual((units["dl_bs"], units["bsr"], units["dl_olla"]), ("bytes", "bytes", "dB"))
+
+    def test_sched_ue_si_prefixed_bytes(self):
+        rec = self.parser.parse(SCHED_UE_LINE.replace("dl_bs=0", "dl_bs=5.74k"))
+        self.assertEqual(rec["dl_bs"], 5740.0)
+        self.assertEqual(self.parser.units["sched_ue"]["dl_bs"], "bytes")
 
     def test_sched_ue_unavailable_values(self):
         rec = self.parser.parse(SCHED_UE_LINE_NA)
@@ -119,13 +127,20 @@ class MetricsParserTest(unittest.TestCase):
         self.assertEqual(rec["layer"], "rlc")
         self.assertEqual((rec["du"], rec["ue"], rec["rb"]), (0, 1, "DRB1"))
         self.assertEqual(rec["tx_sdu_rate"], 1_200_000.0)
-        self.assertEqual(rec["tx_pull_latency_avg"], 1.25e-05)
+        self.assertEqual(rec["tx_pull_latency_avg"], 12.5)
         self.assertEqual(rec["tx_pull_latency_sum"], 1500.0)
         self.assertEqual(rec["tx_ack_latency_avg"], 12000.0)
         self.assertEqual(rec["tx_pdu_latency_hist"], [100, 18, 1200.0, 0])
         self.assertEqual(rec["tx_max_pull_latency"], 35.2)
         self.assertEqual(rec["rx_sdu_segmments_rate"], 1000.0)
         self.assertEqual(self.parser.units["rlc"]["tx_ack_latency_min"], "us")
+        self.assertEqual(self.parser.units["rlc"]["tx_pull_latency_avg"], "us")
+
+    def test_rlc_std_optional_values(self):
+        line = RLC_LINE.replace("t_poll_nof_expiration=0", "t_poll_nof_expiration=2 t_poll_latency_avg=5.5us t_poll_latency_min=optional(3)us t_poll_latency_max=optional(9)us")
+        rec = self.parser.parse(line)
+        self.assertEqual((rec["tx_t_poll_latency_min"], rec["tx_t_poll_latency_max"]), (3, 9))
+        self.assertEqual(self.parser.units["rlc"]["tx_t_poll_latency_min"], "us")
 
     def test_phy(self):
         rec = self.parser.parse(PHY_LINE)
@@ -154,7 +169,9 @@ class MetricsParserTest(unittest.TestCase):
         self.assertEqual(rec["ecpri_nof_past_seqid_msg"], 0)
         self.assertEqual(rec["tx_dl_up_dl_up_max_latency"], 64.02)
         self.assertEqual(rec["tx_kpis_nof_late_dl_rgs"], 1)
-        self.assertEqual(self.parser.units["ofh_sector"]["ether_rx_cpu_usage"], "%")
+        units = self.parser.units["ofh_sector"]
+        self.assertEqual(units["ether_rx_cpu_usage"], "%")
+        self.assertEqual((units["latest_msg_us"], units["ether_tx_tx_bytes"]), ("us", "bytes"))
 
     def test_pdcp(self):
         rec = self.parser.parse(PDCP_LINE)
@@ -177,10 +194,11 @@ class MetricsParserTest(unittest.TestCase):
         rec = self.parser.parse(E1AP_LINE)
         self.assertEqual(rec["layer"], "e1ap")
         self.assertEqual(rec["num_success_ctx_setup"], 2)
-        self.assertEqual(rec["release_latency_avg"], 0.0015)
+        self.assertEqual(rec["release_latency_avg"], 1500.0)
         self.assertEqual(rec["release_latency_hist"], [1, 0, 0])
         self.assertEqual(rec["max_release_latency"], 1500)
         self.assertEqual(self.parser.units["e1ap"]["max_release_latency"], "us")
+        self.assertEqual(self.parser.units["e1ap"]["release_latency_avg"], "us")
 
     def test_e1ap_without_releases(self):
         line = E1AP_LINE.replace("release_latency_avg=1.5m", "release_latency_avg=NaN")

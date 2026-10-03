@@ -36,6 +36,8 @@ Records are flat dicts with `timestamp`, `layer`, the line context fields (e.g. 
 
 - Units are normalized: times to `us`, bitrates to `bps`, SI-prefixed unitless values (`5.74k`) to plain numbers.
   The unit of each field is in `parser.units[layer][field]`.
+  Fields that OCUDU prints without a unit (e.g. `dl_bs` in bytes, `pusch_snr_db` in dB) get the one in
+  `metrics.IMPLIED_UNITS`.
 - `n/a`, `NaN` and `ovl` become `None`.
 - Slot fields (`sfn.slot`) stay strings. Use `metrics.parse_slot()` to split them.
 - `[k=v ...]` blocks and `<section>:` groups are flattened as `<block>_<key>`.
