@@ -81,3 +81,16 @@ script tests:
         paths:
           - "skills/**/*"
           - "tests/**/*"
+
+parser tests:
+  stage: static
+  image: python:3.12-alpine
+  before_script:
+    - pip install ./tools/parsers
+  script:
+    - python3 -m unittest discover -s tools/parsers/tests -t tools/parsers -v
+  rules:
+    - if: $ON_MR
+      changes:
+        paths:
+          - "tools/parsers/**/*"
