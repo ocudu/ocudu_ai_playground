@@ -3,7 +3,7 @@
 
 import uPlot from "uplot";
 import { getJSON } from "../api.js";
-import { displayUnit } from "../units.js";
+import { displayUnit, formatStat } from "../units.js";
 
 // Number of series colors defined by the theme, as CSS variables --s0 to --s9.
 const NOF_SERIES_COLORS = 10;
@@ -35,16 +35,6 @@ function utcDate(ts) {
 function timeTicks(u, splits, axisIdx, space, incr) {
   const fmt = incr < 1 ? fmtMs : incr < 60 ? fmtSec : fmtMin;
   return splits.map((ts) => fmt(utcDate(ts)));
-}
-
-/**
- * Formats a stats value for a table cell.
- * @param {number | null} v
- */
-function formatStat(v) {
-  if (v == null) return "\u2013";
-  if (v !== 0 && (Math.abs(v) >= 1e6 || Math.abs(v) < 1e-3)) return v.toExponential(3);
-  return String(Number(v.toPrecision(5)));
 }
 
 /** @param {string} name */

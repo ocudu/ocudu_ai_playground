@@ -26,6 +26,8 @@ SCHEMA_VERSION = 2
 MAX_FULL_RES_POINTS = 50_000
 # Split values returned when none are selected.
 MAX_DEFAULT_SPLITS = 20
+# Rows returned by default for a table.
+DEFAULT_TABLE_ROWS = 1000
 # Bins of a histogram, unless the field has few integer values.
 DEFAULT_HISTOGRAM_BINS = 50
 # Windows with more points get percentiles from a sample.
@@ -376,6 +378,49 @@ class Store:
         edges = [start + i * bin_width for i in range(nof_bins + 1)]
         return {"unit": ds["units"].get(field), "edges": edges, "total_splits": total_splits, "series": series}
 
+    def table_rows(
+        self,
+        dataset: str,
+        t0: float | None = None,
+        t1: float | None = None,
+        filter_expr: str | None = None,
+        instance: str | None = None,
+        fields: list[str] | None = None,
+        limit: int | None = DEFAULT_TABLE_ROWS,
+    ) -> Iterator[tuple[Any, ...]]:
+        """Yields the rows of a dataset as (time, record, *field values), in time order.
+
+        Fields default to all the fields of the dataset. List values are JSON text. A limit of None yields all rows.
+        """
+        ds = self._dataset(dataset)
+        columns = self._table_columns(ds, fields)
+        with self._connect() as conn:
+            where_sql, params, _ = self._window(conn, ds, None, t0, t1, None, None, filter_expr, instance, 0)
+            selected = ", ".join([_TS, _REC] + [_quote(c) for c in columns])
+            sql = f"SELECT {selected} FROM {_quote('ds_' + dataset)} WHERE {where_sql} ORDER BY {_TS}, {_REC}"
+            if limit is not None:
+                sql += " LIMIT ?"
+                params = params + [limit]
+            yield from conn.execute(sql, params)
+
+    def count_table_rows(
+        self,
+        dataset: str,
+        t0: float | None = None,
+        t1: float | None = None,
+        filter_expr: str | None = None,
+        instance: str | None = None,
+    ) -> int:
+        """Returns the number of rows that table_rows() would yield without a limit."""
+        ds = self._dataset(dataset)
+        with self._connect() as conn:
+            where_sql, params, _ = self._window(conn, ds, None, t0, t1, None, None, filter_expr, instance, 0)
+            return conn.execute(f"SELECT COUNT(*) FROM {_quote('ds_' + dataset)} WHERE {where_sql}", params).fetchone()[0]
+
+    def table_columns(self, dataset: str, fields: list[str] | None = None) -> list[str]:
+        """Returns the columns of a table: the given fields, or all fields with the context fields first."""
+        return self._table_columns(self._dataset(dataset), fields)
+
     def context_values(self, dataset: str, field: str, limit: int = 1000) -> list[Any]:
         """Returns the distinct values of a field."""
         ds = self._dataset(dataset)
@@ -412,7 +457,7 @@ class Store:
         self,
         conn: sqlite3.Connection,
         ds: dict[str, Any],
-        field: str,
+        field: str | None,
         t0: float | None,
         t1: float | None,
         split_by: str | None,
@@ -421,15 +466,18 @@ class Store:
         instance: str | None,
         max_splits: int,
     ) -> tuple[str, list[Any], int]:
-        """Builds the WHERE clause selecting the rows of a numeric field, returning it with its params and split count."""
-        if ds["fields"].get(field) != "number":
+        """Builds the WHERE clause selecting rows, returning it with its params and split count.
+
+        With a field, only rows where that numeric field has a value are selected.
+        """
+        if field is not None and ds["fields"].get(field) != "number":
             raise QueryError(f"Field {field!r} of {ds['name']!r} is not numeric.")
         if split_by is not None and split_by not in ds["fields"]:
             raise QueryError(f"Unknown split field {split_by!r} of {ds['name']!r}.")
 
         table = _quote("ds_" + ds["name"])
         split_col = _quote(split_by) if split_by else "NULL"
-        where = [f"{_quote(field)} IS NOT NULL"]
+        where = [f"{_quote(field)} IS NOT NULL"] if field is not None else ["1"]
         params: list[Any] = []
         if t0 is not None:
             where.append(f"{_TS} >= ?")
@@ -465,6 +513,16 @@ class Store:
                 where.append(f"{split_col} IN ({', '.join('?' * len(first))})")
                 params.extend(r[0] for r in first)
         return " AND ".join(where), params, total_splits
+
+    @staticmethod
+    def _table_columns(ds: dict[str, Any], fields: list[str] | None) -> list[str]:
+        if fields:
+            unknown = [f for f in fields if f not in ds["fields"]]
+            if unknown:
+                raise QueryError(f"Unknown fields {unknown} of {ds['name']!r}.")
+            return list(fields)
+        context = [c for c in ds["context"] if c in ds["fields"]]
+        return context + [f for f in ds["fields"] if f not in context]
 
     def _dataset(self, dataset: str) -> dict[str, Any]:
         try:

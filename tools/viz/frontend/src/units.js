@@ -23,3 +23,13 @@ export function displayUnit(unit, maxAbs) {
   const [divisor, label] = scales[scales.length - 1];
   return { divisor, label };
 }
+
+/**
+ * Formats a number compactly for display, with an en dash for missing values.
+ * @param {number | null} v
+ */
+export function formatStat(v) {
+  if (v == null) return "\u2013";
+  if (v !== 0 && (Math.abs(v) >= 1e6 || Math.abs(v) < 1e-3)) return v.toExponential(3);
+  return String(Number(v.toPrecision(5)));
+}

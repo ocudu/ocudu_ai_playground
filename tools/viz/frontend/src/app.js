@@ -8,6 +8,7 @@ import { getJSON, postJSON } from "./api.js";
 import FileBrowser from "./components/file-browser.js";
 import PlotPanel from "./components/plot-panel.js";
 import RecordView from "./components/record-view.js";
+import TablePanel from "./components/table-panel.js";
 import { applyTheme, loadThemePreference, onSystemThemeChange, saveThemePreference } from "./theme.js";
 import { addRecent, removeRecent } from "./recent.js";
 import { decodeView, encodeView } from "./view-state.js";
@@ -19,9 +20,14 @@ const URL_UPDATE_DELAY_MS = 300;
 
 let nextPlotId = 1;
 
-/** @param {{source: number, dataset?: string | null} & Record<string, any>} init */
+/**
+ * Creates a widget: a plot, or a table of a whole dataset with kind "table".
+ * @param {{source: number, dataset?: string | null, kind?: string} & Record<string, any>} init
+ */
 function newPlot(init) {
   return {
+    kind: "plot",
+    columnFilter: "",
     field: null,
     splitBy: null,
     splitValues: [],
@@ -40,7 +46,7 @@ function newTab() {
 }
 
 const App = {
-  components: { FileBrowser, PlotPanel, RecordView },
+  components: { FileBrowser, PlotPanel, RecordView, TablePanel },
   data() {
     return {
       sources: [],
@@ -199,11 +205,12 @@ const App = {
       if (this.activeId == null || !open.has(this.activeId)) this.activeId = this.openSources[0]?.id ?? null;
     },
 
-    async addPlot() {
+    /** @param {"plot" | "table"} kind */
+    async addPlot(kind) {
       const tab = this.activeTab;
       if (!tab) return;
       const last = tab.plots[tab.plots.length - 1];
-      tab.plots.push(newPlot({ source: this.activeId, dataset: last?.dataset }));
+      tab.plots.push(newPlot({ source: this.activeId, dataset: last?.dataset, kind }));
       await this.$nextTick();
       [...document.querySelectorAll("main > .panel")].at(-1)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     },
@@ -314,10 +321,17 @@ const App = {
       </div>
       <template v-else-if="activeTab">
         <p class="hint muted">Drag to zoom, wheel to zoom, Shift+drag to pan, double-click to reset, click a point to see its log line.</p>
-        <plot-panel v-for="p in activeTab.plots" :key="p.id" :plot="p" :sources="sources" :view="view" :shifts="shifts"
-                    :time-mode="timeMode" :theme-version="themeVersion" :show-source="false"
-                    @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" />
-        <button class="add-plot" title="Add a plot" @click="addPlot">+</button>
+        <template v-for="p in activeTab.plots" :key="p.id">
+          <table-panel v-if="p.kind === 'table'" :panel="p" :sources="sources" :view="view" :shifts="shifts" :show-source="false"
+                       @remove="removePlot(p.id)" @select-record="selection = $event" />
+          <plot-panel v-else :plot="p" :sources="sources" :view="view" :shifts="shifts" :time-mode="timeMode"
+                      :theme-version="themeVersion" :show-source="false"
+                      @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" />
+        </template>
+        <div class="add-buttons">
+          <button class="add-plot" title="Plot of a metric over time, or its histogram" @click="addPlot('plot')">+ plot</button>
+          <button class="add-plot" title="Table of all the metrics of a layer" @click="addPlot('table')">+ table</button>
+        </div>
       </template>
     </main>
     <record-view v-if="selection" :selection="selection" :sources="sources" @close="selection = null" />

@@ -5,11 +5,15 @@
 
 from __future__ import annotations
 
+import csv
+import io
+from collections.abc import Iterator
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from starlette.types import Scope
@@ -25,6 +29,16 @@ _NOT_BUILT_PAGE = (
     "wrapper script, which builds it in the container image, or run <code>npm ci && npm run build</code> in "
     "<code>tools/viz/frontend</code>.</p>"
 )
+# Rows per CSV chunk sent to the client.
+_CSV_CHUNK_ROWS = 5000
+
+
+def _utc_iso(t: float) -> str:
+    return datetime.fromtimestamp(t, timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _csv_name(text: str) -> str:
+    return "".join(c if c.isalnum() or c in "-_." else "_" for c in text)
 
 
 def display_names(paths: list[Path]) -> list[str]:
@@ -206,6 +220,67 @@ def create_app(sources: SourceRegistry | list[Store], static_dir: Path = STATIC_
             return get_store(source).histogram(dataset, field, t0, t1, split_by, split_values, filter_expr, instance, bins)
         except QueryError as e:
             raise HTTPException(400, str(e)) from None
+
+    @app.get("/api/table")
+    def table(
+        source: int,
+        dataset: str,
+        t0: float | None = None,
+        t1: float | None = None,
+        filter_expr: str | None = Query(None, alias="filter"),
+        instance: str | None = None,
+        limit: int = Query(1000, ge=1, le=100_000),
+    ) -> dict[str, Any]:
+        store = get_store(source)
+        try:
+            columns = store.table_columns(dataset)
+            total = store.count_table_rows(dataset, t0, t1, filter_expr, instance)
+            rows = [list(r) for r in store.table_rows(dataset, t0, t1, filter_expr, instance, columns, limit)]
+        except QueryError as e:
+            raise HTTPException(400, str(e)) from None
+        ds = store.datasets[dataset]
+        fields = [{"name": c, "type": ds["fields"][c], "unit": ds["units"].get(c), "context": c in ds["context"]} for c in columns]
+        return {"fields": fields, "total": total, "rows": rows}
+
+    @app.get("/api/table.csv")
+    def table_csv(
+        source: int,
+        dataset: str,
+        t0: float | None = None,
+        t1: float | None = None,
+        filter_expr: str | None = Query(None, alias="filter"),
+        instance: str | None = None,
+        fields: list[str] | None = Query(None),
+    ) -> StreamingResponse:
+        store = get_store(source)
+        try:
+            columns = store.table_columns(dataset, fields)
+            # Validates the query before the response starts, so errors get a proper status.
+            store.count_table_rows(dataset, t0, t1, filter_expr, instance)
+        except QueryError as e:
+            raise HTTPException(400, str(e)) from None
+        units = store.datasets[dataset]["units"]
+        # Header names carry the unit, with "%" spelled out to stay a plain identifier.
+        header = ["time_utc", "line"] + [f"{c}_{units[c].replace('%', 'pct')}" if c in units else c for c in columns]
+
+        def generate() -> Iterator[str]:
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow(header)
+            rows = store.table_rows(dataset, t0, t1, filter_expr, instance, columns, limit=None)
+            for i, (t, rec, *values) in enumerate(rows, start=1):
+                writer.writerow([_utc_iso(t), rec, *values])
+                if i % _CSV_CHUNK_ROWS == 0:
+                    yield buf.getvalue()
+                    buf.seek(0)
+                    buf.truncate()
+            yield buf.getvalue()
+
+        name_parts = [store.path.stem, dataset] + ([instance] if instance else [])
+        filename = _csv_name("_".join(name_parts)) + ".csv"
+        return StreamingResponse(
+            generate(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
 
     @app.get("/api/context")
     def context(source: int, dataset: str, field: str) -> list[Any]:

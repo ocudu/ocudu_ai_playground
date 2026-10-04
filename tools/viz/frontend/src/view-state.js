@@ -5,7 +5,7 @@
 const VERSION = 2;
 const PREFIX = "#v=";
 // Plot properties saved in the view state. A plot's source is the source of its tab.
-const PLOT_KEYS = ["dataset", "instance", "field", "splitBy", "splitValues", "filter", "mode"];
+const PLOT_KEYS = ["kind", "dataset", "instance", "field", "splitBy", "splitValues", "filter", "mode", "columnFilter"];
 
 /** @param {string} text */
 function toBase64Url(text) {
@@ -74,7 +74,7 @@ export function decodeView(hash, sources) {
         warnings.push(`Dataset ${p.dataset} is not in ${t.source}, its plot was skipped.`);
         continue;
       }
-      plots.push({ ...p, splitValues: p.splitValues ?? [], filter: p.filter ?? "" });
+      plots.push({ ...p, kind: p.kind ?? "plot", splitValues: p.splitValues ?? [], filter: p.filter ?? "", columnFilter: p.columnFilter ?? "" });
     }
     tabs.push({ source: source.id, range: t.range ?? null, plots });
   }

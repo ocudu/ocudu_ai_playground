@@ -146,6 +146,29 @@ class StoreTest(unittest.TestCase):
             self.store.series("mac", "nof_slots", instance="x")
         self.assertEqual((self.store.datasets["mac"]["label"], self.store.datasets["mac"]["instance"]), ("mac", None))
 
+    def test_table_rows(self):
+        columns = self.store.table_columns("sched_ue")
+        self.assertEqual(columns[:3], ["ue", "pci", "rnti"])
+        self.assertIn("dl_brate", columns)
+        rows = list(self.store.table_rows("sched_ue", limit=None))
+        self.assertEqual(len(rows), 20)
+        t, rec, *values = rows[2]
+        self.assertEqual(rec, 8)
+        self.assertEqual(dict(zip(columns, values))["dl_brate"], 1000)
+        self.assertEqual([r[0] for r in rows], sorted(r[0] for r in rows))
+
+    def test_table_rows_selection(self):
+        rows = list(self.store.table_rows("sched_ue", filter_expr="ue == 1", fields=["rnti", "dl_brate"], limit=3))
+        self.assertEqual([r[2:] for r in rows], [("0x4601", 0), ("0x4601", 1000), ("0x4601", 2000)])
+        self.assertEqual(self.store.count_table_rows("sched_ue", filter_expr="ue == 1"), 10)
+        with self.assertRaisesRegex(QueryError, "Unknown fields"):
+            self.store.table_columns("sched_ue", ["nope"])
+
+    def test_table_rows_instance(self):
+        log = write_log(self.dir / "exec.log", executors=True)
+        store = self.cache.open(log, LogMetricsSource())
+        self.assertEqual(store.count_table_rows("exec", instance="du_ctrl_exec"), 10)
+
     def test_invalid_queries(self):
         with self.assertRaises(QueryError):
             self.store.series("foo", "x")

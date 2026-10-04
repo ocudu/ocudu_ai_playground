@@ -42,6 +42,7 @@ updated as they are agreed.
 - **F13. Time modes:** absolute (log wall clock, default) or relative (time since the start of the log).
 - **F14. Events overlay:** event datasets drawn on top of the time series plots.
 - **F15. Open files from the page:** start without files and open them from a file browser in the page.
+- **F16. Table widgets and CSV export:** all the metrics of a dataset as a table, exportable as CSV.
 
 ## Non-functional requirements
 
@@ -170,6 +171,18 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - A header selector chooses `auto` (follows the OS setting), `light` or `dark`. The preference is kept in
   browser storage and applied before the first paint. Charts are rebuilt on a theme change, without
   refetching data.
+
+### D11. Table widgets and CSV export
+
+- Below the panels of a tab, `+ plot` adds a plot and `+ table` a table widget. A table shows a whole
+  dataset of the tab's file: dataset and instance are selected, not a field. Its rows are the dataset rows of the visible window at full
+  resolution, with the row filter applied: time, record id (log line), context fields, then all other fields.
+- A column filter, applied as it is typed, shows the metric columns whose name contains any of its words.
+  Context columns stay shown. Numeric columns are scaled to a display unit from the loaded rows.
+- The page shows the first 1000 rows (`GET /api/table`). `GET /api/table.csv` streams all rows of the
+  window with the shown columns, values in the canonical unit named in the column header (e.g.
+  `dl_brate_bps`, `cpu_load_pct`), times in ISO 8601 UTC.
+- Table widgets are saved in the URL view state with the plots of their tab.
 
 ### D12. Container
 

@@ -89,6 +89,35 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.json()["series"][0]["counts"], [10, 10])
 
+    def test_table(self):
+        res = self.client.get("/api/table", params={"source": 0, "dataset": "sched_ue", "limit": 3}).json()
+        self.assertEqual((res["total"], len(res["rows"])), (20, 3))
+        names = [f["name"] for f in res["fields"]]
+        self.assertEqual(names[:3], ["ue", "pci", "rnti"])
+        brate = res["fields"][names.index("dl_brate")]
+        self.assertEqual((brate["unit"], brate["context"]), ("bps", False))
+        self.assertEqual(len(res["rows"][0]), 2 + len(names))
+
+    def test_table_csv(self):
+        params = {"source": 0, "dataset": "exec", "instance": "cell_exec", "fields": ["executor", "task_avg"]}
+        res = self.client.get("/api/table.csv", params=params)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('filename="gnb_exec_cell_exec.csv"', res.headers["content-disposition"])
+        lines = res.text.splitlines()
+        self.assertEqual(lines[0], "time_utc,line,executor,task_avg_us")
+        self.assertEqual(len(lines), 11)
+        self.assertTrue(lines[1].startswith("2026-06-29T14:10:00.000000Z,"))
+        self.assertTrue(lines[1].endswith(",cell_exec,10"))
+
+    def test_table_csv_percent_unit(self):
+        res = self.client.get("/api/table.csv", params={"source": 0, "dataset": "exec", "fields": ["cpu_load"]})
+        self.assertEqual(res.text.splitlines()[0], "time_utc,line,cpu_load_pct")
+
+    def test_table_csv_errors(self):
+        base = {"source": 0, "dataset": "mac"}
+        self.assertEqual(self.client.get("/api/table.csv", params={**base, "filter": "nope > 1"}).status_code, 400)
+        self.assertEqual(self.client.get("/api/table.csv", params={**base, "fields": ["nope"]}).status_code, 400)
+
     def test_context(self):
         res = self.client.get("/api/context", params={"source": 0, "dataset": "sched_ue", "field": "ue"})
         self.assertEqual(res.json(), [0, 1])

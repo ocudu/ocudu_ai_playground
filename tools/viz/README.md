@@ -60,6 +60,11 @@ In the page:
   Strings can be quoted or bare (`type == ue_create`). A bare word naming a field compares two fields.
 - Switch a plot from `time series` to `histogram` to see the value distribution of the visible window,
   one curve per split value. Integer fields with few values (e.g. MCS) get one bin per value.
+- `+ plot` and `+ table` below the panels of a tab add a plot or a table. A table shows all the metrics of
+  a layer for the visible window at full resolution, one row per metrics line. Type words in its column box
+  to show only the metric columns whose name contains any of them (e.g. `latency brate`), and use the row
+  filter like in plots. Click a row to see its log line. `export CSV` downloads all rows of the visible
+  window with the shown columns, values in the canonical unit.
 - Below each plot, a table shows count, min, mean, p50, p95, p99 and max of each series in the visible
   window, with the plot filter applied. Percentiles are sampled for windows over 2M points.
 - Time mode `relative` shows the time since the start of the log.
