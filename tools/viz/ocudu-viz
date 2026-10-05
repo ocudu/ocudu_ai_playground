@@ -10,6 +10,8 @@
 set -euo pipefail
 
 readonly IMAGE="ocudu-viz:latest"
+# Label of the images built from the Dockerfile.
+readonly IMAGE_LABEL="org.ocudu.tool=ocudu-viz"
 readonly DOCKER="${OCUDU_VIZ_DOCKER:-docker}"
 script_dir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 readonly script_dir
@@ -31,6 +33,7 @@ Options:
   --cache-size GB   Parse cache size limit (default: 2).
   --no-cache        Keep parsed data in memory only.
   --clear-cache     Remove all parse caches before starting.
+  --clean           Remove the ocudu-viz images and parse caches, then exit.
   -h, --help        Show this help.
 
 Environment:
@@ -46,6 +49,7 @@ die() {
 port=8765
 open_browser=1
 rebuild=0
+clean=0
 tmp_root="$(readlink -f "${TMPDIR:-/tmp}")"
 roots=("$(readlink -f "$HOME")")
 # gnb logs are often written to the temp dir, unless it is already within the home directory.
@@ -58,6 +62,7 @@ while [[ $# -gt 0 ]]; do
     --root) roots+=("$(readlink -f "${2:?--root needs a value}")"); shift 2 ;;
     --no-browser) open_browser=0; shift ;;
     --rebuild) rebuild=1; shift ;;
+    --clean) clean=1; shift ;;
     --cache-size) server_args+=(--cache-size "${2:?--cache-size needs a value}"); shift 2 ;;
     --no-cache|--clear-cache) server_args+=("$1"); shift ;;
     -h|--help) usage; exit 0 ;;
@@ -68,6 +73,19 @@ while [[ $# -gt 0 ]]; do
 done
 
 command -v "$DOCKER" >/dev/null || die "$DOCKER not found. Install Docker, or set OCUDU_VIZ_DOCKER (e.g. to podman)."
+
+cache_dir="${TMPDIR:-/tmp}/ocudu-viz-$(id -u)"
+
+if [[ $clean -eq 1 ]]; then
+  mapfile -t images < <("$DOCKER" images -q --filter "label=$IMAGE_LABEL" | sort -u)
+  if [[ ${#images[@]} -gt 0 ]]; then
+    "$DOCKER" image rm -f "${images[@]}" >/dev/null || die "could not remove the images, is ocudu-viz still running?"
+  fi
+  rm -rf "$cache_dir"
+  echo "Removed ${#images[@]} ocudu-viz image(s) and the parse cache $cache_dir." >&2
+  echo "Docker's shared build cache is left as is; 'docker builder prune' removes it." >&2
+  exit 0
+fi
 
 # Files are passed to the container by their absolute host paths, which the mounts below keep valid.
 abs_files=()
@@ -80,6 +98,8 @@ build_args=(--quiet)
 [[ $rebuild -eq 1 ]] && build_args+=(--no-cache)
 echo "Building the ocudu-viz image..." >&2
 "$DOCKER" build "${build_args[@]}" -t "$IMAGE" -f "$script_dir/Dockerfile" "$script_dir/.." >/dev/null
+# A rebuild leaves the previous image untagged, remove it.
+"$DOCKER" image prune -f --filter "label=$IMAGE_LABEL" >/dev/null
 
 # Mounts: the roots, plus the directory of any file outside them, all read-only at the same path.
 mounts=()
@@ -103,7 +123,6 @@ for r in "${roots[@]}"; do
   server_args+=(--root "$r")
 done
 
-cache_dir="${TMPDIR:-/tmp}/ocudu-viz-$(id -u)"
 mkdir -p -m 700 "$cache_dir"
 
 port_busy() {

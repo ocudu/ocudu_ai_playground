@@ -185,6 +185,9 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - The server listens on all interfaces inside the container, and the port is published on the host
   loopback only (`127.0.0.1`), never on other interfaces.
 - The wrapper opens the browser once the server listens, since a container cannot open the host browser.
+- The image carries the label `org.ocudu.tool=ocudu-viz`. After each build the wrapper prunes the untagged
+  images with that label, which rebuilds leave behind, and `--clean` removes all of them with the parse
+  cache. Containers run with `--rm` and no Docker volumes are created.
 
 ### D13. Opening files from the page
 

@@ -13,6 +13,8 @@ COPY viz/frontend/ ./
 RUN npm run build
 
 FROM python:3.12-slim
+# Lets the wrapper find the images it built, e.g. to remove the ones replaced by a rebuild.
+LABEL org.ocudu.tool="ocudu-viz"
 WORKDIR /src
 COPY parsers ./parsers
 COPY viz ./viz

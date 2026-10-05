@@ -83,6 +83,7 @@ Large windows are downsampled to min/max per pixel, so spikes stay visible. Zoom
 | `--cache-size GB` | Cache size limit, least recently used caches are removed first (default 2). |
 | `--no-cache`      | Keep parsed data in memory only.                                            |
 | `--clear-cache`   | Remove all caches before starting.                                          |
+| `--clean`         | Remove the ocudu-viz images and parse caches, then exit.                    |
 
 Set `OCUDU_VIZ_DOCKER=podman` to use Podman instead of Docker.
 
