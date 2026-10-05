@@ -85,6 +85,8 @@ def create_app(stores: list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
                         "context": ds["context"],
                         "label": ds["label"],
                         "instance": ds["instance"],
+                        "t_min": ds["t_min"],
+                        "t_max": ds["t_max"],
                     }
                     for ds in s.datasets.values()
                 ],

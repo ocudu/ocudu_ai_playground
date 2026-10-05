@@ -5,10 +5,8 @@ import uPlot from "uplot";
 import { getJSON } from "../api.js";
 import { displayUnit } from "../units.js";
 
-const PALETTE = [
-  "#4e79a7", "#f28e2b", "#e15759", "#76b7b2", "#59a14f",
-  "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac",
-];
+// Number of series colors defined by the theme, as CSS variables --s0 to --s9.
+const NOF_SERIES_COLORS = 10;
 const CHART_HEIGHT = 260;
 const steppedPath = uPlot.paths.stepped({ align: 1 });
 // Delay before fetching after the view changes, to coalesce wheel and pan events.
@@ -54,6 +52,11 @@ function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 }
 
+/** @param {number} i */
+function seriesColor(i) {
+  return cssVar(`--s${i % NOF_SERIES_COLORS}`);
+}
+
 /**
  * Index of the nearest non-null entry of arr to idx, or -1.
  * @param {Array<any>} arr
@@ -75,6 +78,7 @@ export default {
     view: { type: Object, default: null },
     shifts: { type: Array, required: true },
     timeMode: { type: String, required: true },
+    themeVersion: { type: Number, default: 0 },
   },
   emits: ["zoom", "remove", "select-record"],
   data() {
@@ -92,6 +96,7 @@ export default {
       statsSampled: false,
       unit: { divisor: 1, label: "" },
       labels: [],
+      cursorText: "",
     };
   },
   computed: {
@@ -121,7 +126,9 @@ export default {
     statsRows() {
       return this.stats.map((s) => {
         const idx = this.labels.indexOf(s.label);
-        const color = idx >= 0 ? PALETTE[idx % PALETTE.length] : "transparent";
+        // Read after a theme change, which changes the series colors.
+        void this.themeVersion;
+        const color = idx >= 0 ? seriesColor(idx) : "transparent";
         const scale = (v) => formatStat(v == null ? v : v / this.unit.divisor);
         return { label: s.label, color, count: s.count.toLocaleString(), min: scale(s.min), mean: scale(s.mean), p50: scale(s.p50), p95: scale(s.p95), p99: scale(s.p99), max: scale(s.max) };
       });
@@ -152,13 +159,22 @@ export default {
       this.splitFilter = "";
       this.loadSplitOptions();
     },
-    view:{ handler() { this.applyView(); this.scheduleFetch(false); }, deep: true },
+    view: { handler() { this.applyView(); this.scheduleFetch(false); }, deep: true },
+    themeVersion() {
+      // Charts take their colors at creation, so they are rebuilt from the last response.
+      if (!this.lastRes) return;
+      this.rebuildPending = true;
+      if (this.lastRes.edges) this.renderHistogram(this.lastRes);
+      else this.render(this.lastRes);
+    },
   },
   created() {
     // Not reactive: chart state is owned by uPlot.
     this.chart = null;
     this.records = [];
     this.focusedSeries = -1;
+    this.lastRes = null;
+    this.hovering = false;
     this.fetchTimer = null;
     this.abort = null;
     // Any change of the query inputs refetches and rebuilds the chart.
@@ -270,6 +286,7 @@ export default {
     },
 
     render(res) {
+      this.lastRes = res;
       this.downsampled = res.downsampled;
       this.totalSplits = res.total_splits;
       this.nofSeries = res.series.length;
@@ -306,6 +323,7 @@ export default {
     },
 
     renderHistogram(res) {
+      this.lastRes = res;
       this.downsampled = false;
       this.totalSplits = res.total_splits;
       this.nofSeries = res.series.length;
@@ -333,6 +351,36 @@ export default {
       this.rebuildPending = false;
     },
 
+    /** Shows the time and value under the mouse, or only the time when the cursor is synced from another plot. */
+    updateCursorReadout(u) {
+      const { left, top } = u.cursor;
+      if (left == null || left < 0) {
+        this.cursorText = "";
+        return;
+      }
+      const histogram = this.plot.mode === "histogram";
+      const unit = this.unit.label ? ` ${this.unit.label}` : "";
+      const x = u.posToVal(left, "x");
+      let text;
+      if (histogram) text = `${formatStat(x)}${unit}`;
+      else if (this.timeMode === "absolute") text = fmtFull(utcDate(x));
+      else text = `${x.toFixed(3)} s`;
+      if (this.hovering && top != null && top >= 0) {
+        const y = u.posToVal(top, "y");
+        text += histogram ? ` \u00b7 count ${formatStat(Math.max(0, y))}` : ` \u00b7 ${formatStat(y)}${unit}`;
+      }
+      this.cursorText = text;
+    },
+
+    /** Tracks whether the mouse is over this chart, as opposed to a cursor synced from another plot. */
+    trackHover(chart) {
+      chart.over.addEventListener("mouseenter", () => { this.hovering = true; });
+      chart.over.addEventListener("mouseleave", () => {
+        this.hovering = false;
+        this.cursorText = "";
+      });
+    },
+
     applyView() {
       if (this.chart && this.view && this.plot.mode !== "histogram") {
         this.chart.setScale("x", { min: this.view.min, max: this.view.max });
@@ -351,15 +399,18 @@ export default {
         series: [
           { label: unitLabel ? `value [${unitLabel}]` : "value", value: (u, v) => (v == null ? "--" : formatStat(v)) },
           ...labels.map((label, i) => {
-            const color = PALETTE[i % PALETTE.length];
+            const color = seriesColor(i);
             return { label, stroke: color, width: 1.5, paths: steppedPath, points: { show: false }, fill: single ? color + "40" : undefined };
           }),
         ],
         axes: [{ ...axis, label: unitLabel }, { ...axis, label: "count", size: 60 }],
         cursor: { drag: { x: false, y: false }, focus: { prox: 16 } },
         focus: { alpha: 0.35 },
+        hooks: { setCursor: [(u) => this.updateCursorReadout(u)] },
       };
-      return new uPlot(opts, data, this.$refs.chart);
+      const chart = new uPlot(opts, data, this.$refs.chart);
+      this.trackHover(chart);
+      return chart;
     },
 
     createChart(data, labels, unitLabel) {
@@ -378,7 +429,7 @@ export default {
           absolute
             ? { label: "time (UTC)", value: (u, ts) => (ts == null ? "--" : fmtFull(utcDate(ts))) }
             : { label: "time (s)", value: (u, t) => (t == null ? "--" : t.toFixed(3)) },
-          ...labels.map((label, i) => ({ label, stroke: PALETTE[i % PALETTE.length], width: 1.25, spanGaps: true })),
+          ...labels.map((label, i) => ({ label, stroke: seriesColor(i), width: 1.25, spanGaps: true })),
         ],
         axes: [xAxis, { ...axis, label: unitLabel, size: 60 }],
         cursor: { drag: { x: true, y: false, setScale: false }, sync: { key: "ocudu-viz" }, focus: { prox: 16 } },
@@ -393,9 +444,11 @@ export default {
             },
           ],
           setSeries: [(u, idx) => { this.focusedSeries = idx ?? -1; }],
+          setCursor: [(u) => this.updateCursorReadout(u)],
         },
       };
       const chart = new uPlot(opts, data, this.$refs.chart);
+      this.trackHover(chart);
       this.attachInteractions(chart);
       return chart;
     },
@@ -500,7 +553,10 @@ export default {
         </span>
         <button class="icon" title="Remove plot" @click="$emit('remove')">✕</button>
       </header>
-      <div ref="chart" class="chart"></div>
+      <div class="chart-wrap">
+        <div ref="chart" class="chart"></div>
+        <div v-if="cursorText" class="cursor-readout">{{ cursorText }}</div>
+      </div>
       <details v-if="statsRows.length" class="stats" open>
         <summary class="muted">statistics of the visible window{{ unit.label ? " [" + unit.label + "]" : "" }}{{ statsSampled ? ", percentiles sampled" : "" }}</summary>
         <table>

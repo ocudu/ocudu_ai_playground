@@ -201,6 +201,9 @@ class Store:
                     "SELECT name, kind, fields, units, context, label, instance FROM datasets ORDER BY label"
                 )
             }
+            # Time span of each dataset, from the indexed timestamp column.
+            for name, ds in self.datasets.items():
+                ds["t_min"], ds["t_max"] = conn.execute(f"SELECT MIN({_TS}), MAX({_TS}) FROM {_quote('ds_' + name)}").fetchone()
 
     @property
     def path(self) -> Path:

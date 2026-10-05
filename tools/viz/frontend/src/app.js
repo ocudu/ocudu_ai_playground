@@ -7,6 +7,7 @@ import "./style.css";
 import { getJSON } from "./api.js";
 import PlotPanel from "./components/plot-panel.js";
 import RecordView from "./components/record-view.js";
+import { applyTheme, loadThemePreference, onSystemThemeChange, saveThemePreference } from "./theme.js";
 import { decodeView, encodeView } from "./view-state.js";
 
 // Delay before writing the view to the URL, to coalesce zoom and pan events.
@@ -32,7 +33,7 @@ function newPlot(init) {
 const App = {
   components: { PlotPanel, RecordView },
   data() {
-    return { sources: [], plots: [], timeMode: "absolute", userRange: null, selection: null, error: "", warnings: [] };
+    return { sources: [], plots: [], timeMode: "absolute", userRange: null, selection: null, error: "", warnings: [], themePref: loadThemePreference(), themeVersion: 0 };
   },
   computed: {
     /** Shift from source time to display time, per source. */
@@ -52,8 +53,29 @@ const App = {
     view() {
       return this.userRange ?? this.fullRange;
     },
+    /** Span of the datasets shown in the plots, or of all datasets without plots. */
+    metricsRange() {
+      const spans = [];
+      const add = (sourceIdx, ds) => {
+        if (ds && ds.t_min != null) spans.push([ds.t_min + this.shifts[sourceIdx], ds.t_max + this.shifts[sourceIdx]]);
+      };
+      if (this.plots.length) {
+        for (const p of this.plots) add(p.source, this.sources[p.source]?.datasets.find((d) => d.name === p.dataset));
+      } else {
+        this.sources.forEach((s, i) => s.datasets.forEach((d) => add(i, d)));
+      }
+      if (!spans.length) return null;
+      const min = Math.min(...spans.map((s) => s[0]));
+      const max = Math.max(...spans.map((s) => s[1]));
+      return { min, max: max > min ? max : min + 1 };
+    },
   },
   watch: {
+    themePref(pref) {
+      saveThemePreference(pref);
+      applyTheme(pref);
+      this.themeVersion++;
+    },
     timeMode() {
       if (!this.restoring) this.userRange = null;
     },
@@ -63,6 +85,12 @@ const App = {
     this.restoring = false;
     this.urlTimer = null;
     this.writtenHash = "";
+    applyTheme(this.themePref);
+    onSystemThemeChange(() => {
+      if (this.themePref !== "auto") return;
+      applyTheme("auto");
+      this.themeVersion++;
+    });
   },
   async mounted() {
     try {
@@ -129,7 +157,15 @@ const App = {
           <option value="relative">relative</option>
         </select>
       </label>
-      <button @click="zoom(null)" :disabled="!userRange">reset zoom</button>
+      <label class="inline">theme
+        <select v-model="themePref">
+          <option value="auto">auto</option>
+          <option value="light">light</option>
+          <option value="dark">dark</option>
+        </select>
+      </label>
+      <button @click="zoom(null)" :disabled="!userRange" title="Show the whole time range of the logs">reset zoom</button>
+      <button @click="zoom(metricsRange)" :disabled="!metricsRange" title="Fit the time range of the plotted metrics">fit metrics</button>
       <button @click="addPlot" :disabled="!sources.length">add plot</button>
     </header>
     <main>
@@ -137,7 +173,7 @@ const App = {
       <p v-for="w in warnings" :key="w" class="error">{{ w }}</p>
       <p class="hint muted">Drag to zoom, wheel to zoom, Shift+drag to pan, double-click to reset, click a point to see its log line.</p>
       <plot-panel v-for="p in plots" :key="p.id" :plot="p" :sources="sources" :view="view" :shifts="shifts"
-                  :time-mode="timeMode" @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" />
+                  :time-mode="timeMode" :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" />
     </main>
     <record-view v-if="selection" :selection="selection" :sources="sources" @close="selection = null" />
   `,

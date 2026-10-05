@@ -57,6 +57,7 @@ class ServerTest(unittest.TestCase):
         res = self.client.get("/api/sources").json()
         ds = next(d for d in res[0]["datasets"] if d["name"] == "exec")
         self.assertEqual((ds["label"], ds["instance"]), ("executors", "executor"))
+        self.assertEqual(ds["t_max"] - ds["t_min"], 9)
 
     def test_series_instance(self):
         res = self.client.get("/api/series", params={"source": 0, "dataset": "exec", "field": "task_avg", "instance": "du_ctrl_exec"})

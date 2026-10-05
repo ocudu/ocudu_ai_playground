@@ -9,6 +9,15 @@ SPDX-License-Identifier: BSD-3-Clause-Open-MPI
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ocudu-viz</title>
   <link rel="icon" type="image/png" href="img/favicon.png">
+  <script>
+    // Applies the saved theme before the first paint, mirroring theme.js.
+    (function () {
+      var pref = "auto";
+      try { pref = localStorage.getItem("ocudu-viz-theme") || "auto"; } catch (e) {}
+      var dark = pref === "dark" || (pref !== "light" && matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    })();
+  </script>
 </head>
 <body>
   <div id="app"></div>

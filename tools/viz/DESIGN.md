@@ -159,6 +159,15 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - Sources are saved by display name and remapped by name when opened with other files or another order.
   Plots of missing sources or datasets are skipped with a warning. No file paths are put in the URL.
 
+### D10. Themes
+
+- Light and dark themes, defined as CSS custom properties, including the series colors (`--s0` to `--s9`).
+  The dark theme uses neutral charcoal surfaces, soft grey text, faint grid lines and a muted blue
+  accent.
+- A header selector chooses `auto` (follows the OS setting), `light` or `dark`. The preference is kept in
+  browser storage and applied before the first paint. Charts are rebuilt on a theme change, without
+  refetching data.
+
 ### D12. Container
 
 - The image (`ocudu-viz:latest`) is built locally from the `tools/` directory, by the `ocudu-viz` wrapper on

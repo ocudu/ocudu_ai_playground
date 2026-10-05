@@ -30,6 +30,9 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(ue["units"]["dl_brate"], "bps")
         self.assertEqual(ue["units"]["dl_bs"], "bytes")
         self.assertEqual(ue["context"], ["ue", "pci", "rnti"])
+        # Metrics span 9 s, inside the 13 s of the log.
+        self.assertEqual(ue["t_max"] - ue["t_min"], 9)
+        self.assertEqual(ue["t_min"] - self.store.meta["t_min"], 2)
         # The log spans 2 s before the first and 2 s after the last metrics line.
         self.assertEqual(self.store.meta["t_max"] - self.store.meta["t_min"], 13)
 

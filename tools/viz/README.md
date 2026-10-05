@@ -32,7 +32,10 @@ In the page:
 - Pick source, dataset (METRICS layer), field and optionally a context field to split by, giving one
   series per value (e.g. one per `ue`). Without a selection of values, the first 20 are shown.
 - Drag or use the wheel to zoom, Shift+drag to pan, double-click to reset. All plots share the time axis.
+  `reset zoom` shows the whole time range of the logs, `fit metrics` the time range of the plotted metrics.
 - Click a point to see its log line and the lines around it.
+- The top-right corner of a plot shows the time and value under the mouse. The legend below shows the
+  nearest data point.
 - Filter the rows of a plot with an expression, applied on Enter. Values are in the base units of the
   parser (us, bps):
 
@@ -53,6 +56,9 @@ In the page:
 The current view (plots, splits, filters, zoom and time mode) is kept in the page URL, so a reload
 restores it and a bookmark or shared link reopens it, as long as `ocudu-viz` runs with the same files.
 Sources are matched by name; plots of sources that are not open are skipped with a warning.
+
+The `theme` selector in the header switches between light and dark, or follows the
+operating system with `auto`. The choice is remembered by the browser.
 
 Large windows are downsampled to min/max per pixel, so spikes stay visible. Zoom in for full resolution.
 
