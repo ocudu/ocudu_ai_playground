@@ -11,8 +11,11 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 from starlette.types import Scope
 
+from .files import PathNotAllowed, list_dir
+from .registry import OpenError, SourceEntry, SourceRegistry
 from .store import QueryError, Store
 
 # Built frontend, produced by "npm run build" in the frontend directory.
@@ -55,44 +58,101 @@ class _RevalidatedStaticFiles(StaticFiles):
         return response
 
 
-def create_app(stores: list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
-    """Serves the given sources and the frontend in static_dir. Source ids are their positions in stores."""
+def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
+    info: dict[str, Any] = {
+        "id": entry.id,
+        "path": str(entry.path),
+        "name": name,
+        "status": entry.status,
+        "progress": entry.progress,
+        "error": entry.error,
+        "t_min": None,
+        "t_max": None,
+        "datasets": [],
+    }
+    s = entry.store
+    if s is None:
+        return info
+    info["t_min"], info["t_max"] = s.meta.get("t_min"), s.meta.get("t_max")
+    info["datasets"] = [
+        {
+            "name": ds["name"],
+            "kind": ds["kind"],
+            "fields": [{"name": f, "type": t, "unit": ds["units"].get(f)} for f, t in ds["fields"].items()],
+            "context": ds["context"],
+            "label": ds["label"],
+            "instance": ds["instance"],
+            "t_min": ds["t_min"],
+            "t_max": ds["t_max"],
+        }
+        for ds in s.datasets.values()
+    ]
+    return info
+
+
+class _OpenRequest(BaseModel):
+    path: str
+
+
+def create_app(sources: SourceRegistry | list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
+    """Serves the sources of a registry, or a fixed list of stores, and the frontend in static_dir.
+
+    Source ids are the positions of the sources in opening order.
+    """
+    if isinstance(sources, SourceRegistry):
+        registry = sources
+    else:
+        registry = SourceRegistry()
+        for store in sources:
+            registry.add_store(store)
     app = FastAPI(title="ocudu-viz")
 
     def get_store(source: int) -> Store:
-        if not 0 <= source < len(stores):
-            raise HTTPException(404, f"Unknown source {source}.")
-        return stores[source]
+        try:
+            store = registry.get_ready(source)
+        except KeyError:
+            raise HTTPException(404, f"Unknown source {source}.") from None
+        if store is None:
+            raise HTTPException(409, f"Source {source} is not parsed yet.")
+        return store
 
-    names = display_names([s.path for s in stores])
+    def sources_info() -> list[dict[str, Any]]:
+        entries = registry.entries()
+        names = display_names([e.path for e in entries])
+        return [_source_info(e, names[i]) for i, e in enumerate(entries)]
 
     @app.get("/api/sources")
-    def sources() -> list[dict[str, Any]]:
-        return [
-            {
-                "id": i,
-                "path": str(s.path),
-                "name": names[i],
-                "t_min": s.meta.get("t_min"),
-                "t_max": s.meta.get("t_max"),
-                "datasets": [
-                    {
-                        "name": ds["name"],
-                        "kind": ds["kind"],
-                        "fields": [
-                            {"name": f, "type": t, "unit": ds["units"].get(f)} for f, t in ds["fields"].items()
-                        ],
-                        "context": ds["context"],
-                        "label": ds["label"],
-                        "instance": ds["instance"],
-                        "t_min": ds["t_min"],
-                        "t_max": ds["t_max"],
-                    }
-                    for ds in s.datasets.values()
-                ],
-            }
-            for i, s in enumerate(stores)
-        ]
+    def list_sources() -> list[dict[str, Any]]:
+        return sources_info()
+
+    @app.post("/api/sources")
+    def open_source(req: _OpenRequest) -> dict[str, Any]:
+        try:
+            entry = registry.open(req.path)
+        except (OpenError, PathNotAllowed) as e:
+            raise HTTPException(400, str(e)) from None
+        return sources_info()[entry.id]
+
+    @app.delete("/api/sources/{source_id}")
+    def close_source(source_id: int) -> dict[str, Any]:
+        try:
+            registry.close(source_id)
+        except KeyError:
+            raise HTTPException(404, f"Unknown source {source_id}.") from None
+        return sources_info()[source_id]
+
+    @app.get("/api/roots")
+    def roots() -> dict[str, Any]:
+        return {"roots": [str(r) for r in registry.roots], "can_open": registry.cache is not None}
+
+    @app.get("/api/fs")
+    def fs(path: str | None = None, hidden: bool = False) -> dict[str, Any]:
+        if not registry.roots:
+            raise HTTPException(400, "No directories are available to browse.")
+        try:
+            return list_dir(path or registry.roots[0], registry.roots, hidden)
+        except PathNotAllowed as e:
+            raise HTTPException(400, str(e)) from None
 
     @app.get("/api/series")
     def series(

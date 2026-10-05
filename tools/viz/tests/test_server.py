@@ -108,6 +108,45 @@ class ServerTest(unittest.TestCase):
         etag = res.headers["etag"]
         self.assertEqual(self.client.get("/assets/app.js", headers={"if-none-match": etag}).status_code, 304)
 
+    def test_sources_status(self):
+        src = self.client.get("/api/sources").json()[0]
+        self.assertEqual((src["status"], src["progress"], src["error"]), ("ready", 1.0, None))
+
+    def test_open_from_page(self):
+        from fastapi.testclient import TestClient
+
+        from viz.registry import SourceRegistry
+        from viz.server import create_app
+        from viz.sources.log_metrics import LogMetricsSource
+        from viz.store import StoreCache
+
+        from .test_registry import wait_ready
+
+        tmp = Path(self.tmp.name).resolve()
+        (tmp / "logs").mkdir()
+        log = write_log(tmp / "logs" / "du.log")
+        registry = SourceRegistry(StoreCache(tmp / "cache2"), [LogMetricsSource()], [tmp])
+        client = TestClient(create_app(registry, tmp / "missing"))
+        self.assertEqual(client.get("/api/roots").json(), {"roots": [str(tmp)], "can_open": True})
+        listing = client.get("/api/fs", params={"path": str(tmp / "logs")}).json()
+        self.assertEqual([e["name"] for e in listing["entries"]], ["du.log"])
+        self.assertEqual(client.get("/api/fs", params={"path": "/etc"}).status_code, 400)
+        res = client.post("/api/sources", json={"path": str(log)})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["id"], 0)
+        wait_ready(registry, 0)
+        self.assertEqual(client.get("/api/sources").json()[0]["status"], "ready")
+        self.assertEqual(client.get("/api/series", params={"source": 0, "dataset": "mac", "field": "nof_slots"}).status_code, 200)
+        self.assertEqual(client.post("/api/sources", json={"path": "/etc/hostname"}).status_code, 400)
+        self.assertEqual(client.delete("/api/sources/0").json()["status"], "closed")
+        self.assertEqual(client.get("/api/series", params={"source": 0, "dataset": "mac", "field": "nof_slots"}).status_code, 409)
+        self.assertEqual(client.delete("/api/sources/9").status_code, 404)
+
+    def test_open_without_registry(self):
+        res = self.client.post("/api/sources", json={"path": "/tmp"})
+        self.assertEqual(res.status_code, 400)
+        self.assertEqual(self.client.get("/api/roots").json()["can_open"], False)
+
     def test_frontend_not_built(self):
         res = self.not_built_client.get("/")
         self.assertEqual(res.status_code, 200)

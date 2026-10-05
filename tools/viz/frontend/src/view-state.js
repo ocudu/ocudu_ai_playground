@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
 // Bumped when the encoded state changes incompatibly.
-const VERSION = 1;
+const VERSION = 2;
 const PREFIX = "#v=";
-// Plot properties saved in the view state.
-const PLOT_KEYS = ["source", "dataset", "instance", "field", "splitBy", "splitValues", "filter", "mode"];
+// Plot properties saved in the view state. A plot's source is the source of its tab.
+const PLOT_KEYS = ["dataset", "instance", "field", "splitBy", "splitValues", "filter", "mode"];
 
 /** @param {string} text */
 function toBase64Url(text) {
@@ -22,25 +22,31 @@ function fromBase64Url(encoded) {
 }
 
 /**
- * Encodes the view as a URL fragment. Sources are identified by name, not path.
- * @param {{sources: Array<{name: string}>, plots: Array<Record<string, any>>, timeMode: string, userRange: {min: number, max: number} | null}} view
+ * Encodes the view as a URL fragment: the open tabs with their plots and zoom, and the selected tab.
+ * Sources are identified by name, not path.
+ * @param {{openSources: Array<{id: number, name: string}>, sources: Array<{name: string}>, tabs: Record<number, any>, activeId: number | null, timeMode: string}} app
  */
-export function encodeView(view) {
+export function encodeView(app) {
   const state = {
     v: VERSION,
-    sources: view.sources.map((s) => s.name),
-    timeMode: view.timeMode,
-    range: view.userRange,
-    plots: view.plots.map((p) => Object.fromEntries(PLOT_KEYS.map((k) => [k, p[k]]))),
+    timeMode: app.timeMode,
+    active: app.activeId == null ? null : app.sources[app.activeId]?.name ?? null,
+    tabs: app.openSources
+      .filter((s) => app.tabs[s.id])
+      .map((s) => ({
+        source: s.name,
+        range: app.tabs[s.id].userRange,
+        plots: app.tabs[s.id].plots.map((p) => Object.fromEntries(PLOT_KEYS.map((k) => [k, p[k]]))),
+      })),
   };
   return PREFIX + toBase64Url(JSON.stringify(state));
 }
 
 /**
- * Decodes a URL fragment against the open sources, remapping source indexes by name.
+ * Decodes a URL fragment against the open sources, matching tabs to sources by name.
  * Returns null without a view state, or the restored view and warnings about what could not be restored.
  * @param {string} hash
- * @param {Array<{name: string, datasets: Array<{name: string}>}>} sources
+ * @param {Array<{id: number, name: string, datasets: Array<{name: string}>}>} sources Open sources.
  */
 export function decodeView(hash, sources) {
   if (!hash.startsWith(PREFIX)) return null;
@@ -53,22 +59,25 @@ export function decodeView(hash, sources) {
   if (state.v !== VERSION) return { view: null, warnings: ["The view in the URL is from another version and was ignored."] };
 
   const warnings = [];
-  const names = sources.map((s) => s.name);
-  // Index of each saved source among the open ones, or -1.
-  const mapping = state.sources.map((name, i) => (names[i] === name ? i : names.indexOf(name)));
-  state.sources.forEach((name, i) => {
-    if (mapping[i] < 0) warnings.push(`Source ${name} of the URL view is not open, its plots were skipped.`);
-  });
-
-  const plots = [];
-  for (const p of state.plots) {
-    const source = mapping[p.source] ?? -1;
-    if (source < 0) continue;
-    if (!sources[source].datasets.some((d) => d.name === p.dataset)) {
-      warnings.push(`Dataset ${p.dataset} is not in ${names[source]}, its plot was skipped.`);
+  const byName = new Map(sources.map((s) => [s.name, s]));
+  const tabs = [];
+  for (const t of state.tabs ?? []) {
+    const source = byName.get(t.source);
+    if (!source) {
+      warnings.push(`${t.source} of the URL view is not open, its tab was skipped. Open it with the + tab.`);
       continue;
     }
-    plots.push({ ...p, source, splitValues: p.splitValues ?? [], filter: p.filter ?? "" });
+    const plots = [];
+    for (const p of t.plots ?? []) {
+      // Datasets are only known for parsed sources, so plots of sources still parsing are kept as they are.
+      if (source.datasets.length && !source.datasets.some((d) => d.name === p.dataset)) {
+        warnings.push(`Dataset ${p.dataset} is not in ${t.source}, its plot was skipped.`);
+        continue;
+      }
+      plots.push({ ...p, splitValues: p.splitValues ?? [], filter: p.filter ?? "" });
+    }
+    tabs.push({ source: source.id, range: t.range ?? null, plots });
   }
-  return { view: { timeMode: state.timeMode, range: state.range, plots }, warnings };
+  const active = byName.get(state.active)?.id ?? null;
+  return { view: { timeMode: state.timeMode, active, tabs }, warnings };
 }

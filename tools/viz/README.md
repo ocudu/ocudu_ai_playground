@@ -11,14 +11,23 @@ Docker (or Podman, see below). Nothing else: the image contains Python, the pars
 Run the `ocudu-viz` script in this directory, or put it on your `PATH` (e.g. a symlink in `~/.local/bin`):
 
 ```bash
+tools/viz/ocudu-viz                          # no files, open them from the page
 tools/viz/ocudu-viz gnb.log                  # one source
-tools/viz/ocudu-viz du1/du.log du2/du.log    # several sources, on one time axis
+tools/viz/ocudu-viz du1/du.log du2/du.log    # several sources, one tab each
 ```
+
+The `+` tab in the page browses the mounted directories (your home, the temp dir and any `--root`) and
+opens the chosen file in a new tab. Its `Recent` view lists the last files opened in this browser, newest
+first, for one-click reopening. Each open file has its own tab, with its own plots and zoom; close a file
+with the `✕` of its tab.
+Large logs are parsed in the background, with the progress shown on the file, and the page stays usable
+meanwhile. Opened files stay open for as long as the server runs, also across page reloads.
 
 The script builds the `ocudu-viz:latest` image when needed (cached after the first build), then runs it:
 
-- Your home directory is mounted read-only at the same path, so files keep their host paths. Files outside
-  it get their directory mounted too; use `--root DIR` to mount more directories, e.g. shared artifacts.
+- Your home directory and the temp dir (`$TMPDIR` or `/tmp`, where gnb logs often end up) are mounted
+  read-only at the same path, so files keep their host paths. Files outside them get their directory
+  mounted too; use `--root DIR` to mount more directories, e.g. shared artifacts.
 - The server is published on `127.0.0.1` only, on port 8765 or the next free one, and the browser opens on
   it once the files are parsed.
 - The first open of a file parses it into a cache under `/tmp/ocudu-viz-<uid>/` on the host, which makes
@@ -31,7 +40,8 @@ In the page:
   combines with split by to compare them.
 - Pick source, dataset (METRICS layer), field and optionally a context field to split by, giving one
   series per value (e.g. one per `ue`). Without a selection of values, the first 20 are shown.
-- Drag or use the wheel to zoom, Shift+drag to pan, double-click to reset. All plots share the time axis.
+- Drag or use the wheel to zoom, Shift+drag to pan, double-click to reset. The plots of a tab share the time
+  axis.
   `reset zoom` shows the whole time range of the logs, `fit metrics` the time range of the plotted metrics.
 - Click a point to see its log line and the lines around it.
 - The top-right corner of a plot shows the time and value under the mouse. The legend below shows the
@@ -51,7 +61,7 @@ In the page:
   one curve per split value. Integer fields with few values (e.g. MCS) get one bin per value.
 - Below each plot, a table shows count, min, mean, p50, p95, p99 and max of each series in the visible
   window, with the plot filter applied. Percentiles are sampled for windows over 2M points.
-- Time mode `relative` starts each source at t=0.
+- Time mode `relative` shows the time since the start of the log.
 
 The current view (plots, splits, filters, zoom and time mode) is kept in the page URL, so a reload
 restores it and a bookmark or shared link reopens it, as long as `ocudu-viz` runs with the same files.
@@ -67,7 +77,7 @@ Large windows are downsampled to min/max per pixel, so spikes stay visible. Zoom
 | Option            | Description                                                                 |
 |-------------------|-----------------------------------------------------------------------------|
 | `--port N`        | Host port to serve on, or the next free one (default 8765).                 |
-| `--root DIR`      | Also mount DIR read-only. Repeatable. The home directory is always mounted. |
+| `--root DIR`      | Also mount DIR read-only and open its files from the page. Repeatable.     |
 | `--no-browser`    | Do not open the browser.                                                    |
 | `--rebuild`       | Rebuild the image from scratch, without the build cache.                    |
 | `--cache-size GB` | Cache size limit, least recently used caches are removed first (default 2). |

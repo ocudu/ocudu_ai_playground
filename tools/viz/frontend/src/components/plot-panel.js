@@ -79,6 +79,8 @@ export default {
     shifts: { type: Array, required: true },
     timeMode: { type: String, required: true },
     themeVersion: { type: Number, default: 0 },
+    // Whether the panel shows a source selector, which is not needed when the source is fixed, e.g. by a tab.
+    showSource: { type: Boolean, default: true },
   },
   emits: ["zoom", "remove", "select-record"],
   data() {
@@ -507,8 +509,10 @@ export default {
   template: `
     <section class="panel">
       <header class="panel-bar">
-        <select v-model.number="plot.source" :title="source ? source.path : 'Source'">
-          <option v-for="s in sources" :key="s.id" :value="s.id">{{ s.name }}</option>
+        <select v-if="showSource" v-model.number="plot.source" :title="source ? source.path : 'Source'">
+          <option v-for="s in sources" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">
+            {{ s.name }}{{ s.status === "parsing" ? " (parsing)" : s.status === "error" ? " (error)" : "" }}
+          </option>
         </select>
         <select v-model="plot.dataset" title="Dataset">
           <option v-for="d in datasets" :key="d.name" :value="d.name">{{ d.label }}</option>

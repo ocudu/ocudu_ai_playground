@@ -37,9 +37,11 @@ updated as they are agreed.
 - **F10. Live tail:** follow a file that is still being written.
 - **F11. Shareable state:** the current view (sources, datasets, fields, filters, time range) is encoded in
   the URL.
-- **F12. Multiple sources:** `ocudu-viz cu.log du.log`. Every series and event is labelled with its source.
-- **F13. Time modes:** absolute (shared wall clock, default) or relative (each source starts at t=0).
+- **F12. Multiple sources:** `ocudu-viz cu.log du.log`. Each source is shown in its own tab, with its own
+  plots and zoom range; one tab is shown at a time.
+- **F13. Time modes:** absolute (log wall clock, default) or relative (time since the start of the log).
 - **F14. Events overlay:** event datasets drawn on top of the time series plots.
+- **F15. Open files from the page:** start without files and open them from a file browser in the page.
 
 ## Non-functional requirements
 
@@ -97,11 +99,12 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 
 ### D3. Multiple sources
 
-- Multiple sources per view from the first version (F12). Each source has its own cache database.
+- Multiple sources from the first version (F12). Each source has its own cache database.
+- Each source has its own tab, with its plots, zoom range and log line drill-down. Only the selected tab is
+  shown, so sources are not compared side by side; plots do not select their source, their tab does.
 - Absolute time by default, relative time as an option (F13).
 - The time range of a source spans its first to last log timestamp, widened by its dataset timestamps if
-  needed, since log lines are not strictly time ordered. The default view is the union of the source
-  ranges.
+  needed, since log lines are not strictly time ordered. It is the default view of its tab.
 - Out of scope for the first version: automatic cross-source alignment (e.g. by RNTI or procedure), and
   source types not supported by `parsers` yet (e.g. UE logs).
 
@@ -154,10 +157,10 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 
 - The view (F11) is encoded as base64url JSON in the URL fragment (`#v=...`), updated in place with
   `history.replaceState` shortly after each change, and restored on load.
-- Saved: time mode, zoom range, and per plot its source, dataset, instance, field,
-  split, selected split values, filter and view mode. The state carries a version number.
-- Sources are saved by display name and remapped by name when opened with other files or another order.
-  Plots of missing sources or datasets are skipped with a warning. No file paths are put in the URL.
+- Saved: time mode, the selected tab, and per tab its source, zoom range and plots, each with its dataset,
+  instance, field, split, selected split values, filter and view mode. The state carries a version number.
+- Tabs are saved by source display name and matched by name to the open sources. Tabs of sources that are
+  not open, and plots of missing datasets, are skipped with a warning. No file paths are put in the URL.
 
 ### D10. Themes
 
@@ -174,13 +177,29 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   every run, so that source changes are picked up; unchanged sources hit the build cache. A Node stage
   builds the frontend; a Python stage installs `parsers` and `viz` with the built frontend and runs the
   server. Users need no Python environment or Node.
-- The wrapper mounts the home directory read-only at the same path, plus the directory of any file outside
-  it and any `--root DIR`, so files and links keep their host paths. This also prepares selecting files from
-  the page later, limited to the mounted roots.
+- The wrapper mounts the home and temp (`$TMPDIR` or `/tmp`) directories read-only at the same path, plus
+  the directory of any file outside them and any `--root DIR`, so files and links keep their host paths.
+  The temp dir is included because gnb logs are often written there. The parse cache, under the temp dir,
+  is mounted writable on top.
 - The container runs as the host user, so that it can read the user's files and owns the cache it writes.
 - The server listens on all interfaces inside the container, and the port is published on the host
   loopback only (`127.0.0.1`), never on other interfaces.
 - The wrapper opens the browser once the server listens, since a container cannot open the host browser.
+
+### D13. Opening files from the page
+
+- The server only lists and opens files under allowed roots: the directories given with `--root`, the
+  home and temp directories by default. The wrapper passes the directories it mounts. Paths are resolved, following
+  symlinks, before checking them against the roots.
+- `GET /api/roots` and `GET /api/fs?path&hidden` list directories. `POST /api/sources {path}` opens a file:
+  parsing runs in a background thread, and `/api/sources` reports each source's status (`parsing`, `ready`,
+  `error`, `closed`) and progress, which the page polls while a source is parsing. Opening an open file
+  selects its tab. `DELETE /api/sources/{id}` closes a source and releases its store; ids are not reused.
+- Opened sources stay in the server for as long as it runs, so reloads keep them. The URL view state still
+  contains no file paths.
+- The file dialog has a `Recent` view with the last 15 files opened, kept in browser storage, so that it
+  survives server restarts and reboots without a writable location outside the container. A recent file
+  that fails to open is dropped from the list.
 
 ## Open questions
 
