@@ -5,7 +5,7 @@
 
 from __future__ import annotations
 
-from datetime import timezone
+from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
 
@@ -21,6 +21,27 @@ _DATASET_INFO = {"exec": {"label": "executors", "instance": "executor"}}
 _OFFSET_INTERVAL = 1000
 # Bytes between two progress reports.
 _PROGRESS_INTERVAL = 8 << 20
+# Bytes read from the end of the log to find its last timestamp.
+_TAIL_SIZE = 64 << 10
+
+
+def _epoch(timestamp: str) -> float | None:
+    """Seconds since the epoch of a log timestamp, stored as UTC wall clock since logs carry no zone."""
+    try:
+        return datetime.fromisoformat(timestamp).replace(tzinfo=timezone.utc).timestamp()
+    except ValueError:
+        return None
+
+
+def _last_timestamp(path: Path) -> float | None:
+    with path.open("rb") as f:
+        f.seek(max(0, path.stat().st_size - _TAIL_SIZE))
+        lines = f.read().decode("utf-8", "replace").splitlines()
+    for line in reversed(lines):
+        m = preamble.match_preamble(line)
+        if m and (t := _epoch(m.group("timestamp"))) is not None:
+            return t
+    return None
 
 
 def _parsers_version() -> str:
@@ -34,7 +55,7 @@ class LogMetricsSource:
     """One time series dataset per METRICS layer. Records are log lines, identified by line number."""
 
     name = "log_metrics"
-    version = f"1+parsers-{_parsers_version()}"
+    version = f"2+parsers-{_parsers_version()}"
 
     def accepts(self, path: Path) -> bool:
         try:
@@ -51,6 +72,7 @@ class LogMetricsSource:
         total = path.stat().st_size
         offset = 0
         next_progress = 0
+        first_t = None
         with path.open("rb") as f:
             for line_no, raw in enumerate(f, start=1):
                 if line_no % _OFFSET_INTERVAL == 1:
@@ -59,6 +81,8 @@ class LogMetricsSource:
                 if progress and offset >= next_progress:
                     progress(offset, total)
                     next_progress = offset + _PROGRESS_INTERVAL
+                if first_t is None and (m := preamble.match_preamble(raw.decode("utf-8", "replace"))):
+                    first_t = _epoch(m.group("timestamp"))
 
                 # Cheap check before decoding, most lines are not metrics.
                 if b"[METRICS" not in raw:
@@ -67,12 +91,14 @@ class LogMetricsSource:
                 if rec is None:
                     continue
                 layer = rec.pop("layer")
-                # Log timestamps carry no zone, so they are stored as UTC wall clock.
                 t = rec.pop("timestamp").replace(tzinfo=timezone.utc).timestamp()
                 writer.add_row(layer, line_no, t, rec)
 
         if progress:
             progress(total, total)
+        last_t = _last_timestamp(path)
+        if first_t is not None and last_t is not None:
+            writer.set_time_range(first_t, last_t)
         for layer, units in parser.units.items():
             context = list(dict.fromkeys([*metrics.LAYER_PATTERNS[layer].groupindex, *_IDENTITY_FIELDS]))
             writer.set_dataset_info(layer, units, context, **_DATASET_INFO.get(layer, {}))

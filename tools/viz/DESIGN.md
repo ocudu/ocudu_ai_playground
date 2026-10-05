@@ -99,13 +99,16 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 
 - Multiple sources per view from the first version (F12). Each source has its own cache database.
 - Absolute time by default, relative time as an option (F13).
+- The time range of a source spans its first to last log timestamp, widened by its dataset timestamps if
+  needed, since log lines are not strictly time ordered. The default view is the union of the source
+  ranges.
 - Out of scope for the first version: automatic cross-source alignment (e.g. by RNTI or procedure), and
   source types not supported by `parsers` yet (e.g. UE logs).
 
 ### D4. First version scope
 
 - In: CLI, log metrics source type, F1, F2, F6, F7, F8, F9, F12, F13, D1, D2.
-- Deferred: F10 live tail, F11 URL state, F14 events (needs an
+- Deferred: F10 live tail, F14 events (needs an
   event parser in `parsers`), Docker.
 - Without explicit split values, only the first 20 are returned, since sparse splits
   (e.g. ~1000 short-lived UEs) cannot be reduced by downsampling.
@@ -146,6 +149,15 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - Datasets with an instance field get a second selector listing its values, the first selected by default,
   plus `all`. The selection restricts the rows on the server, so it applies to series, statistics and
   histograms.
+
+### D9. View state in the URL
+
+- The view (F11) is encoded as base64url JSON in the URL fragment (`#v=...`), updated in place with
+  `history.replaceState` shortly after each change, and restored on load.
+- Saved: time mode, zoom range, and per plot its source, dataset, instance, field,
+  split, selected split values, filter and view mode. The state carries a version number.
+- Sources are saved by display name and remapped by name when opened with other files or another order.
+  Plots of missing sources or datasets are skipped with a warning. No file paths are put in the URL.
 
 ### D12. Container
 

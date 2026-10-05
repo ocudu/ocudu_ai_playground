@@ -50,6 +50,10 @@ In the page:
   window, with the plot filter applied. Percentiles are sampled for windows over 2M points.
 - Time mode `relative` starts each source at t=0.
 
+The current view (plots, splits, filters, zoom and time mode) is kept in the page URL, so a reload
+restores it and a bookmark or shared link reopens it, as long as `ocudu-viz` runs with the same files.
+Sources are matched by name; plots of sources that are not open are skipped with a warning.
+
 Large windows are downsampled to min/max per pixel, so spikes stay visible. Zoom in for full resolution.
 
 ## Options

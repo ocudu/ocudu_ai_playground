@@ -78,6 +78,7 @@ class StoreWriter:
         self._conn = conn
         self._datasets: dict[str, _DatasetBuffer] = {}
         self._info: dict[str, tuple[dict[str, str], list[str], str | None, str | None]] = {}
+        self._time_range: tuple[float, float] | None = None
         self._conn.executescript(
             """
             CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
@@ -123,6 +124,9 @@ class StoreWriter:
     ) -> None:
         self._info[dataset] = (units, context, label, instance)
 
+    def set_time_range(self, t_min: float, t_max: float) -> None:
+        self._time_range = (t_min, t_max)
+
     def add_record_offset(self, record: int, offset: int) -> None:
         self._conn.execute("INSERT OR REPLACE INTO record_offsets VALUES (?, ?)", (record, offset))
 
@@ -152,6 +156,9 @@ class StoreWriter:
                 ),
             )
 
+        if self._time_range is not None:
+            t_min = self._time_range[0] if t_min is None else min(t_min, self._time_range[0])
+            t_max = self._time_range[1] if t_max is None else max(t_max, self._time_range[1])
         meta = {
             "path": str(source_path),
             "source_type": source_type,

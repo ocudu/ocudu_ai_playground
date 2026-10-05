@@ -32,6 +32,9 @@ class DatasetWriter(Protocol):
         The instance field identifies the entity each row belongs to (e.g. the executor name).
         """
 
+    def set_time_range(self, t_min: float, t_max: float) -> None:
+        """Sets the time span of the source, which may be wider than the span of its datasets."""
+
     def add_record_offset(self, record: int, offset: int) -> None:
         """Registers the byte offset where a raw record starts. Not every record needs one."""
 

@@ -30,7 +30,8 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(ue["units"]["dl_brate"], "bps")
         self.assertEqual(ue["units"]["dl_bs"], "bytes")
         self.assertEqual(ue["context"], ["ue", "pci", "rnti"])
-        self.assertEqual(self.store.meta["t_max"] - self.store.meta["t_min"], 9)
+        # The log spans 2 s before the first and 2 s after the last metrics line.
+        self.assertEqual(self.store.meta["t_max"] - self.store.meta["t_min"], 13)
 
     def test_full_resolution_series(self):
         res = self.store.series("sched_ue", "dl_brate", split_by="ue")
@@ -45,7 +46,7 @@ class StoreTest(unittest.TestCase):
 
     def test_time_window_and_split_values(self):
         t_min = self.store.meta["t_min"]
-        res = self.store.series("sched_ue", "pusch_snr_db", t0=t_min + 2, t1=t_min + 4, split_by="ue", split_values=["1"])
+        res = self.store.series("sched_ue", "pusch_snr_db", t0=t_min + 4, t1=t_min + 6, split_by="ue", split_values=["1"])
         self.assertEqual([s["label"] for s in res["series"]], ["ue=1"])
         self.assertEqual(res["series"][0]["v"], [21.5, 21.5, 21.5])
 
@@ -89,7 +90,7 @@ class StoreTest(unittest.TestCase):
 
     def test_stats_window_and_filter(self):
         t_min = self.store.meta["t_min"]
-        res = self.store.stats("sched_ue", "dl_brate", t0=t_min + 2, t1=t_min + 4, filter_expr="ue == 0")
+        res = self.store.stats("sched_ue", "dl_brate", t0=t_min + 4, t1=t_min + 6, filter_expr="ue == 0")
         self.assertEqual(len(res["series"]), 1)
         self.assertEqual((res["series"][0]["count"], res["series"][0]["min"], res["series"][0]["max"]), (3, 2000, 4000))
 
@@ -190,7 +191,7 @@ class StoreCacheTest(unittest.TestCase):
         cache.open(self.log, LogMetricsSource())
         write_log(self.log, nof_seconds=12)
         store = cache.open(self.log, LogMetricsSource())
-        self.assertEqual(store.meta["t_max"] - store.meta["t_min"], 11)
+        self.assertEqual(store.meta["t_max"] - store.meta["t_min"], 15)
 
     def test_cache_dir_is_private(self):
         cache = StoreCache(self.dir / "cache")

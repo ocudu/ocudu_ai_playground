@@ -7,18 +7,32 @@ import "./style.css";
 import { getJSON } from "./api.js";
 import PlotPanel from "./components/plot-panel.js";
 import RecordView from "./components/record-view.js";
+import { decodeView, encodeView } from "./view-state.js";
+
+// Delay before writing the view to the URL, to coalesce zoom and pan events.
+const URL_UPDATE_DELAY_MS = 300;
 
 let nextPlotId = 1;
 
-/** @param {{source: number, dataset?: string | null}} init */
+/** @param {{source: number, dataset?: string | null} & Record<string, any>} init */
 function newPlot(init) {
-  return { id: nextPlotId++, source: init.source, dataset: init.dataset ?? null, field: null, splitBy: null, splitValues: [], filter: "", mode: "time", instance: null };
+  return {
+    field: null,
+    splitBy: null,
+    splitValues: [],
+    filter: "",
+    mode: "time",
+    instance: null,
+    ...init,
+    dataset: init.dataset ?? null,
+    id: nextPlotId++,
+  };
 }
 
 const App = {
   components: { PlotPanel, RecordView },
   data() {
-    return { sources: [], plots: [], timeMode: "absolute", userRange: null, selection: null, error: "" };
+    return { sources: [], plots: [], timeMode: "absolute", userRange: null, selection: null, error: "", warnings: [] };
   },
   computed: {
     /** Shift from source time to display time, per source. */
@@ -40,7 +54,15 @@ const App = {
     },
   },
   watch: {
-    timeMode() { this.userRange = null; },
+    timeMode() {
+      if (!this.restoring) this.userRange = null;
+    },
+  },
+  created() {
+    // Not reactive: URL synchronization state.
+    this.restoring = false;
+    this.urlTimer = null;
+    this.writtenHash = "";
   },
   async mounted() {
     try {
@@ -49,9 +71,43 @@ const App = {
       this.error = e.message;
       return;
     }
-    if (this.sources.length) this.plots.push(newPlot({ source: 0 }));
+    await this.restoreView();
+    if (!this.plots.length && this.sources.length) this.plots.push(newPlot({ source: 0 }));
+
+    this.$watch(
+      () => [this.plots, this.timeMode, this.userRange],
+      () => this.scheduleUrlUpdate(),
+      { deep: true },
+    );
+    // A pasted link only changes the fragment, which does not reload the page.
+    window.addEventListener("hashchange", () => {
+      if (location.hash !== this.writtenHash) location.reload();
+    });
   },
   methods: {
+    async restoreView() {
+      const restored = decodeView(location.hash, this.sources);
+      if (!restored) return;
+      this.warnings = restored.warnings;
+      const view = restored.view;
+      if (!view) return;
+      this.restoring = true;
+      this.timeMode = view.timeMode === "relative" ? "relative" : "absolute";
+      // The range is in display time, which depends on the time mode set above.
+      await this.$nextTick();
+      this.userRange = view.range && view.range.max > view.range.min ? view.range : null;
+      this.plots = view.plots.map((p) => newPlot(p));
+      this.restoring = false;
+    },
+
+    scheduleUrlUpdate() {
+      clearTimeout(this.urlTimer);
+      this.urlTimer = setTimeout(() => {
+        this.writtenHash = encodeView(this);
+        history.replaceState(null, "", this.writtenHash);
+      }, URL_UPDATE_DELAY_MS);
+    },
+
     addPlot() {
       const last = this.plots[this.plots.length - 1];
       this.plots.push(newPlot(last ? { source: last.source, dataset: last.dataset } : { source: 0 }));
@@ -78,6 +134,7 @@ const App = {
     </header>
     <main>
       <p v-if="error" class="error">{{ error }}</p>
+      <p v-for="w in warnings" :key="w" class="error">{{ w }}</p>
       <p class="hint muted">Drag to zoom, wheel to zoom, Shift+drag to pan, double-click to reset, click a point to see its log line.</p>
       <plot-panel v-for="p in plots" :key="p.id" :plot="p" :sources="sources" :view="view" :shifts="shifts"
                   :time-mode="timeMode" @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" />

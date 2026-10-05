@@ -29,6 +29,8 @@ def _progress(name: str):
 def _free_port(host: str, preferred: int) -> int:
     for port in (preferred, 0):
         with socket.socket() as s:
+            # Same as the server socket, so that connections closing from a previous run do not count as busy.
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 s.bind((host, port))
             except OSError:
