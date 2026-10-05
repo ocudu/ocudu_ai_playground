@@ -90,9 +90,26 @@ def create_app(stores: list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
         width: int = Query(1000, ge=1, le=20000),
         group_by: str | None = None,
         groups: list[str] | None = Query(None),
+        filter_expr: str | None = Query(None, alias="filter"),
     ) -> dict[str, Any]:
         try:
-            return get_store(source).series(dataset, field, t0, t1, width, group_by, groups)
+            return get_store(source).series(dataset, field, t0, t1, width, group_by, groups, filter_expr)
+        except QueryError as e:
+            raise HTTPException(400, str(e)) from None
+
+    @app.get("/api/stats")
+    def stats(
+        source: int,
+        dataset: str,
+        field: str,
+        t0: float | None = None,
+        t1: float | None = None,
+        group_by: str | None = None,
+        groups: list[str] | None = Query(None),
+        filter_expr: str | None = Query(None, alias="filter"),
+    ) -> dict[str, Any]:
+        try:
+            return get_store(source).stats(dataset, field, t0, t1, group_by, groups, filter_expr)
         except QueryError as e:
             raise HTTPException(400, str(e)) from None
 

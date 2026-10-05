@@ -17,6 +17,7 @@ from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any
 
+from .filters import FilterError, compile_filter
 from .sources.base import ProgressFn, SourceType
 
 # Bumped when the database layout changes, part of the cache key.
@@ -25,6 +26,8 @@ SCHEMA_VERSION = 1
 MAX_FULL_RES_POINTS = 50_000
 # Groups returned when no groups are selected.
 MAX_DEFAULT_GROUPS = 20
+# Windows with more points get percentiles from a sample.
+MAX_EXACT_PERCENTILE_POINTS = 2_000_000
 
 # Reserved column names of dataset tables.
 _TS = "_ts"
@@ -183,6 +186,7 @@ class Store:
         width: int = 1000,
         group_by: str | None = None,
         groups: list[str] | None = None,
+        filter_expr: str | None = None,
         max_points: int = MAX_FULL_RES_POINTS,
         max_groups: int = MAX_DEFAULT_GROUPS,
     ) -> dict[str, Any]:
@@ -191,40 +195,11 @@ class Store:
         Without explicit groups, only the first max_groups groups are returned.
         """
         ds = self._dataset(dataset)
-        if ds["fields"].get(field) != "number":
-            raise QueryError(f"Field {field!r} of {dataset!r} is not numeric.")
-        if group_by is not None and group_by not in ds["fields"]:
-            raise QueryError(f"Unknown group field {group_by!r} of {dataset!r}.")
-
         table = _quote("ds_" + dataset)
         value = _quote(field)
         group = _quote(group_by) if group_by else "NULL"
-        where = [f"{value} IS NOT NULL"]
-        params: list[Any] = []
-        if t0 is not None:
-            where.append(f"{_TS} >= ?")
-            params.append(t0)
-        if t1 is not None:
-            where.append(f"{_TS} <= ?")
-            params.append(t1)
-        if group_by and groups:
-            where.append(f"CAST({group} AS TEXT) IN ({', '.join('?' * len(groups))})")
-            params.extend(groups)
-
         with self._connect() as conn:
-            total_groups = 1
-            if group_by:
-                where_sql = " AND ".join(where)
-                total_groups = conn.execute(f"SELECT COUNT(DISTINCT {group}) FROM {table} WHERE {where_sql}", params).fetchone()[0]
-                if not groups and total_groups > max_groups:
-                    first = conn.execute(
-                        f"SELECT DISTINCT {group} FROM {table} WHERE {where_sql} ORDER BY {group} LIMIT ?",
-                        params + [max_groups],
-                    ).fetchall()
-                    where.append(f"{group} IN ({', '.join('?' * len(first))})")
-                    params.extend(r[0] for r in first)
-            where_sql = " AND ".join(where)
-
+            where_sql, params, total_groups = self._window(conn, ds, field, t0, t1, group_by, groups, filter_expr, max_groups)
             count, lo, hi = conn.execute(f"SELECT COUNT(*), MIN({_TS}), MAX({_TS}) FROM {table} WHERE {where_sql}", params).fetchone()
             downsampled = count > max_points and hi is not None and hi > lo
             if not downsampled:
@@ -253,13 +228,68 @@ class Store:
         for g in sorted(by_group, key=_group_sort_key):
             points = sorted(by_group[g].items(), key=lambda item: (item[1][0], item[0]))
             series.append({
-                "label": f"{group_by}={g}" if group_by else field,
+                "label": _label(field, group_by, g),
                 "group": g,
                 "t": [p[1][0] for p in points],
                 "v": [p[1][1] for p in points],
                 "record": [p[0] for p in points],
             })
         return {"unit": ds["units"].get(field), "downsampled": downsampled, "total_groups": total_groups, "series": series}
+
+    def stats(
+        self,
+        dataset: str,
+        field: str,
+        t0: float | None = None,
+        t1: float | None = None,
+        group_by: str | None = None,
+        groups: list[str] | None = None,
+        filter_expr: str | None = None,
+        max_groups: int = MAX_DEFAULT_GROUPS,
+        max_exact_points: int = MAX_EXACT_PERCENTILE_POINTS,
+    ) -> dict[str, Any]:
+        """Returns count, min, max, mean and percentiles of a numeric field per group.
+
+        Percentiles are estimated from an evenly spaced sample when there are more than max_exact_points.
+        """
+        ds = self._dataset(dataset)
+        table = _quote("ds_" + dataset)
+        value = _quote(field)
+        group = _quote(group_by) if group_by else "NULL"
+        with self._connect() as conn:
+            where_sql, params, total_groups = self._window(conn, ds, field, t0, t1, group_by, groups, filter_expr, max_groups)
+            aggregates = conn.execute(
+                f"SELECT {group}, COUNT(*), MIN({value}), MAX({value}), AVG({value}) FROM {table} "
+                f"WHERE {where_sql} GROUP BY {group}",
+                params,
+            ).fetchall()
+            total = sum(row[1] for row in aggregates)
+            stride = -(-total // max_exact_points) if total > max_exact_points else 1
+            values: dict[Any, list[float]] = {}
+            sample_sql = f"SELECT {group}, {value} FROM {table} WHERE {where_sql}"
+            # Record ids are dense enough among metric rows for a stride to be an even sample.
+            sample_params = params
+            if stride > 1:
+                sample_sql += f" AND {_REC} % ? = 0"
+                sample_params = params + [stride]
+            for g, v in conn.execute(sample_sql, sample_params):
+                values.setdefault(g, []).append(v)
+
+        series = []
+        for g, count, vmin, vmax, mean in sorted(aggregates, key=lambda row: _group_sort_key(row[0])):
+            pct = _percentiles(values.get(g, []), (50, 95, 99))
+            series.append({
+                "label": _label(field, group_by, g),
+                "group": g,
+                "count": count,
+                "min": vmin,
+                "max": vmax,
+                "mean": mean,
+                "p50": pct[0],
+                "p95": pct[1],
+                "p99": pct[2],
+            })
+        return {"unit": ds["units"].get(field), "sampled": stride > 1, "total_groups": total_groups, "series": series}
 
     def context_values(self, dataset: str, field: str, limit: int = 1000) -> list[Any]:
         """Returns the distinct values of a field."""
@@ -293,6 +323,58 @@ class Store:
                 record += 1
         return out
 
+    def _window(
+        self,
+        conn: sqlite3.Connection,
+        ds: dict[str, Any],
+        field: str,
+        t0: float | None,
+        t1: float | None,
+        group_by: str | None,
+        groups: list[str] | None,
+        filter_expr: str | None,
+        max_groups: int,
+    ) -> tuple[str, list[Any], int]:
+        """Builds the WHERE clause selecting the rows of a numeric field, returning it with its params and group count."""
+        if ds["fields"].get(field) != "number":
+            raise QueryError(f"Field {field!r} of {ds['name']!r} is not numeric.")
+        if group_by is not None and group_by not in ds["fields"]:
+            raise QueryError(f"Unknown group field {group_by!r} of {ds['name']!r}.")
+
+        table = _quote("ds_" + ds["name"])
+        group = _quote(group_by) if group_by else "NULL"
+        where = [f"{_quote(field)} IS NOT NULL"]
+        params: list[Any] = []
+        if t0 is not None:
+            where.append(f"{_TS} >= ?")
+            params.append(t0)
+        if t1 is not None:
+            where.append(f"{_TS} <= ?")
+            params.append(t1)
+        if filter_expr and filter_expr.strip():
+            try:
+                cond, cond_params = compile_filter(filter_expr, ds["fields"], _quote)
+            except FilterError as e:
+                raise QueryError(f"Filter: {e}") from None
+            where.append(cond)
+            params.extend(cond_params)
+        if group_by and groups:
+            where.append(f"CAST({group} AS TEXT) IN ({', '.join('?' * len(groups))})")
+            params.extend(groups)
+
+        total_groups = 1
+        if group_by:
+            where_sql = " AND ".join(where)
+            total_groups = conn.execute(f"SELECT COUNT(DISTINCT {group}) FROM {table} WHERE {where_sql}", params).fetchone()[0]
+            if not groups and total_groups > max_groups:
+                first = conn.execute(
+                    f"SELECT DISTINCT {group} FROM {table} WHERE {where_sql} ORDER BY {group} LIMIT ?",
+                    params + [max_groups],
+                ).fetchall()
+                where.append(f"{group} IN ({', '.join('?' * len(first))})")
+                params.extend(r[0] for r in first)
+        return " AND ".join(where), params, total_groups
+
     def _dataset(self, dataset: str) -> dict[str, Any]:
         try:
             return self.datasets[dataset]
@@ -303,6 +385,24 @@ class Store:
     def _connect(self) -> Iterator[sqlite3.Connection]:
         with closing(sqlite3.connect(self._uri, uri=True, check_same_thread=False)) as conn:
             yield conn
+
+
+def _label(field: str, group_by: str | None, group: Any) -> str:
+    return f"{group_by}={group}" if group_by else field
+
+
+def _percentiles(values: list[float], percents: tuple[int, ...]) -> list[float | None]:
+    """Linear interpolation percentiles, None for an empty list."""
+    if not values:
+        return [None] * len(percents)
+    values = sorted(values)
+    out = []
+    for p in percents:
+        pos = (len(values) - 1) * p / 100
+        lo = int(pos)
+        hi = min(lo + 1, len(values) - 1)
+        out.append(values[lo] + (values[hi] - values[lo]) * (pos - lo))
+    return out
 
 
 def _group_sort_key(group: Any) -> tuple:

@@ -105,7 +105,7 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 ### D4. First version scope
 
 - In: CLI, log metrics source type, F1, F2, F6, F7, F8, F9, F12, F13, D1, D2.
-- Deferred: F3 filters, F4 statistics, F5 histogram, F10 live tail, F11 URL state, F14 events (needs an
+- Deferred: F5 histogram, F10 live tail, F11 URL state, F14 events (needs an
   event parser in `parsers`), Docker.
 - Without explicit groups, only the first 20 groups of a grouped series are returned, since sparse groups
   (e.g. ~1000 short-lived UEs) cannot be reduced by downsampling.
@@ -122,6 +122,15 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - `GET /api/context?source&dataset&field`: distinct values of a field, for group selection.
 - `GET /api/records?source&around&count`: raw records (log lines) around a record.
 - Sources sharing a file name are labelled with the first directory where their paths differ.
+
+### D6. Filters and statistics
+
+- Filters (F3) use the grammar in `viz/filters.py`: comparisons (`== != < <= > >=`, `is [not] null`)
+  joined by `and`, `or`, `not` and parentheses. Operands are numbers, strings, hex values, bare words or
+  other fields. Values are in the canonical units of `parsers`.
+- A filter applies to the series and the statistics of its plot.
+- Statistics (F4) per series over the visible window: count, min, max, mean from SQL; p50, p95, p99 in
+  Python, from an evenly spaced sample when the window has more than 2M points.
 
 ### D12. Container
 

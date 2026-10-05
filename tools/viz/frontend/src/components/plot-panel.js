@@ -38,6 +38,16 @@ function timeTicks(u, splits, axisIdx, space, incr) {
   return splits.map((ts) => fmt(utcDate(ts)));
 }
 
+/**
+ * Formats a stats value for a table cell.
+ * @param {number | null} v
+ */
+function formatStat(v) {
+  if (v == null) return "\u2013";
+  if (v !== 0 && (Math.abs(v) >= 1e6 || Math.abs(v) < 1e-3)) return v.toExponential(3);
+  return String(Number(v.toPrecision(5)));
+}
+
 /** @param {string} name */
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -67,7 +77,20 @@ export default {
   },
   emits: ["zoom", "remove", "select-record"],
   data() {
-    return { loading: false, error: "", downsampled: false, totalGroups: 0, nofSeries: 0, groupValues: [], groupFilter: "" };
+    return {
+      loading: false,
+      error: "",
+      downsampled: false,
+      totalGroups: 0,
+      nofSeries: 0,
+      groupValues: [],
+      groupFilter: "",
+      filterDraft: this.plot.filter,
+      stats: [],
+      statsSampled: false,
+      unit: { divisor: 1, label: "" },
+      labels: [],
+    };
   },
   computed: {
     source() {
@@ -92,6 +115,17 @@ export default {
       const filter = this.groupFilter.trim();
       const values = filter ? this.groupValues.filter((v) => String(v).includes(filter)) : this.groupValues;
       return values.slice(0, MAX_LISTED_GROUPS);
+    },
+    statsRows() {
+      return this.stats.map((s) => {
+        const idx = this.labels.indexOf(s.label);
+        const color = idx >= 0 ? PALETTE[idx % PALETTE.length] : "transparent";
+        const scale = (v) => formatStat(v == null ? v : v / this.unit.divisor);
+        return { label: s.label, color, count: s.count.toLocaleString(), min: scale(s.min), mean: scale(s.mean), p50: scale(s.p50), p95: scale(s.p95), p99: scale(s.p99), max: scale(s.max) };
+      });
+    },
+    filterDirty() {
+      return this.filterDraft.trim() !== this.plot.filter;
     },
     groupSummary() {
       if (this.plot.groups.length) return `${this.plot.groups.length} selected`;
@@ -123,7 +157,7 @@ export default {
     this.abort = null;
     // Any change of the query inputs refetches and rebuilds the chart.
     this.$watch(
-      () => [this.plot.source, this.plot.dataset, this.plot.field, this.plot.groupBy, [...this.plot.groups], this.shift, this.timeMode],
+      () => [this.plot.source, this.plot.dataset, this.plot.field, this.plot.groupBy, [...this.plot.groups], this.plot.filter, this.shift, this.timeMode],
       () => this.scheduleFetch(true),
     );
   },
@@ -153,6 +187,10 @@ export default {
       }
     },
 
+    applyFilter() {
+      this.plot.filter = this.filterDraft.trim();
+    },
+
     toggleGroup(value) {
       const key = String(value);
       const idx = this.plot.groups.indexOf(key);
@@ -178,7 +216,7 @@ export default {
         field: this.plot.field,
         group_by: this.plot.groupBy,
         groups: this.plot.groups.length ? this.plot.groups : null,
-        width,
+        filter: this.plot.filter || null,
       };
       if (this.view) {
         params.t0 = this.view.min - this.shift;
@@ -186,9 +224,15 @@ export default {
       }
       this.loading = true;
       try {
-        const res = await getJSON("/api/series", params, this.abort.signal);
+        const signal = this.abort.signal;
+        const [res, stats] = await Promise.all([
+          getJSON("/api/series", { ...params, width }, signal),
+          getJSON("/api/stats", params, signal),
+        ]);
         this.error = "";
         this.render(res);
+        this.stats = stats.series;
+        this.statsSampled = stats.sampled;
       } catch (e) {
         if (e.name !== "AbortError") this.error = e.message;
       } finally {
@@ -217,6 +261,8 @@ export default {
       const scaled = values.map((col) => col.map((v) => (v == null ? v : v / unit.divisor)));
       const data = [joined[0], ...scaled];
       const labels = res.series.map((s) => s.label);
+      this.unit = unit;
+      this.labels = labels;
 
       const sameSeries = this.chart && !this.rebuildPending && this.chartKey === JSON.stringify([labels, unit.label]);
       if (sameSeries) {
@@ -239,7 +285,8 @@ export default {
       const gridColor = cssVar("--grid");
       const axis = { stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 } };
       const absolute = this.timeMode === "absolute";
-      const xAxis = absolute ? { ...axis, values: timeTicks } : { ...axis };
+      // Minimum pixels between time ticks, so that HH:mm:ss.fff labels do not overlap.
+      const xAxis = absolute ? { ...axis, values: timeTicks, space: 110 } : { ...axis };
       const opts = {
         width: this.$refs.chart.clientWidth,
         height: CHART_HEIGHT,
@@ -351,6 +398,10 @@ export default {
             <div v-if="groupValues.length > listedGroups.length" class="muted">filter to see more</div>
           </div>
         </details>
+        <form class="filter" @submit.prevent="applyFilter">
+          <input v-model="filterDraft" :class="{ dirty: filterDirty }" placeholder="rnti > 0x4605 and pci == 1"
+                 title="Comparisons (== != < <= > >=, is null) joined by and/or/not. Values in base units (us, bps)." @blur="applyFilter" />
+        </form>
         <span class="status">
           <span v-if="loading" class="muted">loading</span>
           <span v-else-if="downsampled" class="muted" title="min/max per pixel; zoom in for full resolution">downsampled</span>
@@ -359,6 +410,18 @@ export default {
         <button class="icon" title="Remove plot" @click="$emit('remove')">✕</button>
       </header>
       <div ref="chart" class="chart"></div>
+      <details v-if="statsRows.length" class="stats" open>
+        <summary class="muted">statistics of the visible window{{ unit.label ? " [" + unit.label + "]" : "" }}{{ statsSampled ? ", percentiles sampled" : "" }}</summary>
+        <table>
+          <thead><tr><th></th><th>count</th><th>min</th><th>mean</th><th>p50</th><th>p95</th><th>p99</th><th>max</th></tr></thead>
+          <tbody>
+            <tr v-for="r in statsRows" :key="r.label">
+              <td><span class="swatch" :style="{ background: r.color }"></span>{{ r.label }}</td>
+              <td>{{ r.count }}</td><td>{{ r.min }}</td><td>{{ r.mean }}</td><td>{{ r.p50 }}</td><td>{{ r.p95 }}</td><td>{{ r.p99 }}</td><td>{{ r.max }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
     </section>
   `,
 };

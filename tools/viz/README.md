@@ -30,6 +30,19 @@ In the page:
   Without a group selection, the first 20 groups are shown.
 - Drag or use the wheel to zoom, Shift+drag to pan, double-click to reset. All plots share the time axis.
 - Click a point to see its log line and the lines around it.
+- Filter the rows of a plot with an expression, applied on Enter. Values are in the base units of the
+  parser (us, bps):
+
+  ```text
+  dl_mcs > 20 and pci == 1
+  rnti == 0x4601 or (ta is not null and ta > 1.5)
+  dl_mcs > ul_mcs
+  ```
+
+  Operators: `== != < <= > >=`, `is null`, `is not null`, combined with `and`, `or`, `not` and parentheses.
+  Strings can be quoted or bare (`type == ue_create`). A bare word naming a field compares two fields.
+- Below each plot, a table shows count, min, mean, p50, p95, p99 and max of each series in the visible
+  window, with the plot filter applied. Percentiles are sampled for windows over 2M points.
 - Time mode `relative` starts each source at t=0.
 
 Large windows are downsampled to min/max per pixel, so spikes stay visible. Zoom in for full resolution.

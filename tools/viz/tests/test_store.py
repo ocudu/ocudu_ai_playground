@@ -66,6 +66,44 @@ class StoreTest(unittest.TestCase):
         self.assertIn(90, v)
         self.assertLessEqual(len(v), 4)
 
+    def test_filtered_series(self):
+        res = self.store.series("sched_ue", "dl_brate", group_by="ue", filter_expr="rnti == 0x4601 and dl_brate >= 5000")
+        self.assertEqual([s["label"] for s in res["series"]], ["ue=1"])
+        self.assertEqual(res["series"][0]["v"], [5000, 6000, 7000, 8000, 9000])
+        self.assertEqual(res["total_groups"], 1)
+
+    def test_invalid_filter(self):
+        with self.assertRaisesRegex(QueryError, "Filter: Unknown field 'nope'"):
+            self.store.series("sched_ue", "dl_brate", filter_expr="nope > 1")
+
+    def test_stats(self):
+        res = self.store.stats("sched_ue", "dl_brate", group_by="ue")
+        self.assertEqual(res["unit"], "bps")
+        self.assertFalse(res["sampled"])
+        s = res["series"][1]
+        self.assertEqual((s["label"], s["count"], s["min"], s["max"]), ("ue=1", 10, 0, 9000))
+        self.assertEqual(s["mean"], 4500)
+        self.assertEqual(s["p50"], 4500)
+        self.assertAlmostEqual(s["p95"], 8550)
+        self.assertAlmostEqual(s["p99"], 8910)
+
+    def test_stats_window_and_filter(self):
+        t_min = self.store.meta["t_min"]
+        res = self.store.stats("sched_ue", "dl_brate", t0=t_min + 2, t1=t_min + 4, filter_expr="ue == 0")
+        self.assertEqual(len(res["series"]), 1)
+        self.assertEqual((res["series"][0]["count"], res["series"][0]["min"], res["series"][0]["max"]), (3, 2000, 4000))
+
+    def test_stats_sampled_percentiles(self):
+        res = self.store.stats("sched_ue", "dl_brate", max_exact_points=5)
+        self.assertTrue(res["sampled"])
+        s = res["series"][0]
+        self.assertEqual(s["count"], 20)
+        self.assertIsNotNone(s["p50"])
+
+    def test_stats_empty_window(self):
+        res = self.store.stats("sched_ue", "dl_brate", filter_expr="dl_brate > 1e9")
+        self.assertEqual(res["series"], [])
+
     def test_invalid_queries(self):
         with self.assertRaises(QueryError):
             self.store.series("foo", "x")

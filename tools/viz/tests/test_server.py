@@ -62,6 +62,18 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.client.get("/api/series", params={"source": 5, "dataset": "mac", "field": "x"}).status_code, 404)
         self.assertEqual(self.client.get("/api/series", params={"source": 0, "dataset": "mac", "field": "x"}).status_code, 400)
 
+    def test_series_filter(self):
+        res = self.client.get("/api/series", params={"source": 0, "dataset": "sched_ue", "field": "dl_brate", "group_by": "ue", "filter": "ue == 1"})
+        self.assertEqual([s["label"] for s in res.json()["series"]], ["ue=1"])
+        res = self.client.get("/api/series", params={"source": 0, "dataset": "sched_ue", "field": "dl_brate", "filter": "ue >"})
+        self.assertEqual(res.status_code, 400)
+        self.assertIn("Filter:", res.json()["detail"])
+
+    def test_stats(self):
+        res = self.client.get("/api/stats", params={"source": 0, "dataset": "mac", "field": "wall_clock_latency_max"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.json()["series"][0]["max"], 90)
+
     def test_context(self):
         res = self.client.get("/api/context", params={"source": 0, "dataset": "sched_ue", "field": "ue"})
         self.assertEqual(res.json(), [0, 1])
