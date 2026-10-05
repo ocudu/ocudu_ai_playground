@@ -233,8 +233,18 @@ main { padding: 8px 16px 16px; }
   background: var(--bg);
 }
 
+.resize-handle {
+  height: 6px;
+  margin-top: -3px;
+  cursor: ns-resize;
+  touch-action: none;
+}
+.resize-handle:hover { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+
 .record-lines {
-  max-height: 35vh;
+  /* Positioned, so that the offsetTop of a line is relative to this container. */
+  position: relative;
+  height: 35vh;
   overflow: auto;
   font: 12px/1.5 ui-monospace, monospace;
   white-space: pre;

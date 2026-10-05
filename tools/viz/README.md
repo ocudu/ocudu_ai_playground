@@ -43,7 +43,8 @@ In the page:
 - Drag or use the wheel to zoom, Shift+drag to pan, double-click to reset. The plots of a tab share the time
   axis.
   `reset zoom` shows the whole time range of the logs, `fit metrics` the time range of the plotted metrics.
-- Click a point to see its log line and the lines around it.
+- Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,
+  double-click it to reset the height.
 - The top-right corner of a plot shows the time and value under the mouse. The legend below shows the
   nearest data point.
 - Filter the rows of a plot with an expression, applied on Enter. Values are in the base units of the
