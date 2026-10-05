@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
+# SPDX-License-Identifier: BSD-3-Clause-Open-MPI
+
+"""Synthetic OCUDU logs for the tests."""
+
+from pathlib import Path
+
+
+def write_log(path: Path, nof_seconds: int = 10, nof_ues: int = 2) -> Path:
+    """Writes a log with one MAC and one Scheduler UE line per UE per second, among other lines."""
+    lines = ["2026-06-29T14:10:00.000000 [GNB     ] [I] Built in Release mode\n"]
+    for s in range(nof_seconds):
+        ts = f"2026-06-29T14:10:{s:02d}.000000"
+        lines.append(f"{ts} [SCHED   ] [I] [  {s}.0] Slot decisions\n")
+        lines.append(f"{ts} [METRICS ] MAC cell pci=1 metrics: nof_slots=2000 wall_clock_latency=[avg={s}usec max={10 * s}usec max_slot={s}.3]\n")
+        for ue in range(nof_ues):
+            lines.append(
+                f"{ts} [METRICS ] Scheduler UE ue={ue} pci=1 rnti=0x46{ue:02x} metrics: cqi=15 dl_brate={s}kbps "
+                f"dl_bs=1.2k pusch_snr_db={20 + ue}.5 ta=n/a max_crc_delay=2.5ms\n"
+            )
+    path.write_text("".join(lines))
+    return path

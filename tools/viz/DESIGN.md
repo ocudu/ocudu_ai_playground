@@ -58,13 +58,13 @@ updated as they are agreed.
 
 | Layer          | Technology                                                       | Status   |
 |----------------|------------------------------------------------------------------|----------|
-| Backend        | FastAPI + uvicorn                                                | Proposed |
-| Frontend       | Plain JS modules with JSDoc types, Vue 3, bundled by Vite        | Proposed |
-| Charts         | uPlot                                                            | Proposed |
-| Styling        | Plain CSS with custom properties                                 | Proposed |
-| Record list    | Own minimal virtual list                                         | Proposed |
-| Cache, queries | SQLite (Python standard library)                                 | Proposed |
-| Packaging      | Docker image built locally by the `ocudu-viz` wrapper script     | Proposed |
+| Backend        | FastAPI + uvicorn                                                | Decided  |
+| Frontend       | Plain JS modules with JSDoc types, Vue 3, bundled by Vite        | Decided  |
+| Charts         | uPlot                                                            | Decided  |
+| Styling        | Plain CSS with custom properties                                 | Decided  |
+| Record list    | Plain list of a window of records around the selection           | Decided  |
+| Cache, queries | SQLite (Python standard library)                                 | Decided  |
+| Packaging      | Docker image built locally by the `ocudu-viz` wrapper script     | Decided  |
 
 Vue, uPlot and Vite come from npm, pinned in `frontend/package-lock.json`. The build writes the licenses of
 the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
@@ -101,6 +101,41 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - Absolute time by default, relative time as an option (F13).
 - Out of scope for the first version: automatic cross-source alignment (e.g. by RNTI or procedure), and
   source types not supported by `parsers` yet (e.g. UE logs).
+
+### D4. First version scope
+
+- In: CLI, log metrics source type, F1, F2, F6, F7, F8, F9, F12, F13, D1, D2.
+- Deferred: F3 filters, F4 statistics, F5 histogram, F10 live tail, F11 URL state, F14 events (needs an
+  event parser in `parsers`), Docker.
+- Without explicit groups, only the first 20 groups of a grouped series are returned, since sparse groups
+  (e.g. ~1000 short-lived UEs) cannot be reduced by downsampling.
+
+### D5. Layout and API
+
+- Package `viz` (`ocudu-viz`): `cli.py`, `server.py`, `store.py`, `sources/` (one module per source type),
+  `static/` (frontend build output, not in git).
+- `frontend/`: the browser app sources (`src/`, `public/`), built by Vite into `viz/static/`.
+- `Dockerfile` and the `ocudu-viz` wrapper script, see D12.
+- `GET /api/sources`: sources with their datasets, fields (type, unit) and context fields.
+- `GET /api/series?source&dataset&field&group_by&groups&t0&t1&width`: one series per group, each with its
+  own timestamps, values and record ids. The browser aligns them with `uPlot.join`.
+- `GET /api/context?source&dataset&field`: distinct values of a field, for group selection.
+- `GET /api/records?source&around&count`: raw records (log lines) around a record.
+- Sources sharing a file name are labelled with the first directory where their paths differ.
+
+### D12. Container
+
+- The image (`ocudu-viz:latest`) is built locally from the `tools/` directory, by the `ocudu-viz` wrapper on
+  every run, so that source changes are picked up; unchanged sources hit the build cache. A Node stage
+  builds the frontend; a Python stage installs `parsers` and `viz` with the built frontend and runs the
+  server. Users need no Python environment or Node.
+- The wrapper mounts the home directory read-only at the same path, plus the directory of any file outside
+  it and any `--root DIR`, so files and links keep their host paths. This also prepares selecting files from
+  the page later, limited to the mounted roots.
+- The container runs as the host user, so that it can read the user's files and owns the cache it writes.
+- The server listens on all interfaces inside the container, and the port is published on the host
+  loopback only (`127.0.0.1`), never on other interfaces.
+- The wrapper opens the browser once the server listens, since a container cannot open the host browser.
 
 ## Open questions
 

@@ -2,3 +2,4 @@
 \.reuse/
 REUSE\.toml$
 \.md$
+tools/viz/frontend/package(-lock)?\.json$

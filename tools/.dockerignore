@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
+# SPDX-License-Identifier: BSD-3-Clause-Open-MPI
+
+# Build context of the ocudu-viz image: sources only, no local builds or caches.
+**/__pycache__
+**/*.egg-info
+**/build
+**/node_modules
+**/tests
+viz/viz/static

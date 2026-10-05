@@ -1,11 +1,4 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
-__pycache__/
-*.pyc
-*.egg-info/
-build/
-
-# ocudu-viz frontend dependencies and build output.
-node_modules/
-tools/viz/viz/static/
+"""Browser-based visualizer for OCUDU artifacts."""

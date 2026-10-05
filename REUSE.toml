@@ -7,3 +7,12 @@ path = [
   "**/*.md",
   "**/*.mdx",
 ]
+
+[[annotations]]
+SPDX-FileCopyrightText = "Copyright (C) 2021-2026 Software Radio Systems Limited"
+SPDX-License-Identifier = "BSD-3-Clause-Open-MPI"
+path = [
+  "tools/viz/frontend/public/img/*.png",
+  "tools/viz/frontend/package.json",
+  "tools/viz/frontend/package-lock.json",
+]

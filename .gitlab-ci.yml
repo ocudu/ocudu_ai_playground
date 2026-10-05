@@ -94,3 +94,30 @@ parser tests:
       changes:
         paths:
           - "tools/parsers/**/*"
+
+viz frontend:
+  stage: static
+  image: node:22-alpine
+  script:
+    - cd tools/viz/frontend
+    - npm ci --no-audit --no-fund
+    - npm run build
+  rules:
+    - if: $ON_MR
+      changes:
+        paths:
+          - "tools/viz/frontend/**/*"
+
+viz tests:
+  stage: static
+  image: python:3.12-alpine
+  before_script:
+    - pip install ./tools/parsers "./tools/viz[test]"
+  script:
+    - python3 -m unittest discover -s tools/viz/tests -t tools/viz -v
+  rules:
+    - if: $ON_MR
+      changes:
+        paths:
+          - "tools/parsers/**/*"
+          - "tools/viz/**/*"
