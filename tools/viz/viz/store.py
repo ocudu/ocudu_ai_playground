@@ -24,8 +24,10 @@ from .sources.base import ProgressFn, SourceType
 SCHEMA_VERSION = 1
 # Time series windows up to this many points are returned at full resolution.
 MAX_FULL_RES_POINTS = 50_000
-# Groups returned when no groups are selected.
-MAX_DEFAULT_GROUPS = 20
+# Split values returned when none are selected.
+MAX_DEFAULT_SPLITS = 20
+# Bins of a histogram, unless the field has few integer values.
+DEFAULT_HISTOGRAM_BINS = 50
 # Windows with more points get percentiles from a sample.
 MAX_EXACT_PERCENTILE_POINTS = 2_000_000
 
@@ -184,27 +186,27 @@ class Store:
         t0: float | None = None,
         t1: float | None = None,
         width: int = 1000,
-        group_by: str | None = None,
-        groups: list[str] | None = None,
+        split_by: str | None = None,
+        split_values: list[str] | None = None,
         filter_expr: str | None = None,
         max_points: int = MAX_FULL_RES_POINTS,
-        max_groups: int = MAX_DEFAULT_GROUPS,
+        max_splits: int = MAX_DEFAULT_SPLITS,
     ) -> dict[str, Any]:
-        """Returns the series of a numeric field, one per group, downsampled to min/max per pixel if needed.
+        """Returns the series of a numeric field, one per split value, downsampled to min/max per pixel if needed.
 
-        Without explicit groups, only the first max_groups groups are returned.
+        Without explicit split values, only the first max_splits are returned.
         """
         ds = self._dataset(dataset)
         table = _quote("ds_" + dataset)
         value = _quote(field)
-        group = _quote(group_by) if group_by else "NULL"
+        split_col = _quote(split_by) if split_by else "NULL"
         with self._connect() as conn:
-            where_sql, params, total_groups = self._window(conn, ds, field, t0, t1, group_by, groups, filter_expr, max_groups)
+            where_sql, params, total_splits = self._window(conn, ds, field, t0, t1, split_by, split_values, filter_expr, max_splits)
             count, lo, hi = conn.execute(f"SELECT COUNT(*), MIN({_TS}), MAX({_TS}) FROM {table} WHERE {where_sql}", params).fetchone()
             downsampled = count > max_points and hi is not None and hi > lo
             if not downsampled:
                 rows = conn.execute(
-                    f"SELECT {group}, {_TS}, {value}, {_REC} FROM {table} WHERE {where_sql} ORDER BY {_TS}", params
+                    f"SELECT {split_col}, {_TS}, {value}, {_REC} FROM {table} WHERE {where_sql} ORDER BY {_TS}", params
                 ).fetchall()
             else:
                 start = t0 if t0 is not None else lo
@@ -216,25 +218,25 @@ class Store:
                 # SQLite returns the other columns of the row holding the MIN or MAX.
                 for agg in ("MIN", "MAX"):
                     rows += conn.execute(
-                        f"SELECT {group}, {_TS}, {agg}({value}), {_REC} FROM {table} WHERE {where_sql} "
-                        f"GROUP BY {group}, {bucket}",
+                        f"SELECT {split_col}, {_TS}, {agg}({value}), {_REC} FROM {table} WHERE {where_sql} "
+                        f"GROUP BY {split_col}, {bucket}",
                         params + [start, scale],
                     ).fetchall()
 
-        by_group: dict[Any, dict[int, tuple[float, Any]]] = {}
+        by_split: dict[Any, dict[int, tuple[float, Any]]] = {}
         for g, t, v, rec in rows:
-            by_group.setdefault(g, {})[rec] = (t, v)
+            by_split.setdefault(g, {})[rec] = (t, v)
         series = []
-        for g in sorted(by_group, key=_group_sort_key):
-            points = sorted(by_group[g].items(), key=lambda item: (item[1][0], item[0]))
+        for g in sorted(by_split, key=_split_sort_key):
+            points = sorted(by_split[g].items(), key=lambda item: (item[1][0], item[0]))
             series.append({
-                "label": _label(field, group_by, g),
-                "group": g,
+                "label": _label(field, split_by, g),
+                "split": g,
                 "t": [p[1][0] for p in points],
                 "v": [p[1][1] for p in points],
                 "record": [p[0] for p in points],
             })
-        return {"unit": ds["units"].get(field), "downsampled": downsampled, "total_groups": total_groups, "series": series}
+        return {"unit": ds["units"].get(field), "downsampled": downsampled, "total_splits": total_splits, "series": series}
 
     def stats(
         self,
@@ -242,31 +244,31 @@ class Store:
         field: str,
         t0: float | None = None,
         t1: float | None = None,
-        group_by: str | None = None,
-        groups: list[str] | None = None,
+        split_by: str | None = None,
+        split_values: list[str] | None = None,
         filter_expr: str | None = None,
-        max_groups: int = MAX_DEFAULT_GROUPS,
+        max_splits: int = MAX_DEFAULT_SPLITS,
         max_exact_points: int = MAX_EXACT_PERCENTILE_POINTS,
     ) -> dict[str, Any]:
-        """Returns count, min, max, mean and percentiles of a numeric field per group.
+        """Returns count, min, max, mean and percentiles of a numeric field per split value.
 
         Percentiles are estimated from an evenly spaced sample when there are more than max_exact_points.
         """
         ds = self._dataset(dataset)
         table = _quote("ds_" + dataset)
         value = _quote(field)
-        group = _quote(group_by) if group_by else "NULL"
+        split_col = _quote(split_by) if split_by else "NULL"
         with self._connect() as conn:
-            where_sql, params, total_groups = self._window(conn, ds, field, t0, t1, group_by, groups, filter_expr, max_groups)
+            where_sql, params, total_splits = self._window(conn, ds, field, t0, t1, split_by, split_values, filter_expr, max_splits)
             aggregates = conn.execute(
-                f"SELECT {group}, COUNT(*), MIN({value}), MAX({value}), AVG({value}) FROM {table} "
-                f"WHERE {where_sql} GROUP BY {group}",
+                f"SELECT {split_col}, COUNT(*), MIN({value}), MAX({value}), AVG({value}) FROM {table} "
+                f"WHERE {where_sql} GROUP BY {split_col}",
                 params,
             ).fetchall()
             total = sum(row[1] for row in aggregates)
             stride = -(-total // max_exact_points) if total > max_exact_points else 1
             values: dict[Any, list[float]] = {}
-            sample_sql = f"SELECT {group}, {value} FROM {table} WHERE {where_sql}"
+            sample_sql = f"SELECT {split_col}, {value} FROM {table} WHERE {where_sql}"
             # Record ids are dense enough among metric rows for a stride to be an even sample.
             sample_params = params
             if stride > 1:
@@ -276,11 +278,11 @@ class Store:
                 values.setdefault(g, []).append(v)
 
         series = []
-        for g, count, vmin, vmax, mean in sorted(aggregates, key=lambda row: _group_sort_key(row[0])):
+        for g, count, vmin, vmax, mean in sorted(aggregates, key=lambda row: _split_sort_key(row[0])):
             pct = _percentiles(values.get(g, []), (50, 95, 99))
             series.append({
-                "label": _label(field, group_by, g),
-                "group": g,
+                "label": _label(field, split_by, g),
+                "split": g,
                 "count": count,
                 "min": vmin,
                 "max": vmax,
@@ -289,7 +291,57 @@ class Store:
                 "p95": pct[1],
                 "p99": pct[2],
             })
-        return {"unit": ds["units"].get(field), "sampled": stride > 1, "total_groups": total_groups, "series": series}
+        return {"unit": ds["units"].get(field), "sampled": stride > 1, "total_splits": total_splits, "series": series}
+
+    def histogram(
+        self,
+        dataset: str,
+        field: str,
+        t0: float | None = None,
+        t1: float | None = None,
+        split_by: str | None = None,
+        split_values: list[str] | None = None,
+        filter_expr: str | None = None,
+        bins: int = DEFAULT_HISTOGRAM_BINS,
+        max_splits: int = MAX_DEFAULT_SPLITS,
+    ) -> dict[str, Any]:
+        """Returns the value distribution of a numeric field per split value, over shared bins.
+
+        Integer fields spanning at most bins values get one bin per integer.
+        """
+        ds = self._dataset(dataset)
+        table = _quote("ds_" + dataset)
+        value = _quote(field)
+        split_col = _quote(split_by) if split_by else "NULL"
+        with self._connect() as conn:
+            where_sql, params, total_splits = self._window(conn, ds, field, t0, t1, split_by, split_values, filter_expr, max_splits)
+            lo, hi, nof_fractional = conn.execute(
+                f"SELECT MIN({value}), MAX({value}), SUM({value} != CAST({value} AS INTEGER)) FROM {table} WHERE {where_sql}",
+                params,
+            ).fetchone()
+            if lo is None:
+                return {"unit": ds["units"].get(field), "edges": [], "total_splits": total_splits, "series": []}
+            if not nof_fractional and hi - lo + 1 <= bins:
+                start, bin_width, nof_bins = lo - 0.5, 1.0, int(hi - lo) + 1
+            elif hi > lo:
+                start, bin_width, nof_bins = lo, (hi - lo) / bins, bins
+            else:
+                start, bin_width, nof_bins = lo - 0.5, 1.0, 1
+            rows = conn.execute(
+                f"SELECT {split_col}, MIN(CAST(({value} - ?) / ? AS INTEGER), {nof_bins - 1}), COUNT(*) FROM {table} "
+                f"WHERE {where_sql} GROUP BY 1, 2",
+                [start, bin_width] + params,
+            ).fetchall()
+
+        counts: dict[Any, list[int]] = {}
+        for split, b, n in rows:
+            counts.setdefault(split, [0] * nof_bins)[b] += n
+        series = [
+            {"label": _label(field, split_by, split), "split": split, "counts": counts[split]}
+            for split in sorted(counts, key=_split_sort_key)
+        ]
+        edges = [start + i * bin_width for i in range(nof_bins + 1)]
+        return {"unit": ds["units"].get(field), "edges": edges, "total_splits": total_splits, "series": series}
 
     def context_values(self, dataset: str, field: str, limit: int = 1000) -> list[Any]:
         """Returns the distinct values of a field."""
@@ -330,19 +382,19 @@ class Store:
         field: str,
         t0: float | None,
         t1: float | None,
-        group_by: str | None,
-        groups: list[str] | None,
+        split_by: str | None,
+        split_values: list[str] | None,
         filter_expr: str | None,
-        max_groups: int,
+        max_splits: int,
     ) -> tuple[str, list[Any], int]:
-        """Builds the WHERE clause selecting the rows of a numeric field, returning it with its params and group count."""
+        """Builds the WHERE clause selecting the rows of a numeric field, returning it with its params and split count."""
         if ds["fields"].get(field) != "number":
             raise QueryError(f"Field {field!r} of {ds['name']!r} is not numeric.")
-        if group_by is not None and group_by not in ds["fields"]:
-            raise QueryError(f"Unknown group field {group_by!r} of {ds['name']!r}.")
+        if split_by is not None and split_by not in ds["fields"]:
+            raise QueryError(f"Unknown split field {split_by!r} of {ds['name']!r}.")
 
         table = _quote("ds_" + ds["name"])
-        group = _quote(group_by) if group_by else "NULL"
+        split_col = _quote(split_by) if split_by else "NULL"
         where = [f"{_quote(field)} IS NOT NULL"]
         params: list[Any] = []
         if t0 is not None:
@@ -358,22 +410,22 @@ class Store:
                 raise QueryError(f"Filter: {e}") from None
             where.append(cond)
             params.extend(cond_params)
-        if group_by and groups:
-            where.append(f"CAST({group} AS TEXT) IN ({', '.join('?' * len(groups))})")
-            params.extend(groups)
+        if split_by and split_values:
+            where.append(f"CAST({split_col} AS TEXT) IN ({', '.join('?' * len(split_values))})")
+            params.extend(split_values)
 
-        total_groups = 1
-        if group_by:
+        total_splits = 1
+        if split_by:
             where_sql = " AND ".join(where)
-            total_groups = conn.execute(f"SELECT COUNT(DISTINCT {group}) FROM {table} WHERE {where_sql}", params).fetchone()[0]
-            if not groups and total_groups > max_groups:
+            total_splits = conn.execute(f"SELECT COUNT(DISTINCT {split_col}) FROM {table} WHERE {where_sql}", params).fetchone()[0]
+            if not split_values and total_splits > max_splits:
                 first = conn.execute(
-                    f"SELECT DISTINCT {group} FROM {table} WHERE {where_sql} ORDER BY {group} LIMIT ?",
-                    params + [max_groups],
+                    f"SELECT DISTINCT {split_col} FROM {table} WHERE {where_sql} ORDER BY {split_col} LIMIT ?",
+                    params + [max_splits],
                 ).fetchall()
-                where.append(f"{group} IN ({', '.join('?' * len(first))})")
+                where.append(f"{split_col} IN ({', '.join('?' * len(first))})")
                 params.extend(r[0] for r in first)
-        return " AND ".join(where), params, total_groups
+        return " AND ".join(where), params, total_splits
 
     def _dataset(self, dataset: str) -> dict[str, Any]:
         try:
@@ -387,8 +439,8 @@ class Store:
             yield conn
 
 
-def _label(field: str, group_by: str | None, group: Any) -> str:
-    return f"{group_by}={group}" if group_by else field
+def _label(field: str, split_by: str | None, value: Any) -> str:
+    return f"{split_by}={value}" if split_by else field
 
 
 def _percentiles(values: list[float], percents: tuple[int, ...]) -> list[float | None]:
@@ -405,12 +457,12 @@ def _percentiles(values: list[float], percents: tuple[int, ...]) -> list[float |
     return out
 
 
-def _group_sort_key(group: Any) -> tuple:
-    if group is None:
+def _split_sort_key(value: Any) -> tuple:
+    if value is None:
         return (2, "")
-    if isinstance(group, (int, float)):
-        return (0, group)
-    return (1, str(group))
+    if isinstance(value, (int, float)):
+        return (0, value)
+    return (1, str(value))
 
 
 def _file_uri(path: Path) -> str:

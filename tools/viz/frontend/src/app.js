@@ -12,7 +12,7 @@ let nextPlotId = 1;
 
 /** @param {{source: number, dataset?: string | null}} init */
 function newPlot(init) {
-  return { id: nextPlotId++, source: init.source, dataset: init.dataset ?? null, field: null, groupBy: null, groups: [], filter: "" };
+  return { id: nextPlotId++, source: init.source, dataset: init.dataset ?? null, field: null, splitBy: null, splitValues: [], filter: "", mode: "time" };
 }
 
 const App = {
@@ -65,7 +65,7 @@ const App = {
   },
   template: `
     <header class="app-bar">
-      <span class="brand">ocudu-viz</span>
+      <img src="img/ocudu_color.png" alt="OCUDU" class="logo" />
       <div class="spacer"></div>
       <label class="inline">time
         <select v-model="timeMode">

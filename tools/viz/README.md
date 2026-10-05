@@ -26,8 +26,8 @@ The script builds the `ocudu-viz:latest` image when needed (cached after the fir
 
 In the page:
 
-- Pick source, dataset (METRICS layer), field and optionally a context field to group by (e.g. `ue`).
-  Without a group selection, the first 20 groups are shown.
+- Pick source, dataset (METRICS layer), field and optionally a context field to split by, giving one
+  series per value (e.g. one per `ue`). Without a selection of values, the first 20 are shown.
 - Drag or use the wheel to zoom, Shift+drag to pan, double-click to reset. All plots share the time axis.
 - Click a point to see its log line and the lines around it.
 - Filter the rows of a plot with an expression, applied on Enter. Values are in the base units of the
@@ -41,6 +41,8 @@ In the page:
 
   Operators: `== != < <= > >=`, `is null`, `is not null`, combined with `and`, `or`, `not` and parentheses.
   Strings can be quoted or bare (`type == ue_create`). A bare word naming a field compares two fields.
+- Switch a plot from `time series` to `histogram` to see the value distribution of the visible window,
+  one curve per split value. Integer fields with few values (e.g. MCS) get one bin per value.
 - Below each plot, a table shows count, min, mean, p50, p95, p99 and max of each series in the visible
   window, with the plot filter applied. Percentiles are sampled for windows over 2M points.
 - Time mode `relative` starts each source at t=0.

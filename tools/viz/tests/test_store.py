@@ -33,7 +33,7 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(self.store.meta["t_max"] - self.store.meta["t_min"], 9)
 
     def test_full_resolution_series(self):
-        res = self.store.series("sched_ue", "dl_brate", group_by="ue")
+        res = self.store.series("sched_ue", "dl_brate", split_by="ue")
         self.assertFalse(res["downsampled"])
         self.assertEqual(res["unit"], "bps")
         self.assertEqual([s["label"] for s in res["series"]], ["ue=0", "ue=1"])
@@ -43,20 +43,20 @@ class StoreTest(unittest.TestCase):
         # Line 1 is the boot line, then 4 lines per second for 2 UEs.
         self.assertEqual(s["record"][:2], [4, 8])
 
-    def test_time_window_and_groups(self):
+    def test_time_window_and_split_values(self):
         t_min = self.store.meta["t_min"]
-        res = self.store.series("sched_ue", "pusch_snr_db", t0=t_min + 2, t1=t_min + 4, group_by="ue", groups=["1"])
+        res = self.store.series("sched_ue", "pusch_snr_db", t0=t_min + 2, t1=t_min + 4, split_by="ue", split_values=["1"])
         self.assertEqual([s["label"] for s in res["series"]], ["ue=1"])
         self.assertEqual(res["series"][0]["v"], [21.5, 21.5, 21.5])
 
-    def test_group_cap_without_explicit_groups(self):
+    def test_split_cap_without_explicit_values(self):
         log = write_log(self.dir / "many.log", nof_seconds=2, nof_ues=30)
         store = self.cache.open(log, LogMetricsSource())
-        res = store.series("sched_ue", "dl_brate", group_by="ue", max_groups=5)
-        self.assertEqual(res["total_groups"], 30)
-        self.assertEqual([s["group"] for s in res["series"]], [0, 1, 2, 3, 4])
-        res = store.series("sched_ue", "dl_brate", group_by="ue", groups=["7", "29"], max_groups=5)
-        self.assertEqual([s["group"] for s in res["series"]], [7, 29])
+        res = store.series("sched_ue", "dl_brate", split_by="ue", max_splits=5)
+        self.assertEqual(res["total_splits"], 30)
+        self.assertEqual([s["split"] for s in res["series"]], [0, 1, 2, 3, 4])
+        res = store.series("sched_ue", "dl_brate", split_by="ue", split_values=["7", "29"], max_splits=5)
+        self.assertEqual([s["split"] for s in res["series"]], [7, 29])
 
     def test_downsampled_series_keeps_extremes(self):
         res = self.store.series("mac", "wall_clock_latency_max", width=2, max_points=5)
@@ -67,17 +67,17 @@ class StoreTest(unittest.TestCase):
         self.assertLessEqual(len(v), 4)
 
     def test_filtered_series(self):
-        res = self.store.series("sched_ue", "dl_brate", group_by="ue", filter_expr="rnti == 0x4601 and dl_brate >= 5000")
+        res = self.store.series("sched_ue", "dl_brate", split_by="ue", filter_expr="rnti == 0x4601 and dl_brate >= 5000")
         self.assertEqual([s["label"] for s in res["series"]], ["ue=1"])
         self.assertEqual(res["series"][0]["v"], [5000, 6000, 7000, 8000, 9000])
-        self.assertEqual(res["total_groups"], 1)
+        self.assertEqual(res["total_splits"], 1)
 
     def test_invalid_filter(self):
         with self.assertRaisesRegex(QueryError, "Filter: Unknown field 'nope'"):
             self.store.series("sched_ue", "dl_brate", filter_expr="nope > 1")
 
     def test_stats(self):
-        res = self.store.stats("sched_ue", "dl_brate", group_by="ue")
+        res = self.store.stats("sched_ue", "dl_brate", split_by="ue")
         self.assertEqual(res["unit"], "bps")
         self.assertFalse(res["sampled"])
         s = res["series"][1]
@@ -104,6 +104,26 @@ class StoreTest(unittest.TestCase):
         res = self.store.stats("sched_ue", "dl_brate", filter_expr="dl_brate > 1e9")
         self.assertEqual(res["series"], [])
 
+    def test_histogram_continuous(self):
+        res = self.store.histogram("sched_ue", "dl_brate", split_by="ue", bins=3)
+        self.assertEqual(res["edges"], [0, 3000, 6000, 9000])
+        self.assertEqual([s["label"] for s in res["series"]], ["ue=0", "ue=1"])
+        # 0..9000 in steps of 1000: the maximum falls into the last bin.
+        self.assertEqual(res["series"][0]["counts"], [3, 3, 4])
+
+    def test_histogram_integer_bins(self):
+        res = self.store.histogram("mac", "wall_clock_latency_avg")
+        self.assertEqual(res["edges"][:2], [-0.5, 0.5])
+        self.assertEqual(len(res["edges"]), 11)
+        self.assertEqual(res["series"][0]["counts"], [1] * 10)
+
+    def test_histogram_constant_and_empty(self):
+        res = self.store.histogram("sched_ue", "max_crc_delay")
+        self.assertEqual(res["series"][0]["counts"], [20])
+        self.assertEqual(len(res["edges"]), 2)
+        res = self.store.histogram("sched_ue", "dl_brate", filter_expr="dl_brate < 0")
+        self.assertEqual((res["edges"], res["series"]), ([], []))
+
     def test_invalid_queries(self):
         with self.assertRaises(QueryError):
             self.store.series("foo", "x")
@@ -112,7 +132,7 @@ class StoreTest(unittest.TestCase):
         with self.assertRaises(QueryError):
             self.store.series("sched_ue", 'dl_brate" OR 1=1 --')
         with self.assertRaises(QueryError):
-            self.store.series("sched_ue", "dl_brate", group_by="nope")
+            self.store.series("sched_ue", "dl_brate", split_by="nope")
 
     def test_context_values(self):
         self.assertEqual(self.store.context_values("sched_ue", "rnti"), ["0x4600", "0x4601"])

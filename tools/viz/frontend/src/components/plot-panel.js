@@ -10,10 +10,11 @@ const PALETTE = [
   "#edc948", "#b07aa1", "#ff9da7", "#9c755f", "#bab0ac",
 ];
 const CHART_HEIGHT = 260;
+const steppedPath = uPlot.paths.stepped({ align: 1 });
 // Delay before fetching after the view changes, to coalesce wheel and pan events.
 const FETCH_DELAY_MS = 120;
-// Group values listed in the group picker.
-const MAX_LISTED_GROUPS = 300;
+// Split values listed in the split value picker.
+const MAX_LISTED_SPLITS = 300;
 
 const fmtMs = uPlot.fmtDate("{HH}:{mm}:{ss}.{fff}");
 const fmtSec = uPlot.fmtDate("{HH}:{mm}:{ss}");
@@ -81,10 +82,10 @@ export default {
       loading: false,
       error: "",
       downsampled: false,
-      totalGroups: 0,
+      totalSplits: 0,
       nofSeries: 0,
-      groupValues: [],
-      groupFilter: "",
+      splitOptions: [],
+      splitFilter: "",
       filterDraft: this.plot.filter,
       stats: [],
       statsSampled: false,
@@ -105,16 +106,16 @@ export default {
     numericFields() {
       return this.dataset ? this.dataset.fields.filter((f) => f.type === "number" && !this.dataset.context.includes(f.name)) : [];
     },
-    groupFields() {
+    splitFields() {
       return this.dataset ? this.dataset.context : [];
     },
     shift() {
       return this.shifts[this.plot.source] || 0;
     },
-    listedGroups() {
-      const filter = this.groupFilter.trim();
-      const values = filter ? this.groupValues.filter((v) => String(v).includes(filter)) : this.groupValues;
-      return values.slice(0, MAX_LISTED_GROUPS);
+    listedSplits() {
+      const filter = this.splitFilter.trim();
+      const values = filter ? this.splitOptions.filter((v) => String(v).includes(filter)) : this.splitOptions;
+      return values.slice(0, MAX_LISTED_SPLITS);
     },
     statsRows() {
       return this.stats.map((s) => {
@@ -127,9 +128,9 @@ export default {
     filterDirty() {
       return this.filterDraft.trim() !== this.plot.filter;
     },
-    groupSummary() {
-      if (this.plot.groups.length) return `${this.plot.groups.length} selected`;
-      if (this.totalGroups > this.nofSeries) return `first ${this.nofSeries} of ${this.totalGroups}`;
+    splitSummary() {
+      if (this.plot.splitValues.length) return `${this.plot.splitValues.length} selected`;
+      if (this.totalSplits > this.nofSeries) return `first ${this.nofSeries} of ${this.totalSplits}`;
       return "all";
     },
   },
@@ -139,12 +140,12 @@ export default {
     },
     "plot.dataset"() {
       this.plot.field = this.numericFields[0]?.name ?? null;
-      this.plot.groupBy = null;
+      this.plot.splitBy = null;
     },
-    "plot.groupBy"() {
-      this.plot.groups = [];
-      this.groupFilter = "";
-      this.loadGroupValues();
+    "plot.splitBy"() {
+      this.plot.splitValues = [];
+      this.splitFilter = "";
+      this.loadSplitOptions();
     },
     view:{ handler() { this.applyView(); this.scheduleFetch(false); }, deep: true },
   },
@@ -157,7 +158,7 @@ export default {
     this.abort = null;
     // Any change of the query inputs refetches and rebuilds the chart.
     this.$watch(
-      () => [this.plot.source, this.plot.dataset, this.plot.field, this.plot.groupBy, [...this.plot.groups], this.plot.filter, this.shift, this.timeMode],
+      () => [this.plot.source, this.plot.dataset, this.plot.field, this.plot.splitBy, [...this.plot.splitValues], this.plot.filter, this.plot.mode, this.shift, this.timeMode],
       () => this.scheduleFetch(true),
     );
   },
@@ -177,11 +178,11 @@ export default {
     this.chart?.destroy();
   },
   methods: {
-    async loadGroupValues() {
-      this.groupValues = [];
-      if (!this.plot.groupBy) return;
+    async loadSplitOptions() {
+      this.splitOptions = [];
+      if (!this.plot.splitBy) return;
       try {
-        this.groupValues = await getJSON("/api/context", { source: this.plot.source, dataset: this.plot.dataset, field: this.plot.groupBy });
+        this.splitOptions = await getJSON("/api/context", { source: this.plot.source, dataset: this.plot.dataset, field: this.plot.splitBy });
       } catch (e) {
         this.error = e.message;
       }
@@ -191,11 +192,11 @@ export default {
       this.plot.filter = this.filterDraft.trim();
     },
 
-    toggleGroup(value) {
+    toggleSplit(value) {
       const key = String(value);
-      const idx = this.plot.groups.indexOf(key);
-      if (idx >= 0) this.plot.groups.splice(idx, 1);
-      else this.plot.groups.push(key);
+      const idx = this.plot.splitValues.indexOf(key);
+      if (idx >= 0) this.plot.splitValues.splice(idx, 1);
+      else this.plot.splitValues.push(key);
     },
 
     /** @param {boolean} rebuild Whether the series set may have changed. */
@@ -214,8 +215,8 @@ export default {
         source: this.plot.source,
         dataset: this.plot.dataset,
         field: this.plot.field,
-        group_by: this.plot.groupBy,
-        groups: this.plot.groups.length ? this.plot.groups : null,
+        split_by: this.plot.splitBy,
+        split_values: this.plot.splitValues.length ? this.plot.splitValues : null,
         filter: this.plot.filter || null,
       };
       if (this.view) {
@@ -225,12 +226,14 @@ export default {
       this.loading = true;
       try {
         const signal = this.abort.signal;
+        const histogram = this.plot.mode === "histogram";
         const [res, stats] = await Promise.all([
-          getJSON("/api/series", { ...params, width }, signal),
+          histogram ? getJSON("/api/histogram", params, signal) : getJSON("/api/series", { ...params, width }, signal),
           getJSON("/api/stats", params, signal),
         ]);
         this.error = "";
-        this.render(res);
+        if (histogram) this.renderHistogram(res);
+        else this.render(res);
         this.stats = stats.series;
         this.statsSampled = stats.sampled;
       } catch (e) {
@@ -242,7 +245,7 @@ export default {
 
     render(res) {
       this.downsampled = res.downsampled;
-      this.totalGroups = res.total_groups;
+      this.totalSplits = res.total_splits;
       this.nofSeries = res.series.length;
       const shift = this.shift;
       const tables = res.series.map((s) => [s.t.map((t) => t + shift), s.v, s.record]);
@@ -264,20 +267,73 @@ export default {
       this.unit = unit;
       this.labels = labels;
 
-      const sameSeries = this.chart && !this.rebuildPending && this.chartKey === JSON.stringify([labels, unit.label]);
-      if (sameSeries) {
+      const key = JSON.stringify(["time", labels, unit.label]);
+      if (this.chart && !this.rebuildPending && this.chartKey === key) {
         this.chart.setData(data, false);
       } else {
         this.chart?.destroy();
-        this.chartKey = JSON.stringify([labels, unit.label]);
+        this.chartKey = key;
         this.chart = this.createChart(data, labels, unit.label);
       }
       this.rebuildPending = false;
       this.applyView();
     },
 
+    renderHistogram(res) {
+      this.downsampled = false;
+      this.totalSplits = res.total_splits;
+      this.nofSeries = res.series.length;
+      this.records = [];
+      let maxAbs = 0;
+      for (const e of res.edges) maxAbs = Math.max(maxAbs, Math.abs(e));
+      const unit = displayUnit(res.unit, maxAbs);
+      const labels = res.series.map((s) => s.label);
+      this.unit = unit;
+      this.labels = labels;
+      // A stepped path draws bin i from edge i to edge i+1, so the last count is repeated at the last edge.
+      const data = [
+        res.edges.map((e) => e / unit.divisor),
+        ...res.series.map((s) => [...s.counts, s.counts[s.counts.length - 1]]),
+      ];
+
+      const key = JSON.stringify(["histogram", labels, unit.label]);
+      if (this.chart && !this.rebuildPending && this.chartKey === key) {
+        this.chart.setData(data);
+      } else {
+        this.chart?.destroy();
+        this.chartKey = key;
+        this.chart = this.createHistogramChart(data, labels, unit.label);
+      }
+      this.rebuildPending = false;
+    },
+
     applyView() {
-      if (this.chart && this.view) this.chart.setScale("x", { min: this.view.min, max: this.view.max });
+      if (this.chart && this.view && this.plot.mode !== "histogram") {
+        this.chart.setScale("x", { min: this.view.min, max: this.view.max });
+      }
+    },
+
+    createHistogramChart(data, labels, unitLabel) {
+      const axisColor = cssVar("--fg-muted");
+      const gridColor = cssVar("--grid");
+      const axis = { stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 } };
+      const single = labels.length === 1;
+      const opts = {
+        width: this.$refs.chart.clientWidth,
+        height: CHART_HEIGHT,
+        scales: { x: { time: false } },
+        series: [
+          { label: unitLabel ? `value [${unitLabel}]` : "value", value: (u, v) => (v == null ? "--" : formatStat(v)) },
+          ...labels.map((label, i) => {
+            const color = PALETTE[i % PALETTE.length];
+            return { label, stroke: color, width: 1.5, paths: steppedPath, points: { show: false }, fill: single ? color + "40" : undefined };
+          }),
+        ],
+        axes: [{ ...axis, label: unitLabel }, { ...axis, label: "count", size: 60 }],
+        cursor: { drag: { x: false, y: false }, focus: { prox: 16 } },
+        focus: { alpha: 0.35 },
+      };
+      return new uPlot(opts, data, this.$refs.chart);
     },
 
     createChart(data, labels, unitLabel) {
@@ -381,21 +437,25 @@ export default {
         <select v-model="plot.field" title="Field" class="field-select">
           <option v-for="f in numericFields" :key="f.name" :value="f.name">{{ f.name }}{{ f.unit ? " [" + f.unit + "]" : "" }}</option>
         </select>
-        <label class="inline">group by
-          <select v-model="plot.groupBy">
+        <select v-model="plot.mode" title="View">
+          <option value="time">time series</option>
+          <option value="histogram">histogram</option>
+        </select>
+        <label class="inline">split by
+          <select v-model="plot.splitBy">
             <option :value="null">none</option>
-            <option v-for="g in groupFields" :key="g" :value="g">{{ g }}</option>
+            <option v-for="g in splitFields" :key="g" :value="g">{{ g }}</option>
           </select>
         </label>
-        <details v-if="plot.groupBy" class="groups">
-          <summary>{{ groupSummary }}</summary>
-          <div class="groups-popup">
-            <input v-model="groupFilter" placeholder="filter" />
-            <button v-if="plot.groups.length" @click="plot.groups.splice(0)">clear</button>
-            <label v-for="v in listedGroups" :key="v" class="group-option">
-              <input type="checkbox" :checked="plot.groups.includes(String(v))" @change="toggleGroup(v)" /> {{ v }}
+        <details v-if="plot.splitBy" class="splits">
+          <summary>{{ splitSummary }}</summary>
+          <div class="splits-popup">
+            <input v-model="splitFilter" placeholder="filter" />
+            <button v-if="plot.splitValues.length" @click="plot.splitValues.splice(0)">clear</button>
+            <label v-for="v in listedSplits" :key="v" class="split-option">
+              <input type="checkbox" :checked="plot.splitValues.includes(String(v))" @change="toggleSplit(v)" /> {{ v }}
             </label>
-            <div v-if="groupValues.length > listedGroups.length" class="muted">filter to see more</div>
+            <div v-if="splitOptions.length > listedSplits.length" class="muted">filter to see more</div>
           </div>
         </details>
         <form class="filter" @submit.prevent="applyFilter">
@@ -404,6 +464,7 @@ export default {
         </form>
         <span class="status">
           <span v-if="loading" class="muted">loading</span>
+          <span v-else-if="plot.mode === 'histogram'" class="muted">distribution of the visible window</span>
           <span v-else-if="downsampled" class="muted" title="min/max per pixel; zoom in for full resolution">downsampled</span>
           <span v-if="error" class="error">{{ error }}</span>
         </span>

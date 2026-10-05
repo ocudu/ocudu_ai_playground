@@ -14,7 +14,7 @@ updated as they are agreed.
 
 - **Source:** one input file (e.g. `du.log`, `cu.log`, a pcap). A view can hold several sources.
 - **Dataset:** what a source type extracts from a source. Three kinds:
-  - **Time series:** numeric fields over time, grouped by context (e.g. METRICS layers, trace latencies).
+  - **Time series:** numeric fields over time, split by context (e.g. METRICS layers, trace latencies).
   - **Events:** timestamped points or intervals with a label (e.g. RRC procedures, errors, PRACH, handovers).
     Drawn as markers or spans over the plots.
   - **Records:** the raw entries behind the other datasets (e.g. log lines, packets), for drill-down.
@@ -24,7 +24,7 @@ updated as they are agreed.
 ## Functional requirements
 
 - **F1. Metric selection:** pick a dataset (e.g. METRICS layer `sched_ue`) and one or more of its fields.
-- **F2. Group by context:** split a field into one series per context value (e.g. per `pci`, `ue`, `rnti`,
+- **F2. Split by context:** split a field into one series per context value (e.g. per `pci`, `ue`, `rnti`,
   `executor`).
 - **F3. Filters:** boolean filter expressions over record fields (e.g. `pci == 1 and dl_mcs > 20`).
 - **F4. Statistics:** min, max, mean and percentiles of the selected series over the visible range.
@@ -85,7 +85,7 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 
 - Each source is parsed once into a SQLite database: one table per dataset, one column per field, plus
   timestamp and record id. List values are stored as JSON text. Columns are added as fields appear.
-- SQLite also serves the queries: filters (F3), grouping (F2), downsampling (D1) and statistics (F4).
+- SQLite also serves the queries: filters (F3), splitting (F2), downsampling (D1) and statistics (F4).
 - Filter expressions are translated from a small grammar (`field op value`, `and`, `or`, parentheses) into
   parameterized SQL, never passed through as SQL.
 - Cache location: a per-user directory (mode 0700) under the system temp dir of the host (honours
@@ -105,9 +105,9 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 ### D4. First version scope
 
 - In: CLI, log metrics source type, F1, F2, F6, F7, F8, F9, F12, F13, D1, D2.
-- Deferred: F5 histogram, F10 live tail, F11 URL state, F14 events (needs an
+- Deferred: F10 live tail, F11 URL state, F14 events (needs an
   event parser in `parsers`), Docker.
-- Without explicit groups, only the first 20 groups of a grouped series are returned, since sparse groups
+- Without explicit split values, only the first 20 are returned, since sparse splits
   (e.g. ~1000 short-lived UEs) cannot be reduced by downsampling.
 
 ### D5. Layout and API
@@ -117,9 +117,9 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - `frontend/`: the browser app sources (`src/`, `public/`), built by Vite into `viz/static/`.
 - `Dockerfile` and the `ocudu-viz` wrapper script, see D12.
 - `GET /api/sources`: sources with their datasets, fields (type, unit) and context fields.
-- `GET /api/series?source&dataset&field&group_by&groups&t0&t1&width`: one series per group, each with its
+- `GET /api/series?source&dataset&field&split_by&split_values&t0&t1&width`: one series per split value, each with its
   own timestamps, values and record ids. The browser aligns them with `uPlot.join`.
-- `GET /api/context?source&dataset&field`: distinct values of a field, for group selection.
+- `GET /api/context?source&dataset&field`: distinct values of a field, for split value selection.
 - `GET /api/records?source&around&count`: raw records (log lines) around a record.
 - Sources sharing a file name are labelled with the first directory where their paths differ.
 
@@ -131,6 +131,13 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - A filter applies to the series and the statistics of its plot.
 - Statistics (F4) per series over the visible window: count, min, max, mean from SQL; p50, p95, p99 in
   Python, from an evenly spaced sample when the window has more than 2M points.
+
+### D7. Histogram
+
+- Per plot toggle between time series and histogram (F5). The histogram covers the visible window, with the
+  plot filter and split applied, and is drawn as one stepped curve per split value over shared bins.
+- 50 equal bins over the window's value range. Integer fields spanning at most 50 values get one bin per
+  integer, centred on it.
 
 ### D12. Container
 

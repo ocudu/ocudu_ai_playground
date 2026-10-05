@@ -88,12 +88,12 @@ def create_app(stores: list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
         t0: float | None = None,
         t1: float | None = None,
         width: int = Query(1000, ge=1, le=20000),
-        group_by: str | None = None,
-        groups: list[str] | None = Query(None),
+        split_by: str | None = None,
+        split_values: list[str] | None = Query(None),
         filter_expr: str | None = Query(None, alias="filter"),
     ) -> dict[str, Any]:
         try:
-            return get_store(source).series(dataset, field, t0, t1, width, group_by, groups, filter_expr)
+            return get_store(source).series(dataset, field, t0, t1, width, split_by, split_values, filter_expr)
         except QueryError as e:
             raise HTTPException(400, str(e)) from None
 
@@ -104,12 +104,29 @@ def create_app(stores: list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
         field: str,
         t0: float | None = None,
         t1: float | None = None,
-        group_by: str | None = None,
-        groups: list[str] | None = Query(None),
+        split_by: str | None = None,
+        split_values: list[str] | None = Query(None),
         filter_expr: str | None = Query(None, alias="filter"),
     ) -> dict[str, Any]:
         try:
-            return get_store(source).stats(dataset, field, t0, t1, group_by, groups, filter_expr)
+            return get_store(source).stats(dataset, field, t0, t1, split_by, split_values, filter_expr)
+        except QueryError as e:
+            raise HTTPException(400, str(e)) from None
+
+    @app.get("/api/histogram")
+    def histogram(
+        source: int,
+        dataset: str,
+        field: str,
+        t0: float | None = None,
+        t1: float | None = None,
+        split_by: str | None = None,
+        split_values: list[str] | None = Query(None),
+        filter_expr: str | None = Query(None, alias="filter"),
+        bins: int = Query(50, ge=1, le=1000),
+    ) -> dict[str, Any]:
+        try:
+            return get_store(source).histogram(dataset, field, t0, t1, split_by, split_values, filter_expr, bins)
         except QueryError as e:
             raise HTTPException(400, str(e)) from None
 
