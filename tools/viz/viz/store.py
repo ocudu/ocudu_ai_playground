@@ -21,11 +21,15 @@ from .filters import FilterError, compile_filter
 from .sources.base import ProgressFn, SourceType
 
 # Bumped when the database layout changes, part of the cache key.
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 # Time series windows up to this many points are returned at full resolution.
 MAX_FULL_RES_POINTS = 50_000
 # Split values returned when none are selected.
 MAX_DEFAULT_SPLITS = 20
+# Columns of the events table, after the timestamp and record id.
+EVENT_COLUMNS = ("type", "category", "layer", "level", "ue", "rnti", "cause", "text")
+# Events returned by default for a time window.
+DEFAULT_MAX_EVENTS = 5000
 # Rows returned by default for a table.
 DEFAULT_TABLE_ROWS = 1000
 # Bins of a histogram, unless the field has few integer values.
@@ -81,6 +85,7 @@ class StoreWriter:
         self._datasets: dict[str, _DatasetBuffer] = {}
         self._info: dict[str, tuple[dict[str, str], list[str], str | None, str | None]] = {}
         self._time_range: tuple[float, float] | None = None
+        self._events: list[tuple] = []
         self._conn.executescript(
             """
             CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
@@ -88,6 +93,8 @@ class StoreWriter:
                 name TEXT PRIMARY KEY, kind TEXT, fields TEXT, units TEXT, context TEXT, label TEXT, instance TEXT
             );
             CREATE TABLE record_offsets (record INTEGER PRIMARY KEY, offset INTEGER);
+            CREATE TABLE events (_ts REAL, _rec INTEGER, type TEXT, category TEXT, layer TEXT, level TEXT, ue INTEGER,
+                                 rnti TEXT, cause TEXT, text TEXT);
             """
         )
 
@@ -129,11 +136,18 @@ class StoreWriter:
     def set_time_range(self, t_min: float, t_max: float) -> None:
         self._time_range = (t_min, t_max)
 
+    def add_event(self, record: int, t: float, event: dict[str, Any]) -> None:
+        self._events.append((t, record, *(event.get(c) for c in EVENT_COLUMNS)))
+        if len(self._events) >= _BATCH_SIZE:
+            self._flush_events()
+
     def add_record_offset(self, record: int, offset: int) -> None:
         self._conn.execute("INSERT OR REPLACE INTO record_offsets VALUES (?, ?)", (record, offset))
 
     def finish(self, source_path: Path, source_type: str) -> None:
         """Flushes pending rows, writes the dataset metadata and indexes."""
+        self._flush_events()
+        self._conn.execute(f"CREATE INDEX idx_events ON events ({_TS})")
         t_min = t_max = None
         for ds in self._datasets.values():
             self._flush(ds)
@@ -171,6 +185,12 @@ class StoreWriter:
         self._conn.executemany("INSERT INTO meta VALUES (?, ?)", [(k, json.dumps(v)) for k, v in meta.items()])
         self._conn.commit()
 
+    def _flush_events(self) -> None:
+        if self._events:
+            marks = ", ".join("?" * (len(EVENT_COLUMNS) + 2))
+            self._conn.executemany(f"INSERT INTO events VALUES ({marks})", self._events)
+            self._events.clear()
+
     def _flush(self, ds: _DatasetBuffer) -> None:
         if not ds.rows:
             return
@@ -206,6 +226,7 @@ class Store:
             # Time span of each dataset, from the indexed timestamp column.
             for name, ds in self.datasets.items():
                 ds["t_min"], ds["t_max"] = conn.execute(f"SELECT MIN({_TS}), MAX({_TS}) FROM {_quote('ds_' + name)}").fetchone()
+            self.event_counts = dict(conn.execute("SELECT category, COUNT(*) FROM events GROUP BY category"))
 
     @property
     def path(self) -> Path:
@@ -420,6 +441,43 @@ class Store:
     def table_columns(self, dataset: str, fields: list[str] | None = None) -> list[str]:
         """Returns the columns of a table: the given fields, or all fields with the context fields first."""
         return self._table_columns(self._dataset(dataset), fields)
+
+    def events(
+        self,
+        t0: float | None = None,
+        t1: float | None = None,
+        categories: list[str] | None = None,
+        ue: int | None = None,
+        limit: int = DEFAULT_MAX_EVENTS,
+    ) -> dict[str, Any]:
+        """Returns the events of a time window in time order, optionally of some categories or of one UE.
+
+        At most limit events are returned; total counts all the matching ones.
+        """
+        if categories is not None and not categories:
+            return {"total": 0, "truncated": False, "events": []}
+        where, params = ["1"], []
+        if t0 is not None:
+            where.append(f"{_TS} >= ?")
+            params.append(t0)
+        if t1 is not None:
+            where.append(f"{_TS} <= ?")
+            params.append(t1)
+        if categories is not None:
+            where.append(f"category IN ({', '.join('?' * len(categories))})")
+            params.extend(categories)
+        if ue is not None:
+            where.append("ue = ?")
+            params.append(ue)
+        where_sql = " AND ".join(where)
+        with self._connect() as conn:
+            total = conn.execute(f"SELECT COUNT(*) FROM events WHERE {where_sql}", params).fetchone()[0]
+            rows = conn.execute(
+                f"SELECT {_TS}, {_REC}, {', '.join(EVENT_COLUMNS)} FROM events WHERE {where_sql} ORDER BY {_TS}, {_REC} LIMIT ?",
+                params + [limit],
+            ).fetchall()
+        events = [dict(zip(("t", "record", *EVENT_COLUMNS), r)) for r in rows]
+        return {"total": total, "truncated": total > len(events), "events": events}
 
     def context_values(self, dataset: str, field: str, limit: int = 1000) -> list[Any]:
         """Returns the distinct values of a field."""

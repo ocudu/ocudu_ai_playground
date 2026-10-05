@@ -13,6 +13,20 @@ import { applyTheme, loadThemePreference, onSystemThemeChange, saveThemePreferen
 import { addRecent, removeRecent } from "./recent.js";
 import { decodeView, encodeView } from "./view-state.js";
 
+// Event categories, in display order, with their labels.
+const EVENT_CATEGORIES = [
+  ["ra", "random access"],
+  ["lifecycle", "UE lifecycle"],
+  ["rrc", "RRC"],
+  ["mobility", "mobility"],
+  ["failure", "failures"],
+  ["warning", "warnings"],
+  ["error", "errors"],
+];
+// Events fetched for the visible window of a tab.
+const MAX_EVENTS = 5000;
+// Delay before fetching events after the view changes, to coalesce zoom and pan events.
+const EVENTS_FETCH_DELAY_MS = 150;
 // Interval between refreshes of the sources while some are being parsed.
 const SOURCES_POLL_MS = 500;
 // Delay before writing the view to the URL, to coalesce zoom and pan events.
@@ -40,9 +54,9 @@ function newPlot(init) {
   };
 }
 
-/** State of the tab of one source: its plots and zoom range. */
+/** State of the tab of one source: its plots, zoom range and shown event categories (null until known). */
 function newTab() {
-  return { plots: [], userRange: null, defaultPlotAdded: false };
+  return { plots: [], userRange: null, defaultPlotAdded: false, eventCategories: [] };
 }
 
 const App = {
@@ -61,6 +75,9 @@ const App = {
       themeVersion: 0,
       roots: [],
       canOpen: false,
+      // Events of the visible window of the active tab, in display time.
+      events: [],
+      eventsTruncated: false,
       browserOpen: false,
     };
   },
@@ -84,6 +101,15 @@ const App = {
       if (!s || s.t_min == null) return null;
       const shift = this.shifts[s.id];
       return { min: s.t_min + shift, max: (s.t_max > s.t_min ? s.t_max : s.t_min + 1) + shift };
+    },
+    /** Inputs of the events request of the active tab. */
+    eventsQuery() {
+      return [this.activeId, this.activeSource?.status, this.view, this.activeTab?.eventCategories, this.timeMode];
+    },
+    /** Event categories of the active source that have events, with their labels and counts. */
+    eventCategoryChips() {
+      const counts = this.activeSource?.event_counts ?? {};
+      return EVENT_CATEGORIES.filter(([c]) => counts[c]).map(([c, label]) => ({ category: c, label, count: counts[c] }));
     },
     view() {
       return this.activeTab?.userRange ?? this.fullRange;
@@ -115,6 +141,13 @@ const App = {
     activeId() {
       this.selection = null;
     },
+    eventsQuery: {
+      handler() {
+        clearTimeout(this.eventsTimer);
+        this.eventsTimer = setTimeout(() => this.fetchEvents(), EVENTS_FETCH_DELAY_MS);
+      },
+      deep: true,
+    },
   },
   created() {
     // Not reactive: URL synchronization state.
@@ -123,6 +156,9 @@ const App = {
     this.writtenHash = "";
     // Polling of the sources while some are being parsed.
     this.pollTimer = null;
+    // Pending and in-flight events requests.
+    this.eventsTimer = null;
+    this.eventsAbort = null;
     // Ids of the sources whose parsing error was already reported.
     this.reportedErrors = new Set();
     applyTheme(this.themePref);
@@ -171,6 +207,7 @@ const App = {
         const tab = newTab();
         tab.userRange = t.range && t.range.max > t.range.min ? t.range : null;
         tab.plots = t.plots.map((p) => newPlot({ ...p, source: t.source }));
+        tab.eventCategories = t.eventCategories ?? [];
         tab.defaultPlotAdded = true;
         this.tabs[t.source] = tab;
       }
@@ -203,6 +240,40 @@ const App = {
         }
       }
       if (this.activeId == null || !open.has(this.activeId)) this.activeId = this.openSources[0]?.id ?? null;
+    },
+
+    /** @param {string} category */
+    toggleEventCategory(category) {
+      const tab = this.activeTab;
+      const shown = new Set(tab.eventCategories ?? []);
+      if (shown.has(category)) shown.delete(category);
+      else shown.add(category);
+      tab.eventCategories = EVENT_CATEGORIES.map(([c]) => c).filter((c) => shown.has(c));
+    },
+
+    /** Fetches the events of the visible window of the active tab, in the shown categories. */
+    async fetchEvents() {
+      this.eventsAbort?.abort();
+      const s = this.activeSource;
+      const categories = this.activeTab?.eventCategories;
+      if (!s || s.status !== "ready" || !categories?.length || !this.view) {
+        this.events = [];
+        this.eventsTruncated = false;
+        return;
+      }
+      this.eventsAbort = new AbortController();
+      const shift = this.shifts[s.id];
+      try {
+        const res = await getJSON(
+          "/api/events",
+          { source: s.id, t0: this.view.min - shift, t1: this.view.max - shift, categories, limit: MAX_EVENTS },
+          this.eventsAbort.signal,
+        );
+        this.events = res.events.map((e) => ({ ...e, t: e.t + shift }));
+        this.eventsTruncated = res.truncated;
+      } catch (e) {
+        if (e.name !== "AbortError") this.warnings = [...this.warnings, e.message];
+      }
     },
 
     /** @param {"plot" | "table"} kind */
@@ -320,12 +391,21 @@ const App = {
         <p class="error">{{ activeSource.error }}</p>
       </div>
       <template v-else-if="activeTab">
-        <p class="hint muted">Drag to zoom, wheel to zoom, Shift+drag to pan, double-click to reset, click a point to see its log line.</p>
+        <p class="hint muted">Drag to zoom, wheel to zoom, Shift+drag to pan, double-click to reset, click a point or an event marker to see its log line.</p>
+        <div v-if="eventCategoryChips.length" class="event-bar">
+          <span class="muted">events</span>
+          <button v-for="c in eventCategoryChips" :key="c.category"
+                  :class="['event-chip', 'ev-' + c.category, { off: !(activeTab.eventCategories || []).includes(c.category) }]"
+                  :title="'Show or hide the ' + c.label + ' events'" @click="toggleEventCategory(c.category)">
+            <span class="event-dot"></span>{{ c.label }} <span class="muted">{{ c.count }}</span>
+          </button>
+          <span v-if="eventsTruncated" class="muted">only the first {{ events.length }} events of the window are shown, zoom in for all</span>
+        </div>
         <template v-for="p in activeTab.plots" :key="p.id">
           <table-panel v-if="p.kind === 'table'" :panel="p" :sources="sources" :view="view" :shifts="shifts" :show-source="false"
                        @remove="removePlot(p.id)" @select-record="selection = $event" />
           <plot-panel v-else :plot="p" :sources="sources" :view="view" :shifts="shifts" :time-mode="timeMode"
-                      :theme-version="themeVersion" :show-source="false"
+                      :theme-version="themeVersion" :show-source="false" :events="events"
                       @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" />
         </template>
         <div class="add-buttons">

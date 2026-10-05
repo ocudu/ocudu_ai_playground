@@ -25,6 +25,14 @@
   --s7: #ff9da7;
   --s8: #9c755f;
   --s9: #bab0ac;
+  /* Event marker colors, by category. */
+  --ev-ra: #2e9e44;
+  --ev-lifecycle: #7b8794;
+  --ev-rrc: #00a3b8;
+  --ev-mobility: #9b51e0;
+  --ev-failure: #e0b000;
+  --ev-warning: #f57c00;
+  --ev-error: #e53935;
   color-scheme: light;
 }
 
@@ -50,6 +58,13 @@
   --s7: #96d98d;
   --s8: #ffb357;
   --s9: #ca95e5;
+  --ev-ra: #4ade80;
+  --ev-lifecycle: #9aa0a6;
+  --ev-rrc: #22d3ee;
+  --ev-mobility: #c084fc;
+  --ev-failure: #ffd84d;
+  --ev-warning: #ff9a3c;
+  --ev-error: #ff6b6b;
   color-scheme: dark;
 }
 
@@ -198,6 +213,19 @@ main { padding: 8px 16px 16px; }
 .status { flex: 1; text-align: right; }
 .chart { padding: 4px 8px; min-height: 200px; }
 .chart-wrap { position: relative; }
+.event-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 12px; }
+.event-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; border-radius: 10px; padding: 1px 8px; }
+.event-chip.off { opacity: 0.45; }
+.event-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: currentColor; }
+.ev-ra .event-dot { background: var(--ev-ra); }
+.ev-lifecycle .event-dot { background: var(--ev-lifecycle); }
+.ev-rrc .event-dot { background: var(--ev-rrc); }
+.ev-mobility .event-dot { background: var(--ev-mobility); }
+.ev-failure .event-dot { background: var(--ev-failure); }
+.ev-warning .event-dot { background: var(--ev-warning); }
+.ev-error .event-dot { background: var(--ev-error); }
+.cursor-event { margin-top: 2px; max-width: 60vw; white-space: normal; color: var(--fg); }
+.cursor-event .event-dot { margin-right: 5px; }
 .cursor-readout {
   position: absolute;
   top: 6px;

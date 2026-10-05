@@ -169,6 +169,31 @@ class StoreTest(unittest.TestCase):
         store = self.cache.open(log, LogMetricsSource())
         self.assertEqual(store.count_table_rows("exec", instance="du_ctrl_exec"), 10)
 
+    def test_events(self):
+        store = self.cache.open(write_log(self.dir / "events.log", events=True), LogMetricsSource())
+        self.assertEqual(store.event_counts, {"ra": 2, "lifecycle": 2, "failure": 1, "warning": 1})
+        res = store.events()
+        self.assertEqual([e["type"] for e in res["events"]], ["prach", "prach", "ue_create", "ue_create", "rlf", "warning"])
+        prach = res["events"][1]
+        self.assertEqual((prach["rnti"], prach["level"]), ("0x4601", "D"))
+        self.assertIn("Processed slot events", store.records(around=prach["record"], count=1)[0]["text"])
+        rlf = res["events"][4]
+        self.assertEqual((rlf["category"], rlf["layer"], rlf["ue"], rlf["cause"]), ("failure", "MAC", 1, "100 consecutive HARQ-ACK KOs"))
+        self.assertIn("RLF detected", store.records(around=rlf["record"], count=1)[0]["text"])
+
+    def test_events_selection(self):
+        store = self.cache.open(write_log(self.dir / "events.log", events=True), LogMetricsSource())
+        t_min = store.meta["t_min"]
+        self.assertEqual([e["type"] for e in store.events(categories=["failure", "warning"])["events"]], ["rlf", "warning"])
+        self.assertEqual([e["type"] for e in store.events(ue=1)["events"]], ["ue_create", "rlf"])
+        self.assertEqual([e["type"] for e in store.events(t0=t_min + 6, t1=t_min + 11)["events"]], ["warning"])
+        limited = store.events(limit=1)
+        self.assertEqual((limited["total"], limited["truncated"], len(limited["events"])), (6, True, 1))
+        self.assertEqual(store.events(categories=[])["events"], [])
+
+    def test_no_events(self):
+        self.assertEqual((self.store.event_counts, self.store.events()["total"]), ({}, 0))
+
     def test_invalid_queries(self):
         with self.assertRaises(QueryError):
             self.store.series("foo", "x")

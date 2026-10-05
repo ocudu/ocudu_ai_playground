@@ -5,6 +5,8 @@ import uPlot from "uplot";
 import { getJSON } from "../api.js";
 import { displayUnit, formatStat } from "../units.js";
 
+// Distance in pixels within which the cursor is on an event marker.
+const EVENT_HIT_PX = 5;
 // Number of series colors defined by the theme, as CSS variables --s0 to --s9.
 const NOF_SERIES_COLORS = 10;
 const CHART_HEIGHT = 260;
@@ -71,6 +73,8 @@ export default {
     themeVersion: { type: Number, default: 0 },
     // Whether the panel shows a source selector, which is not needed when the source is fixed, e.g. by a tab.
     showSource: { type: Boolean, default: true },
+    // Events drawn as markers on time series, in display time, each with t, record, category, type and text.
+    events: { type: Array, default: () => [] },
   },
   emits: ["zoom", "remove", "select-record"],
   data() {
@@ -89,6 +93,8 @@ export default {
       unit: { divisor: 1, label: "" },
       labels: [],
       cursorText: "",
+      // Event under the cursor, shown with the cursor readout.
+      cursorEvent: null,
     };
   },
   computed: {
@@ -152,6 +158,10 @@ export default {
       this.loadSplitOptions();
     },
     view: { handler() { this.applyView(); this.scheduleFetch(false); }, deep: true },
+    events() {
+      // Markers are drawn by the chart, which only needs a redraw.
+      this.chart?.redraw(false, false);
+    },
     themeVersion() {
       // Charts take their colors at creation, so they are rebuilt from the last response.
       if (!this.lastRes) return;
@@ -348,8 +358,10 @@ export default {
       const { left, top } = u.cursor;
       if (left == null || left < 0) {
         this.cursorText = "";
+        this.cursorEvent = null;
         return;
       }
+      this.cursorEvent = this.hovering && this.plot.mode !== "histogram" ? this.eventAt(u, left) : null;
       const histogram = this.plot.mode === "histogram";
       const unit = this.unit.label ? ` ${this.unit.label}` : "";
       const x = u.posToVal(left, "x");
@@ -437,6 +449,7 @@ export default {
           ],
           setSeries: [(u, idx) => { this.focusedSeries = idx ?? -1; }],
           setCursor: [(u) => this.updateCursorReadout(u)],
+          draw: [(u) => this.drawEvents(u)],
         },
       };
       const chart = new uPlot(opts, data, this.$refs.chart);
@@ -487,7 +500,56 @@ export default {
       over.addEventListener("dblclick", () => this.$emit("zoom", null));
     },
 
+    /**
+     * Event whose marker is nearest to a cursor position, within EVENT_HIT_PX, or null.
+     * @param {any} u
+     * @param {number} left Cursor position in CSS pixels from the left of the plot area.
+     */
+    eventAt(u, left) {
+      let best = null;
+      let bestDist = EVENT_HIT_PX;
+      for (const ev of this.events) {
+        const d = Math.abs(u.valToPos(ev.t, "x") - left);
+        if (d <= bestDist) {
+          best = ev;
+          bestDist = d;
+        }
+      }
+      return best;
+    },
+
+    /** Draws the event markers as dashed vertical lines over the plot area, colored by category. */
+    drawEvents(u) {
+      if (!this.events.length) return;
+      const { ctx, bbox } = u;
+      const colors = {};
+      ctx.save();
+      ctx.lineWidth = Math.max(1, devicePixelRatio);
+      ctx.globalAlpha = 0.75;
+      const dash = 4 * devicePixelRatio;
+      for (const ev of this.events) {
+        const x = Math.round(u.valToPos(ev.t, "x", true));
+        if (x < bbox.left || x > bbox.left + bbox.width) continue;
+        ctx.strokeStyle = colors[ev.category] ??= cssVar(`--ev-${ev.category}`);
+        ctx.setLineDash([dash, dash]);
+        ctx.beginPath();
+        ctx.moveTo(x, bbox.top);
+        ctx.lineTo(x, bbox.top + bbox.height);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fillRect(x - 2 * devicePixelRatio, bbox.top, 4 * devicePixelRatio, 4 * devicePixelRatio);
+      }
+      ctx.restore();
+    },
+
     drillDown(chart) {
+      // An event marker under the cursor takes precedence over the data points.
+      const ev = chart.cursor.left >= 0 ? this.eventAt(chart, chart.cursor.left) : null;
+      if (ev) {
+        this.$emit("select-record", { source: this.plot.source, record: ev.record });
+        return;
+      }
       const idx = chart.cursor.idx;
       if (idx == null || !this.records.length) return;
       let si = this.focusedSeries > 0 ? this.focusedSeries - 1 : this.records.findIndex((r) => r[idx] != null);
@@ -549,7 +611,12 @@ export default {
       </header>
       <div class="chart-wrap">
         <div ref="chart" class="chart"></div>
-        <div v-if="cursorText" class="cursor-readout">{{ cursorText }}</div>
+        <div v-if="cursorText" class="cursor-readout">
+          {{ cursorText }}
+          <div v-if="cursorEvent" :class="['cursor-event', 'ev-' + cursorEvent.category]">
+            <span class="event-dot"></span>{{ cursorEvent.type }}: {{ cursorEvent.text }}
+          </div>
+        </div>
       </div>
       <details v-if="statsRows.length" class="stats" open>
         <summary class="muted">statistics of the visible window{{ unit.label ? " [" + unit.label + "]" : "" }}{{ statsSampled ? ", percentiles sampled" : "" }}</summary>

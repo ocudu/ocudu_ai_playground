@@ -34,7 +34,7 @@ class ServerTest(unittest.TestCase):
 
         self.tmp = tempfile.TemporaryDirectory()
         tmp = Path(self.tmp.name)
-        store = StoreCache(tmp / "cache").open(write_log(tmp / "gnb.log", executors=True), LogMetricsSource())
+        store = StoreCache(tmp / "cache").open(write_log(tmp / "gnb.log", executors=True, events=True), LogMetricsSource())
         # A stand-in for the built frontend, so that the tests do not need Node.
         static = tmp / "static"
         (static / "assets").mkdir(parents=True)
@@ -136,6 +136,13 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(res.headers["cache-control"], "no-cache")
         etag = res.headers["etag"]
         self.assertEqual(self.client.get("/assets/app.js", headers={"if-none-match": etag}).status_code, 304)
+
+    def test_events(self):
+        src = self.client.get("/api/sources").json()[0]
+        self.assertEqual(src["event_counts"], {"ra": 2, "lifecycle": 2, "failure": 1, "warning": 1})
+        res = self.client.get("/api/events", params={"source": 0, "categories": ["failure"]}).json()
+        self.assertEqual([e["type"] for e in res["events"]], ["rlf"])
+        self.assertEqual(set(res["events"][0]), {"t", "record", "type", "category", "layer", "level", "ue", "rnti", "cause", "text"})
 
     def test_sources_status(self):
         src = self.client.get("/api/sources").json()[0]

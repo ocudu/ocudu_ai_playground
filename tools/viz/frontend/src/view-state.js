@@ -36,6 +36,7 @@ export function encodeView(app) {
       .map((s) => ({
         source: s.name,
         range: app.tabs[s.id].userRange,
+        events: app.tabs[s.id].eventCategories,
         plots: app.tabs[s.id].plots.map((p) => Object.fromEntries(PLOT_KEYS.map((k) => [k, p[k]]))),
       })),
   };
@@ -76,7 +77,7 @@ export function decodeView(hash, sources) {
       }
       plots.push({ ...p, kind: p.kind ?? "plot", splitValues: p.splitValues ?? [], filter: p.filter ?? "", columnFilter: p.columnFilter ?? "" });
     }
-    tabs.push({ source: source.id, range: t.range ?? null, plots });
+    tabs.push({ source: source.id, range: t.range ?? null, plots, eventCategories: t.events ?? null });
   }
   const active = byName.get(state.active)?.id ?? null;
   return { view: { timeMode: state.timeMode, active, tabs }, warnings };

@@ -14,12 +14,14 @@ def _ts(seconds: float) -> str:
     return (START + timedelta(seconds=seconds)).isoformat(timespec="microseconds")
 
 
-def write_log(path: Path, nof_seconds: int = 10, nof_ues: int = 2, executors: bool = False) -> Path:
+def write_log(path: Path, nof_seconds: int = 10, nof_ues: int = 2, executors: bool = False, events: bool = False) -> Path:
     """Writes a log with one MAC and one Scheduler UE line per UE per second, among other lines.
 
     Metrics start at START. The log starts 2 s before the first and ends 2 s after the last metrics lines.
 
-    With executors, it also writes one line per second for executors "cell_exec" and "du_ctrl_exec".
+    With executors, it also writes one line per second for executors "cell_exec" and "du_ctrl_exec". With events,
+    it writes a debug scheduler entry with the PRACHs of both UEs in continuation lines at 0.4 s, UE creation lines at
+    0.5 s, an RLF of UE 1 at 3.5 s and a warning at 6.5 s.
     """
     lines = [f"{_ts(-2)} [GNB     ] [I] Built in Release mode\n"]
     for s in range(nof_seconds):
@@ -38,6 +40,16 @@ def write_log(path: Path, nof_seconds: int = 10, nof_ues: int = 2, executors: bo
                     f"enqueue_avg=1usec enqueue_max=5usec task_avg={10 * (i + 1)}usec task_max=50usec cpu_load=1.5% "
                     f"nof_vol_ctxt_switch=0 nof_invol_ctxt_switch=0\n"
                 )
+    if events:
+        prachs = "".join(
+            f"- PRACH: slot=3.9 preamble={ue} ra-rnti=0x10b temp_crnti=0x46{ue:02x} ta_cmd=0\n" for ue in range(nof_ues)
+        )
+        lines.append(f"{_ts(0.4)} [SCHED   ] [D] [    4.0] Processed slot events pci=1:\n{prachs}")
+        for ue in range(nof_ues):
+            lines.append(f'{_ts(0.5)} [DU-MNG  ] [I] ue={ue} rnti=0x46{ue:02x} proc="UE Create": Procedure started....\n')
+        lines.append(f"{_ts(3.5)} [MAC     ] [I] [   35.0] ue=1: RLF detected. Cause: 100 consecutive HARQ-ACK KOs\n")
+        lines.append(f"{_ts(6.5)} [SCHED   ] [W] Late slot indication\n")
+        lines.sort()
     lines.append(f"{_ts(nof_seconds + 1)} [GNB     ] [I] Stopped\n")
     lines.append("  continuation line without a timestamp\n")
     path.write_text("".join(lines))

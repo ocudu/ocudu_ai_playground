@@ -112,8 +112,7 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 ### D4. First version scope
 
 - In: CLI, log metrics source type, F1, F2, F6, F7, F8, F9, F12, F13, D1, D2.
-- Deferred: F10 live tail, F14 events (needs an
-  event parser in `parsers`), Docker.
+- Deferred: F10 live tail, F14 events, Docker.
 - Without explicit split values, only the first 20 are returned, since sparse splits
   (e.g. ~1000 short-lived UEs) cannot be reduced by downsampling.
 
@@ -216,6 +215,17 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - The file dialog has a `Recent` view with the last 15 files opened, kept in browser storage, so that it
   survives server restarts and reboots without a writable location outside the container. A recent file
   that fails to open is dropped from the list.
+
+### D14. Events overlay
+
+- Events are recognized by `parsers.log.events` while the log is parsed, and stored in an `events` table of the
+  source cache with their time, record, type, category, logger, level, UE, RNTI, cause and text.
+- `/api/sources` reports the event count per category, and `GET /api/events?source&t0&t1&categories&ue&limit`
+  returns the events of a window, capped at 5000.
+- Events are dashed vertical lines over the time plots of the tab, coloured by category. Hovering one shows its text,
+  clicking it opens its log line.
+- Each tab has a chip per category present in its file, with its count. All categories start hidden, and the shown
+  ones are kept in the URL view state.
 
 ## Open questions
 

@@ -5,11 +5,12 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
 
-from parsers.log import metrics, preamble
+from parsers.log import events, metrics, preamble
 
 from .base import DatasetWriter, ProgressFn
 
@@ -21,6 +22,8 @@ _DATASET_INFO = {"exec": {"label": "executors", "instance": "executor"}}
 _OFFSET_INTERVAL = 1000
 # Bytes between two progress reports.
 _PROGRESS_INTERVAL = 8 << 20
+_EVENT_CANDIDATE_RE = re.compile(events.CANDIDATE_PATTERN.encode())
+_ENTRY_START_RE = re.compile(events.ENTRY_START_PATTERN.encode())
 # Bytes read from the end of the log to find its last timestamp.
 _TAIL_SIZE = 64 << 10
 
@@ -52,10 +55,12 @@ def _parsers_version() -> str:
 
 
 class LogMetricsSource:
-    """One time series dataset per METRICS layer. Records are log lines, identified by line number."""
+    """One time series dataset per METRICS layer, and the events of the log. Records are log lines, identified by
+    line number.
+    """
 
     name = "log_metrics"
-    version = f"2+parsers-{_parsers_version()}"
+    version = f"3+parsers-{_parsers_version()}"
 
     def accepts(self, path: Path) -> bool:
         try:
@@ -73,6 +78,14 @@ class LogMetricsSource:
         offset = 0
         next_progress = 0
         first_t = None
+        # Header line number, line, preamble match and continuation lines of the entry whose events are pending.
+        pending: tuple[int, str, re.Match, list[str]] | None = None
+
+        def add_events(line_no: int, line: str, m: re.Match, body: list[str]) -> None:
+            for ev in events.parse(line, body, m):
+                ev_t = ev.pop("timestamp").replace(tzinfo=timezone.utc).timestamp()
+                writer.add_event(line_no, ev_t, ev)
+
         with path.open("rb") as f:
             for line_no, raw in enumerate(f, start=1):
                 if line_no % _OFFSET_INTERVAL == 1:
@@ -84,8 +97,21 @@ class LogMetricsSource:
                 if first_t is None and (m := preamble.match_preamble(raw.decode("utf-8", "replace"))):
                     first_t = _epoch(m.group("timestamp"))
 
-                # Cheap check before decoding, most lines are not metrics.
+                if pending is not None:
+                    if not _ENTRY_START_RE.match(raw):
+                        pending[3].append(raw.decode("utf-8", "replace"))
+                        continue
+                    add_events(*pending)
+                    pending = None
+                # Cheap checks before decoding, most lines are neither metrics nor events.
                 if b"[METRICS" not in raw:
+                    if _EVENT_CANDIDATE_RE.search(raw):
+                        line = raw.decode("utf-8", "replace")
+                        if m := preamble.match_preamble(line):
+                            if events.has_body(m):
+                                pending = (line_no, line, m, [])
+                            else:
+                                add_events(line_no, line, m, [])
                     continue
                 rec = parser.parse(raw.decode("utf-8", "replace"))
                 if rec is None:
@@ -94,6 +120,8 @@ class LogMetricsSource:
                 t = rec.pop("timestamp").replace(tzinfo=timezone.utc).timestamp()
                 writer.add_row(layer, line_no, t, rec)
 
+        if pending is not None:
+            add_events(*pending)
         if progress:
             progress(total, total)
         last_t = _last_timestamp(path)

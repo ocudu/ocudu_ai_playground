@@ -43,6 +43,9 @@ In the page:
 - Drag or use the wheel to zoom, Shift+drag to pan, double-click to reset. The plots of a tab share the time
   axis.
   `reset zoom` shows the whole time range of the logs, `fit metrics` the time range of the plotted metrics.
+- The `events` chips above the plots show event markers on the time plots, per category (random access, UE
+  lifecycle, RRC, mobility, failures, warnings and errors), with their count in the file. All start hidden.
+  Hover a marker to see its event, click it to see its log line.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,
   double-click it to reset the height.
 - The top-right corner of a plot shows the time and value under the mouse. The legend below shows the

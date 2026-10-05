@@ -83,11 +83,13 @@ def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
         "t_min": None,
         "t_max": None,
         "datasets": [],
+        "event_counts": {},
     }
     s = entry.store
     if s is None:
         return info
     info["t_min"], info["t_max"] = s.meta.get("t_min"), s.meta.get("t_max")
+    info["event_counts"] = s.event_counts
     info["datasets"] = [
         {
             "name": ds["name"],
@@ -281,6 +283,17 @@ def create_app(sources: SourceRegistry | list[Store], static_dir: Path = STATIC_
         return StreamingResponse(
             generate(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'}
         )
+
+    @app.get("/api/events")
+    def events(
+        source: int,
+        t0: float | None = None,
+        t1: float | None = None,
+        categories: list[str] | None = Query(None),
+        ue: int | None = None,
+        limit: int = Query(5000, ge=1, le=50_000),
+    ) -> dict[str, Any]:
+        return get_store(source).events(t0, t1, categories, ue, limit)
 
     @app.get("/api/context")
     def context(source: int, dataset: str, field: str) -> list[Any]:
