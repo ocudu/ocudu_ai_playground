@@ -15,6 +15,8 @@ from .base import DatasetWriter, ProgressFn
 
 # Fields that identify the entity a metric belongs to, besides the ones in the line context.
 _IDENTITY_FIELDS = ("du", "ue", "rb", "drb")
+# Display label and instance field of the datasets that are not shown by their layer name.
+_DATASET_INFO = {"exec": {"label": "executors", "instance": "executor"}}
 # Lines between two registered record offsets.
 _OFFSET_INTERVAL = 1000
 # Bytes between two progress reports.
@@ -73,4 +75,4 @@ class LogMetricsSource:
             progress(total, total)
         for layer, units in parser.units.items():
             context = list(dict.fromkeys([*metrics.LAYER_PATTERNS[layer].groupindex, *_IDENTITY_FIELDS]))
-            writer.set_dataset_info(layer, units, context)
+            writer.set_dataset_info(layer, units, context, **_DATASET_INFO.get(layer, {}))

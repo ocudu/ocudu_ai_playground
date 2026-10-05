@@ -11,6 +11,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.types import Scope
 
 from .store import QueryError, Store
 
@@ -45,6 +46,15 @@ def display_names(paths: list[Path]) -> list[str]:
     return names
 
 
+class _RevalidatedStaticFiles(StaticFiles):
+    """Static files that browsers revalidate on every load, so that frontend changes are never served stale."""
+
+    async def get_response(self, path: str, scope: Scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def create_app(stores: list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
     """Serves the given sources and the frontend in static_dir. Source ids are their positions in stores."""
     app = FastAPI(title="ocudu-viz")
@@ -73,6 +83,8 @@ def create_app(stores: list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
                             {"name": f, "type": t, "unit": ds["units"].get(f)} for f, t in ds["fields"].items()
                         ],
                         "context": ds["context"],
+                        "label": ds["label"],
+                        "instance": ds["instance"],
                     }
                     for ds in s.datasets.values()
                 ],
@@ -91,9 +103,10 @@ def create_app(stores: list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
         split_by: str | None = None,
         split_values: list[str] | None = Query(None),
         filter_expr: str | None = Query(None, alias="filter"),
+        instance: str | None = None,
     ) -> dict[str, Any]:
         try:
-            return get_store(source).series(dataset, field, t0, t1, width, split_by, split_values, filter_expr)
+            return get_store(source).series(dataset, field, t0, t1, width, split_by, split_values, filter_expr, instance)
         except QueryError as e:
             raise HTTPException(400, str(e)) from None
 
@@ -107,9 +120,10 @@ def create_app(stores: list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
         split_by: str | None = None,
         split_values: list[str] | None = Query(None),
         filter_expr: str | None = Query(None, alias="filter"),
+        instance: str | None = None,
     ) -> dict[str, Any]:
         try:
-            return get_store(source).stats(dataset, field, t0, t1, split_by, split_values, filter_expr)
+            return get_store(source).stats(dataset, field, t0, t1, split_by, split_values, filter_expr, instance)
         except QueryError as e:
             raise HTTPException(400, str(e)) from None
 
@@ -123,10 +137,11 @@ def create_app(stores: list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
         split_by: str | None = None,
         split_values: list[str] | None = Query(None),
         filter_expr: str | None = Query(None, alias="filter"),
+        instance: str | None = None,
         bins: int = Query(50, ge=1, le=1000),
     ) -> dict[str, Any]:
         try:
-            return get_store(source).histogram(dataset, field, t0, t1, split_by, split_values, filter_expr, bins)
+            return get_store(source).histogram(dataset, field, t0, t1, split_by, split_values, filter_expr, instance, bins)
         except QueryError as e:
             raise HTTPException(400, str(e)) from None
 
@@ -142,7 +157,7 @@ def create_app(stores: list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
         return get_store(source).records(around, count)
 
     if (static_dir / "index.html").is_file():
-        app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+        app.mount("/", _RevalidatedStaticFiles(directory=static_dir, html=True), name="static")
     else:
 
         @app.get("/", response_class=HTMLResponse)

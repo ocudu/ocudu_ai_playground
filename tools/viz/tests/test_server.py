@@ -34,7 +34,7 @@ class ServerTest(unittest.TestCase):
 
         self.tmp = tempfile.TemporaryDirectory()
         tmp = Path(self.tmp.name)
-        store = StoreCache(tmp / "cache").open(write_log(tmp / "gnb.log"), LogMetricsSource())
+        store = StoreCache(tmp / "cache").open(write_log(tmp / "gnb.log", executors=True), LogMetricsSource())
         # A stand-in for the built frontend, so that the tests do not need Node.
         static = tmp / "static"
         (static / "assets").mkdir(parents=True)
@@ -52,6 +52,15 @@ class ServerTest(unittest.TestCase):
         ue = next(d for d in res[0]["datasets"] if d["name"] == "sched_ue")
         brate = next(f for f in ue["fields"] if f["name"] == "dl_brate")
         self.assertEqual(brate, {"name": "dl_brate", "type": "number", "unit": "bps"})
+
+    def test_sources_dataset_label_and_instance(self):
+        res = self.client.get("/api/sources").json()
+        ds = next(d for d in res[0]["datasets"] if d["name"] == "exec")
+        self.assertEqual((ds["label"], ds["instance"]), ("executors", "executor"))
+
+    def test_series_instance(self):
+        res = self.client.get("/api/series", params={"source": 0, "dataset": "exec", "field": "task_avg", "instance": "du_ctrl_exec"})
+        self.assertEqual(res.json()["series"][0]["v"], [20] * 10)
 
     def test_series(self):
         res = self.client.get("/api/series", params={"source": 0, "dataset": "sched_ue", "field": "dl_brate", "split_by": "ue", "split_values": ["0", "1"]})
@@ -91,6 +100,12 @@ class ServerTest(unittest.TestCase):
         res = self.client.get("/")
         self.assertEqual(res.status_code, 200)
         self.assertIn("text/html", res.headers["content-type"])
+
+    def test_static_files_are_revalidated(self):
+        res = self.client.get("/assets/app.js")
+        self.assertEqual(res.headers["cache-control"], "no-cache")
+        etag = res.headers["etag"]
+        self.assertEqual(self.client.get("/assets/app.js", headers={"if-none-match": etag}).status_code, 304)
 
     def test_frontend_not_built(self):
         res = self.not_built_client.get("/")

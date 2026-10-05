@@ -6,8 +6,11 @@
 from pathlib import Path
 
 
-def write_log(path: Path, nof_seconds: int = 10, nof_ues: int = 2) -> Path:
-    """Writes a log with one MAC and one Scheduler UE line per UE per second, among other lines."""
+def write_log(path: Path, nof_seconds: int = 10, nof_ues: int = 2, executors: bool = False) -> Path:
+    """Writes a log with one MAC and one Scheduler UE line per UE per second, among other lines.
+
+    With executors, it also writes one line per second for executors "cell_exec" and "du_ctrl_exec".
+    """
     lines = ["2026-06-29T14:10:00.000000 [GNB     ] [I] Built in Release mode\n"]
     for s in range(nof_seconds):
         ts = f"2026-06-29T14:10:{s:02d}.000000"
@@ -18,5 +21,12 @@ def write_log(path: Path, nof_seconds: int = 10, nof_ues: int = 2) -> Path:
                 f"{ts} [METRICS ] Scheduler UE ue={ue} pci=1 rnti=0x46{ue:02x} metrics: cqi=15 dl_brate={s}kbps "
                 f"dl_bs=1.2k pusch_snr_db={20 + ue}.5 ta=n/a max_crc_delay=2.5ms\n"
             )
+        if executors:
+            for i, name in enumerate(("cell_exec", "du_ctrl_exec")):
+                lines.append(
+                    f'{ts} [METRICS ] Executor metrics "{name}": nof_executes={100 * (i + 1) + s} nof_defers=0 '
+                    f"enqueue_avg=1usec enqueue_max=5usec task_avg={10 * (i + 1)}usec task_max=50usec cpu_load=1.5% "
+                    f"nof_vol_ctxt_switch=0 nof_invol_ctxt_switch=0\n"
+                )
     path.write_text("".join(lines))
     return path

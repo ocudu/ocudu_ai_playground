@@ -21,7 +21,7 @@ from .filters import FilterError, compile_filter
 from .sources.base import ProgressFn, SourceType
 
 # Bumped when the database layout changes, part of the cache key.
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 # Time series windows up to this many points are returned at full resolution.
 MAX_FULL_RES_POINTS = 50_000
 # Split values returned when none are selected.
@@ -77,11 +77,13 @@ class StoreWriter:
     def __init__(self, conn: sqlite3.Connection):
         self._conn = conn
         self._datasets: dict[str, _DatasetBuffer] = {}
-        self._info: dict[str, tuple[dict[str, str], list[str]]] = {}
+        self._info: dict[str, tuple[dict[str, str], list[str], str | None, str | None]] = {}
         self._conn.executescript(
             """
             CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
-            CREATE TABLE datasets (name TEXT PRIMARY KEY, kind TEXT, fields TEXT, units TEXT, context TEXT);
+            CREATE TABLE datasets (
+                name TEXT PRIMARY KEY, kind TEXT, fields TEXT, units TEXT, context TEXT, label TEXT, instance TEXT
+            );
             CREATE TABLE record_offsets (record INTEGER PRIMARY KEY, offset INTEGER);
             """
         )
@@ -111,8 +113,15 @@ class StoreWriter:
         if len(ds.rows) >= _BATCH_SIZE:
             self._flush(ds)
 
-    def set_dataset_info(self, dataset: str, units: dict[str, str], context: list[str]) -> None:
-        self._info[dataset] = (units, context)
+    def set_dataset_info(
+        self,
+        dataset: str,
+        units: dict[str, str],
+        context: list[str],
+        label: str | None = None,
+        instance: str | None = None,
+    ) -> None:
+        self._info[dataset] = (units, context, label, instance)
 
     def add_record_offset(self, record: int, offset: int) -> None:
         self._conn.execute("INSERT OR REPLACE INTO record_offsets VALUES (?, ?)", (record, offset))
@@ -129,11 +138,18 @@ class StoreWriter:
                 t_min = lo if t_min is None else min(t_min, lo)
                 t_max = hi if t_max is None else max(t_max, hi)
 
-            units, context = self._info.get(ds.name, ({}, []))
+            units, context, label, instance = self._info.get(ds.name, ({}, [], None, None))
             fields = {col: (ds.types[col] or "text") for col in ds.columns}
             self._conn.execute(
-                "INSERT INTO datasets VALUES (?, 'timeseries', ?, ?, ?)",
-                (ds.name, json.dumps(fields), json.dumps(units), json.dumps([c for c in context if c in fields])),
+                "INSERT INTO datasets VALUES (?, 'timeseries', ?, ?, ?, ?, ?)",
+                (
+                    ds.name,
+                    json.dumps(fields),
+                    json.dumps(units),
+                    json.dumps([c for c in context if c in fields]),
+                    label or ds.name,
+                    instance if instance in fields else None,
+                ),
             )
 
         meta = {
@@ -171,8 +187,12 @@ class Store:
                     "fields": json.loads(fields),
                     "units": json.loads(units),
                     "context": json.loads(context),
+                    "label": label,
+                    "instance": instance,
                 }
-                for name, kind, fields, units, context in conn.execute("SELECT * FROM datasets ORDER BY name")
+                for name, kind, fields, units, context, label, instance in conn.execute(
+                    "SELECT name, kind, fields, units, context, label, instance FROM datasets ORDER BY label"
+                )
             }
 
     @property
@@ -189,6 +209,7 @@ class Store:
         split_by: str | None = None,
         split_values: list[str] | None = None,
         filter_expr: str | None = None,
+        instance: str | None = None,
         max_points: int = MAX_FULL_RES_POINTS,
         max_splits: int = MAX_DEFAULT_SPLITS,
     ) -> dict[str, Any]:
@@ -201,7 +222,7 @@ class Store:
         value = _quote(field)
         split_col = _quote(split_by) if split_by else "NULL"
         with self._connect() as conn:
-            where_sql, params, total_splits = self._window(conn, ds, field, t0, t1, split_by, split_values, filter_expr, max_splits)
+            where_sql, params, total_splits = self._window(conn, ds, field, t0, t1, split_by, split_values, filter_expr, instance, max_splits)
             count, lo, hi = conn.execute(f"SELECT COUNT(*), MIN({_TS}), MAX({_TS}) FROM {table} WHERE {where_sql}", params).fetchone()
             downsampled = count > max_points and hi is not None and hi > lo
             if not downsampled:
@@ -247,6 +268,7 @@ class Store:
         split_by: str | None = None,
         split_values: list[str] | None = None,
         filter_expr: str | None = None,
+        instance: str | None = None,
         max_splits: int = MAX_DEFAULT_SPLITS,
         max_exact_points: int = MAX_EXACT_PERCENTILE_POINTS,
     ) -> dict[str, Any]:
@@ -259,7 +281,7 @@ class Store:
         value = _quote(field)
         split_col = _quote(split_by) if split_by else "NULL"
         with self._connect() as conn:
-            where_sql, params, total_splits = self._window(conn, ds, field, t0, t1, split_by, split_values, filter_expr, max_splits)
+            where_sql, params, total_splits = self._window(conn, ds, field, t0, t1, split_by, split_values, filter_expr, instance, max_splits)
             aggregates = conn.execute(
                 f"SELECT {split_col}, COUNT(*), MIN({value}), MAX({value}), AVG({value}) FROM {table} "
                 f"WHERE {where_sql} GROUP BY {split_col}",
@@ -302,6 +324,7 @@ class Store:
         split_by: str | None = None,
         split_values: list[str] | None = None,
         filter_expr: str | None = None,
+        instance: str | None = None,
         bins: int = DEFAULT_HISTOGRAM_BINS,
         max_splits: int = MAX_DEFAULT_SPLITS,
     ) -> dict[str, Any]:
@@ -314,7 +337,7 @@ class Store:
         value = _quote(field)
         split_col = _quote(split_by) if split_by else "NULL"
         with self._connect() as conn:
-            where_sql, params, total_splits = self._window(conn, ds, field, t0, t1, split_by, split_values, filter_expr, max_splits)
+            where_sql, params, total_splits = self._window(conn, ds, field, t0, t1, split_by, split_values, filter_expr, instance, max_splits)
             lo, hi, nof_fractional = conn.execute(
                 f"SELECT MIN({value}), MAX({value}), SUM({value} != CAST({value} AS INTEGER)) FROM {table} WHERE {where_sql}",
                 params,
@@ -385,6 +408,7 @@ class Store:
         split_by: str | None,
         split_values: list[str] | None,
         filter_expr: str | None,
+        instance: str | None,
         max_splits: int,
     ) -> tuple[str, list[Any], int]:
         """Builds the WHERE clause selecting the rows of a numeric field, returning it with its params and split count."""
@@ -410,6 +434,11 @@ class Store:
                 raise QueryError(f"Filter: {e}") from None
             where.append(cond)
             params.extend(cond_params)
+        if instance is not None:
+            if not ds["instance"]:
+                raise QueryError(f"Dataset {ds['name']!r} has no instance field.")
+            where.append(f"CAST({_quote(ds['instance'])} AS TEXT) = ?")
+            params.append(instance)
         if split_by and split_values:
             where.append(f"CAST({split_col} AS TEXT) IN ({', '.join('?' * len(split_values))})")
             params.extend(split_values)

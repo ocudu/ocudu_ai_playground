@@ -85,6 +85,7 @@ export default {
       totalSplits: 0,
       nofSeries: 0,
       splitOptions: [],
+      instanceOptions: [],
       splitFilter: "",
       filterDraft: this.plot.filter,
       stats: [],
@@ -136,11 +137,15 @@ export default {
   },
   watch: {
     "plot.source"() {
-      this.plot.dataset = this.datasets[0]?.name ?? null;
+      const dataset = this.datasets[0]?.name ?? null;
+      // An unchanged dataset name does not trigger its watcher, but the instances differ per source.
+      if (dataset === this.plot.dataset) this.loadInstanceOptions(true);
+      this.plot.dataset = dataset;
     },
     "plot.dataset"() {
       this.plot.field = this.numericFields[0]?.name ?? null;
       this.plot.splitBy = null;
+      this.loadInstanceOptions(true);
     },
     "plot.splitBy"() {
       this.plot.splitValues = [];
@@ -158,7 +163,7 @@ export default {
     this.abort = null;
     // Any change of the query inputs refetches and rebuilds the chart.
     this.$watch(
-      () => [this.plot.source, this.plot.dataset, this.plot.field, this.plot.splitBy, [...this.plot.splitValues], this.plot.filter, this.plot.mode, this.shift, this.timeMode],
+      () => [this.plot.source, this.plot.dataset, this.plot.field, this.plot.splitBy, [...this.plot.splitValues], this.plot.filter, this.plot.instance, this.plot.mode, this.shift, this.timeMode],
       () => this.scheduleFetch(true),
     );
   },
@@ -169,6 +174,7 @@ export default {
     this.resizeObserver.observe(this.$refs.chart);
     if (!this.plot.dataset) this.plot.dataset = this.datasets[0]?.name ?? null;
     if (!this.plot.field) this.plot.field = this.numericFields[0]?.name ?? null;
+    this.loadInstanceOptions(this.plot.instance == null);
     this.scheduleFetch(true);
   },
   beforeUnmount() {
@@ -183,6 +189,25 @@ export default {
       if (!this.plot.splitBy) return;
       try {
         this.splitOptions = await getJSON("/api/context", { source: this.plot.source, dataset: this.plot.dataset, field: this.plot.splitBy });
+      } catch (e) {
+        this.error = e.message;
+      }
+    },
+
+    /** @param {boolean} selectFirst Whether to select the first instance, e.g. after a dataset change. */
+    async loadInstanceOptions(selectFirst) {
+      this.instanceOptions = [];
+      if (!this.dataset?.instance) {
+        this.plot.instance = null;
+        return;
+      }
+      const dataset = this.plot.dataset;
+      try {
+        const values = await getJSON("/api/context", { source: this.plot.source, dataset, field: this.dataset.instance });
+        // The dataset may have changed while the request was in flight.
+        if (dataset !== this.plot.dataset) return;
+        this.instanceOptions = values.map(String);
+        if (selectFirst) this.plot.instance = this.instanceOptions[0] ?? null;
       } catch (e) {
         this.error = e.message;
       }
@@ -218,6 +243,7 @@ export default {
         split_by: this.plot.splitBy,
         split_values: this.plot.splitValues.length ? this.plot.splitValues : null,
         filter: this.plot.filter || null,
+        instance: this.dataset?.instance ? this.plot.instance : null,
       };
       if (this.view) {
         params.t0 = this.view.min - this.shift;
@@ -432,10 +458,14 @@ export default {
           <option v-for="s in sources" :key="s.id" :value="s.id">{{ s.name }}</option>
         </select>
         <select v-model="plot.dataset" title="Dataset">
-          <option v-for="d in datasets" :key="d.name" :value="d.name">{{ d.name }}</option>
+          <option v-for="d in datasets" :key="d.name" :value="d.name">{{ d.label }}</option>
+        </select>
+        <select v-if="dataset && dataset.instance" v-model="plot.instance" :title="dataset.instance">
+          <option :value="null">all</option>
+          <option v-for="v in instanceOptions" :key="v" :value="v">{{ v }}</option>
         </select>
         <select v-model="plot.field" title="Field" class="field-select">
-          <option v-for="f in numericFields" :key="f.name" :value="f.name">{{ f.name }}{{ f.unit ? " [" + f.unit + "]" : "" }}</option>
+          <option v-for="f in numericFields" :key="f.name" :value="f.name">{{ f.name }}</option>
         </select>
         <select v-model="plot.mode" title="View">
           <option value="time">time series</option>

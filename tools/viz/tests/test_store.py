@@ -124,6 +124,24 @@ class StoreTest(unittest.TestCase):
         res = self.store.histogram("sched_ue", "dl_brate", filter_expr="dl_brate < 0")
         self.assertEqual((res["edges"], res["series"]), ([], []))
 
+    def test_instance_selection(self):
+        log = write_log(self.dir / "exec.log", executors=True)
+        store = self.cache.open(log, LogMetricsSource())
+        ds = store.datasets["exec"]
+        self.assertEqual((ds["label"], ds["instance"]), ("executors", "executor"))
+        self.assertEqual(store.context_values("exec", "executor"), ["cell_exec", "du_ctrl_exec"])
+        res = store.series("exec", "nof_executes", instance="du_ctrl_exec")
+        self.assertEqual(res["series"][0]["v"], [200 + s for s in range(10)])
+        self.assertEqual(store.stats("exec", "task_avg", instance="cell_exec")["series"][0]["mean"], 10)
+        self.assertEqual(store.histogram("exec", "task_avg", instance="cell_exec")["series"][0]["counts"], [10])
+        both = store.series("exec", "task_avg", split_by="executor")
+        self.assertEqual([s["label"] for s in both["series"]], ["executor=cell_exec", "executor=du_ctrl_exec"])
+
+    def test_instance_on_dataset_without_instance(self):
+        with self.assertRaisesRegex(QueryError, "no instance field"):
+            self.store.series("mac", "nof_slots", instance="x")
+        self.assertEqual((self.store.datasets["mac"]["label"], self.store.datasets["mac"]["instance"]), ("mac", None))
+
     def test_invalid_queries(self):
         with self.assertRaises(QueryError):
             self.store.series("foo", "x")

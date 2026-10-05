@@ -12,7 +12,7 @@ let nextPlotId = 1;
 
 /** @param {{source: number, dataset?: string | null}} init */
 function newPlot(init) {
-  return { id: nextPlotId++, source: init.source, dataset: init.dataset ?? null, field: null, splitBy: null, splitValues: [], filter: "", mode: "time" };
+  return { id: nextPlotId++, source: init.source, dataset: init.dataset ?? null, field: null, splitBy: null, splitValues: [], filter: "", mode: "time", instance: null };
 }
 
 const App = {

@@ -139,6 +139,14 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - 50 equal bins over the window's value range. Integer fields spanning at most 50 values get one bin per
   integer, centred on it.
 
+### D8. Dataset labels and instances
+
+- A source type can give a dataset a display label and an instance field, the context field naming the
+  entity each row belongs to. METRICS layer `exec` is shown as `executors`, with instance field `executor`.
+- Datasets with an instance field get a second selector listing its values, the first selected by default,
+  plus `all`. The selection restricts the rows on the server, so it applies to series, statistics and
+  histograms.
+
 ### D12. Container
 
 - The image (`ocudu-viz:latest`) is built locally from the `tools/` directory, by the `ocudu-viz` wrapper on

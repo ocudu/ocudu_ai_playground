@@ -19,8 +19,18 @@ class DatasetWriter(Protocol):
     def add_row(self, dataset: str, record: int, t: float, fields: dict[str, Any]) -> None:
         """Adds one time series row. t is in seconds since the epoch, record identifies the raw record."""
 
-    def set_dataset_info(self, dataset: str, units: dict[str, str], context: list[str]) -> None:
-        """Sets the field units and the context fields of a time series dataset."""
+    def set_dataset_info(
+        self,
+        dataset: str,
+        units: dict[str, str],
+        context: list[str],
+        label: str | None = None,
+        instance: str | None = None,
+    ) -> None:
+        """Sets the field units, context fields, display label and instance field of a time series dataset.
+
+        The instance field identifies the entity each row belongs to (e.g. the executor name).
+        """
 
     def add_record_offset(self, record: int, offset: int) -> None:
         """Registers the byte offset where a raw record starts. Not every record needs one."""

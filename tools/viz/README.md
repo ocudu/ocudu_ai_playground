@@ -26,6 +26,9 @@ The script builds the `ocudu-viz:latest` image when needed (cached after the fir
 
 In the page:
 
+- Datasets whose rows belong to named entities get a second selector next to the dataset, e.g.
+  `executors` lists the executors (`cu_cp_exec`, `mac_cell_exec#0`, ...). `all` selects every entity, which
+  combines with split by to compare them.
 - Pick source, dataset (METRICS layer), field and optionally a context field to split by, giving one
   series per value (e.g. one per `ue`). Without a selection of values, the first 20 are shown.
 - Drag or use the wheel to zoom, Shift+drag to pan, double-click to reset. All plots share the time axis.
