@@ -8,7 +8,7 @@ Standard-library only, so it can be imported by visualization or analysis tools 
 
 | Subpackage    | Artifact                                                      |
 |---------------|---------------------------------------------------------------|
-| `parsers.log` | OCUDU text logs: line preamble and `METRICS` logger lines.    |
+| `parsers.log` | OCUDU text logs: line preamble, `METRICS` lines, events and the configuration echo. |
 
 ## Installation
 
@@ -18,6 +18,8 @@ pip install -e "tools/parsers[pandas]"  # adds to_dataframe()
 ```
 
 ## Usage
+
+### Metrics
 
 ```python
 from parsers.log import metrics
@@ -63,6 +65,49 @@ Supported layers (keys of `metrics.LAYER_PATTERNS`), matching the current OCUDU 
 | `buffer_pool`    | `Buffer pool:`             |
 
 Unit conflicts and unknown units are reported once per field on the `parsers` logger.
+
+### Events
+
+```python
+from parsers.log import events
+
+with open("gnb.log") as f:
+    for line_no, ev in events.iter_events(f):
+        print(line_no, ev["timestamp"], ev["category"], ev["type"], ev["ue"], ev["rnti"], ev["text"])
+```
+
+`events.iter_events()` recognizes the lines of known events (`events.EVENT_PATTERNS`) and reports the other warning and
+error lines as generic `warning` and `error` events. Records have `timestamp`, `type`, `category`, `layer`, `level`,
+`ue`, `rnti`, `cause` and `text`.
+
+| Category    | Types                                                              |
+|-------------|--------------------------------------------------------------------|
+| `ra`        | `prach`, `msg3`, `conres`                                          |
+| `lifecycle` | `ue_create`, `ue_delete`                                           |
+| `rrc`       | `rrc_setup_complete`, `rrc_release`, `rrc_reest_request`           |
+| `mobility`  | `ho_trigger`, `ho_preparation`                                     |
+| `failure`   | `rlf`, `rrc_reest_failed`, `rrc_reest_rejected`                    |
+| `warning`   | `warning` (other `[W]` lines)                                      |
+| `error`     | `error` (other `[E]` lines)                                        |
+
+A log entry can hold several events, and some messages change format with the log level: the scheduler prints its slot
+events inline at info level (`prach(...)`, one event per preamble) and one per continuation line at debug level
+(`- PRACH: ...`). Patterns are bound to the level of the entry. To read a log line by line without `iter_events()`, pass
+the continuation lines of the entries for which `events.has_body()` is true to `events.parse()`.
+
+### Configuration
+
+```python
+from parsers.log import config
+
+cfg = config.from_log(open("gnb.log"))  # None if the log has no configuration echo
+if cfg and not cfg.logs_at("SCHED", "info"):
+    print("no PRACH events: mac_level is", cfg.level("mac"))
+```
+
+`config.from_log()` reads the configuration that OCUDU echoes at the top of its logs (`config_level` info or debug), and
+`config.parse_config()` a YAML configuration file. `AppConfig` has the explicit log levels, the effective level of each
+option or logger (`level()`, `logger_level()`, `logs_at()`), and the node planes and type.
 
 ## Tests
 
