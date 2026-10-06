@@ -26,9 +26,8 @@ _IDENTITY_FIELDS = ("du", "ue", "rb", "drb")
 _DATASET_INFO = {"exec": {"label": "executors", "instance": "executor"}}
 # Lines between two registered record offsets.
 _OFFSET_INTERVAL = 1000
-# Logs from this size have their metrics parsed in chunks, in parallel.
-_PARALLEL_MIN_SIZE = 16 << 20
-# Smallest chunk, and chunks per worker, so that a slow chunk does not hold back the following ones for long.
+# Smallest chunk, so that logs under twice this size are parsed in the server process, where they parse as fast as
+# with workers. And chunks per worker, so that a slow chunk does not hold back the following ones for long.
 _MIN_CHUNK_SIZE = 4 << 20
 _CHUNKS_PER_WORKER = 4
 _EVENT_CANDIDATE_RE = re.compile(events.CANDIDATE_PATTERN.encode())
@@ -160,9 +159,8 @@ class LogMetricsSource:
     def parse(self, path: Path, writer: DatasetWriter, progress: ProgressFn | None = None) -> None:
         writer.set_notes(_event_notes(path))
         total = path.stat().st_size
-        nof_chunks = 1
-        if total >= _PARALLEL_MIN_SIZE:
-            nof_chunks = max(1, min(parallel.nof_workers() * _CHUNKS_PER_WORKER, total // _MIN_CHUNK_SIZE))
+        workers = parallel.nof_workers()
+        nof_chunks = 1 if workers == 1 else max(1, min(workers * _CHUNKS_PER_WORKER, total // _MIN_CHUNK_SIZE))
         ranges = chunks.chunk_ranges(path, nof_chunks)
         # Counted in the pool, since counting the lines of a large file takes about a second.
         counts = parallel.map_chunks(chunks.count_lines, [(str(path), start, end) for start, end in ranges[:-1]])

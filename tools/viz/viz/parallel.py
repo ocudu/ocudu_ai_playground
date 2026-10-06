@@ -13,17 +13,33 @@ from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any
 
-# Worker processes of the pool, at most. Beyond this, parsing a metrics-heavy log gets no faster on a 16-core
-# machine.
+# Worker processes of the pool chosen by default, at most. Beyond this, parsing a metrics-heavy log gets no faster
+# on a 16-core machine.
 MAX_WORKERS = 12
 
 _pool: ProcessPoolExecutor | None = None
 _pool_lock = threading.Lock()
+# Worker processes set with configure(), or None to choose them from the CPUs.
+_jobs: int | None = None
+
+
+def configure(jobs: int | None) -> None:
+    """Sets the number of worker processes. None chooses it from the CPUs, 1 parses in the calling process."""
+    global _jobs
+    _jobs = jobs
 
 
 def nof_workers() -> int:
-    """Worker processes of the pool, from the CPUs this process may run on."""
+    """Worker processes of the pool: the configured ones, or the CPUs this process may run on up to MAX_WORKERS."""
+    if _jobs is not None:
+        return max(1, _jobs)
     return max(1, min(MAX_WORKERS, len(os.sched_getaffinity(0))))
+
+
+def warm_up() -> None:
+    """Starts the pool and its workers in the background, so that the first large file does not wait for them."""
+    if nof_workers() > 1:
+        threading.Thread(target=_start_workers, daemon=True, name="pool-warm-up").start()
 
 
 def get_pool() -> ProcessPoolExecutor | None:
@@ -57,6 +73,13 @@ def map_chunks(fn: Callable[..., Any], args: Iterable[tuple]) -> Iterator[Any]:
             except BrokenProcessPool:
                 _discard_pool(pool)
         yield fn(*a)
+
+
+def _start_workers() -> None:
+    pool = get_pool()
+    if pool is not None:
+        # Workers start as tasks are submitted, one per task while fewer than the pool size.
+        list(pool.map(int, range(nof_workers())))
 
 
 def _discard_pool(pool: ProcessPoolExecutor) -> None:

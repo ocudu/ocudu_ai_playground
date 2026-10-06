@@ -33,6 +33,8 @@ Options:
   --cache-size GB   Parse cache size limit (default: 2).
   --no-cache        Keep parsed data in memory only.
   --clear-cache     Remove all parse caches before starting.
+  -j K, --jobs K    Worker processes that parse large logs, 1 to parse in the server process
+                    (default: one per CPU, up to 12).
   --clean           Remove the ocudu-viz images and parse caches, then exit.
   -h, --help        Show this help.
 
@@ -65,6 +67,7 @@ while [[ $# -gt 0 ]]; do
     --clean) clean=1; shift ;;
     --cache-size) server_args+=(--cache-size "${2:?--cache-size needs a value}"); shift 2 ;;
     --no-cache|--clear-cache) server_args+=("$1"); shift ;;
+    -j|--jobs) server_args+=(--jobs "${2:?$1 needs a value}"); shift 2 ;;
     -h|--help) usage; exit 0 ;;
     --) shift; files+=("$@"); break ;;
     -*) die "unknown option $1 (see --help)" ;;

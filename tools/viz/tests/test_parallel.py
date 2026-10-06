@@ -45,13 +45,13 @@ class ParallelTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def open(self, name, min_size, chunk_size):
-        with mock.patch.object(log_metrics, "_PARALLEL_MIN_SIZE", min_size), mock.patch.object(log_metrics, "_MIN_CHUNK_SIZE", chunk_size):
+    def open(self, name, jobs, chunk_size):
+        with mock.patch.object(parallel, "_jobs", jobs), mock.patch.object(log_metrics, "_MIN_CHUNK_SIZE", chunk_size):
             return StoreCache(self.dir / name).open(self.log, LogMetricsSource())
 
     def test_chunks_give_the_same_store(self):
-        serial = self.open("serial", 1 << 40, 1 << 40)
-        chunked = self.open("chunked", 0, 4096)
+        serial = self.open("serial", 1, 4096)
+        chunked = self.open("chunked", None, 4096)
         self.assertEqual(dump(chunked), dump(serial))
         nof_lines = len(self.log.read_text().splitlines())
         for record in (1, 2, 999, 1000, 1001, nof_lines // 2, nof_lines):

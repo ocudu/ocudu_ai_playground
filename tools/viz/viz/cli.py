@@ -13,8 +13,9 @@ import threading
 import webbrowser
 from pathlib import Path
 
-from .sources.log_metrics import LogMetricsSource
+from . import parallel
 from .registry import SourceRegistry
+from .sources.log_metrics import LogMetricsSource
 from .store import StoreCache, default_cache_dir
 
 SOURCE_TYPES = [LogMetricsSource()]
@@ -61,6 +62,14 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--no-cache", action="store_true", help="Keep parsed data in memory only.")
     p.add_argument("--clear-cache", action="store_true", help="Remove all parse caches before starting.")
     p.add_argument(
+        "-j",
+        "--jobs",
+        type=int,
+        metavar="K",
+        help="Worker processes that parse large logs, 1 to parse in the server process (default: one per CPU, up to "
+        f"{parallel.MAX_WORKERS}). Logs under 8 MB are always parsed in the server process.",
+    )
+    p.add_argument(
         "--root",
         action="append",
         type=Path,
@@ -80,6 +89,11 @@ def main(argv: list[str] | None = None) -> int:
         if not r.is_dir():
             print(f"ocudu-viz: {r}: not a directory.", file=sys.stderr)
             return 2
+    if args.jobs is not None and args.jobs < 1:
+        print("ocudu-viz: --jobs must be at least 1.", file=sys.stderr)
+        return 2
+    parallel.configure(args.jobs)
+    parallel.warm_up()
     registry = SourceRegistry(cache, SOURCE_TYPES, roots)
 
     for path in args.files:

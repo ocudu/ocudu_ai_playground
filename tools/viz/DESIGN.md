@@ -241,12 +241,14 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 
 ### D15. Parallel parsing
 
-- Most of the parse time of a metrics-heavy log goes to parsing the METRICS lines in Python (about 70 us per line),
-  not to finding them, so the metrics of logs from 16 MB are parsed in chunks by a pool of worker processes.
-- The pool is shared by all sources for as long as the server runs, with up to 12 workers within the CPUs the process
-  may use: on a 16-core machine, a metrics-heavy log parses no faster with more. Workers start from a fork server, since forking the multithreaded server could deadlock. A pool whose
+- Most of the parse time of a metrics-heavy log goes to parsing the METRICS lines in Python, not to finding them, so
+  the metrics of large logs are parsed in chunks by a pool of worker processes.
+- The pool is shared by all sources for as long as the server runs, and started in the background when the server
+  starts, so that the first large log does not wait for it. `-j K` sets its workers, 1 for no pool; by default there
+  is one per CPU the process may use, up to 12: on a 16-core machine, a metrics-heavy log parses no faster with more. Workers start from a fork server, since forking the multithreaded server could deadlock. A pool whose
   worker dies is replaced, and its chunks are parsed in the server process.
-- Chunks are byte ranges, about 4 per worker and at least 4 MB, whose starts are moved to the next line that begins a
+- Chunks are byte ranges, about 4 per worker and at least 4 MB, so that logs under 8 MB, which parse as fast either
+  way, stay in the server process, whose starts are moved to the next line that begins a
   log entry, so that multi-line entries stay whole. The chunking comes from `parsers.log.chunks`, which other tools use
   through `MetricsParser.parse_file()`; viz keeps the pool and its own workers, which return rows ready to store. Workers read their range from the file and return rows grouped by
   layer and grouped by field names, with values ready to store, the column types of each field and their units. Workers
