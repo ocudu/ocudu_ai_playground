@@ -57,23 +57,6 @@ class ParallelTest(unittest.TestCase):
         for record in (1, 2, 999, 1000, 1001, nof_lines // 2, nof_lines):
             self.assertEqual(chunked.records(around=record, count=5), serial.records(around=record, count=5))
 
-    def test_chunk_ranges_start_at_entries(self):
-        # The continuation lines of the debug scheduler entry must stay with their header.
-        text = self.log.read_bytes()
-        ranges = parallel.chunk_ranges(self.log, 200, log_metrics._ENTRY_START_RE)
-        self.assertGreater(len(ranges), 50)
-        self.assertEqual((ranges[0][0], ranges[-1][1]), (0, len(text)))
-        for (_, end), (start, _) in zip(ranges, ranges[1:]):
-            self.assertEqual(end, start)
-            self.assertEqual(text[start - 1 : start], b"\n")
-            self.assertRegex(text[start : start + 30].decode(), r"^\d{4}-\d\d-\d\dT")
-
-    def test_chunk_ranges_small_files(self):
-        empty = self.dir / "empty.log"
-        empty.write_bytes(b"")
-        self.assertEqual(parallel.chunk_ranges(empty, 8, log_metrics._ENTRY_START_RE), [(0, 0)])
-        self.assertEqual(parallel.chunk_ranges(self.log, 1, log_metrics._ENTRY_START_RE), [(0, self.log.stat().st_size)])
-
 
     @unittest.skipIf(parallel.nof_workers() < 2, "needs several CPUs")
     def test_dead_workers_fall_back_to_this_process(self):

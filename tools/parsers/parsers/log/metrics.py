@@ -15,12 +15,14 @@ from __future__ import annotations
 
 import logging
 import re
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
+from concurrent.futures import Executor
 from datetime import datetime
 from functools import lru_cache
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from . import preamble
+from . import chunks, preamble
 
 if TYPE_CHECKING:
     import pandas
@@ -482,6 +484,38 @@ class MetricsParser:
             self._warn_once(layer, field, f"Field {layer}.{field} has unknown unit {unit!r}. Value not normalized.")
         return record
 
+    def parse_file(
+        self, path: str | Path, executor: Executor | None = None, nof_chunks: int | None = None
+    ) -> Iterator[tuple[int, dict[str, Any]]]:
+        """Parses the metrics of a log file, yielding the line number, from 1, and record of each metrics line.
+
+        With an executor, e.g. a ProcessPoolExecutor, the file is split into nof_chunks ranges at log entries, by
+        default one per 4 MB up to 64, parsed by its workers. Records are still yielded in file order, and the units
+        of all ranges are merged into self.units as a single pass would, complete once the iteration ends.
+
+        Worker processes started with "spawn" or "forkserver", the default start methods outside Linux and from Python
+        3.14, import the main module of the calling program, so its entry point must be under
+        `if __name__ == "__main__":`.
+        """
+        path = Path(path)
+        if nof_chunks is None:
+            nof_chunks = 1 if executor is None else min(_MAX_DEFAULT_CHUNKS, path.stat().st_size // _MIN_CHUNK_SIZE)
+        ranges = chunks.chunk_ranges(path, max(1, nof_chunks))
+        firsts = chunks.first_lines(path, ranges, executor)
+        args = [(str(path), start, end, first, self.layers) for (start, end), first in zip(ranges, firsts)]
+        if executor and len(args) > 1:
+            results = executor.map(parse_range, *zip(*args))
+        else:
+            results = (parse_range(*a) for a in args)
+        for records, units in results:
+            for layer, layer_units in units.items():
+                known_units = self.units[layer]
+                for field, unit in layer_units.items():
+                    known = known_units.setdefault(field, unit)
+                    if known != unit:
+                        self._warn_once(layer, field, f"Field {layer}.{field} has unit {unit!r}, expected {known!r}.")
+            yield from records
+
     def _parse_fields(self, layer: str, text: str, sink: _FieldSink) -> None:
         """Parses the fields of a metrics text, through the template of its layout when one was learned."""
         templates = self._templates[layer]
@@ -500,6 +534,28 @@ class MetricsParser:
         if (layer, field) not in self._warned:
             self._warned.add((layer, field))
             logger.warning(msg)
+
+
+# Smallest range of a log parsed by one worker of parse_file(), and most ranges by default.
+_MIN_CHUNK_SIZE = 4 << 20
+_MAX_DEFAULT_CHUNKS = 64
+
+
+def parse_range(
+    path: str, start: int, end: int, first_line: int = 1, layers: Sequence[str] | None = None
+) -> tuple[list[tuple[int, dict[str, Any]]], dict[str, dict[str, str]]]:
+    """Parses the metrics of the byte range [start, end) of a log, which starts at line first_line.
+
+    Returns the line number and record of each metrics line, and the units learned. A top-level function, so that it
+    can run in worker processes.
+    """
+    parser = MetricsParser(layers)
+    records = []
+    for line_no, raw in enumerate(chunks.read_lines(path, start, end), start=first_line):
+        # Cheap check before decoding, most lines are not metrics.
+        if b"[METRICS" in raw and (rec := parser.parse(raw.decode("utf-8", "replace"))) is not None:
+            records.append((line_no, rec))
+    return records, parser.units
 
 
 def to_dataframe(lines: Iterable[str], layer: str) -> pandas.DataFrame:

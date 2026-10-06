@@ -34,6 +34,24 @@ with open("gnb.log") as f:
 df = metrics.to_dataframe(open("gnb.log"), "mac")  # units in df.attrs["units"]
 ```
 
+`parser.parse_file()` parses a whole log, yielding `(line_no, record)` in file order. Given an executor, it splits the
+log into ranges that start at log entries (`parsers.log.chunks`) and parses them in its workers, which is several times
+faster on large logs:
+
+```python
+import multiprocessing
+from concurrent.futures import ProcessPoolExecutor
+
+from parsers.log import metrics
+
+if __name__ == "__main__":  # needed by worker processes that start with "spawn" or "forkserver"
+    parser = metrics.MetricsParser()
+    with ProcessPoolExecutor(mp_context=multiprocessing.get_context("forkserver")) as executor:
+        for line_no, rec in parser.parse_file("gnb.log", executor):
+            ...
+    print(parser.units)  # merged from all ranges once the iteration ends
+```
+
 Records are flat dicts with `timestamp`, `layer`, the line context fields (e.g. `pci`) and the metric fields:
 
 - Units are normalized: times to `us`, bitrates to `bps`, SI-prefixed unitless values (`5.74k`) to plain numbers.

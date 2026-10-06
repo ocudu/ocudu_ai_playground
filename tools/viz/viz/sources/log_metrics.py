@@ -5,15 +5,15 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
-import mmap
 import re
 from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
 from typing import Any
 
-from parsers.log import config, events, metrics, preamble
+from parsers.log import chunks, config, events, metrics, preamble
 
 from .. import parallel
 from .base import DatasetWriter, EventWriter, ProgressFn, column_type, column_value
@@ -92,12 +92,7 @@ def _parse_metrics_chunk(path: str, start: int, end: int, first_line: int) -> di
     result: dict[str, Any] = {"offsets": [], "first_t": None, "units": {}, "layers": {}}
     if end <= start:
         return result
-    with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-        data = mm[start:end]
-    lines = data.split(b"\n")
-    if lines[-1] == b"":
-        lines.pop()
-
+    lines = chunks.read_lines(path, start, end)
     parser = metrics.MetricsParser()
     # Per layer, the groups of rows by field names: the field names, the column types of each field and the rows.
     layers: dict[str, dict[tuple, tuple[tuple, dict[str, set[str]], list[tuple]]]] = {}
@@ -168,8 +163,10 @@ class LogMetricsSource:
         nof_chunks = 1
         if total >= _PARALLEL_MIN_SIZE:
             nof_chunks = max(1, min(parallel.nof_workers() * _CHUNKS_PER_WORKER, total // _MIN_CHUNK_SIZE))
-        ranges = parallel.chunk_ranges(path, nof_chunks, _ENTRY_START_RE)
-        first_lines = [n + 1 for n in parallel.lines_before(path, ranges)]
+        ranges = chunks.chunk_ranges(path, nof_chunks)
+        # Counted in the pool, since counting the lines of a large file takes about a second.
+        counts = parallel.map_chunks(chunks.count_lines, [(str(path), start, end) for start, end in ranges[:-1]])
+        first_lines = [1 + n for n in itertools.accumulate(counts, initial=0)]
         args = [(str(path), start, end, first_line) for (start, end), first_line in zip(ranges, first_lines)]
         results = parallel.map_chunks(_parse_metrics_chunk, args)
 

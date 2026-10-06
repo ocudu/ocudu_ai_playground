@@ -247,7 +247,8 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   may use: on a 16-core machine, a metrics-heavy log parses no faster with more. Workers start from a fork server, since forking the multithreaded server could deadlock. A pool whose
   worker dies is replaced, and its chunks are parsed in the server process.
 - Chunks are byte ranges, about 4 per worker and at least 4 MB, whose starts are moved to the next line that begins a
-  log entry, so that multi-line entries stay whole. Workers read their range from the file and return rows grouped by
+  log entry, so that multi-line entries stay whole. The chunking comes from `parsers.log.chunks`, which other tools use
+  through `MetricsParser.parse_file()`; viz keeps the pool and its own workers, which return rows ready to store. Workers read their range from the file and return rows grouped by
   layer and grouped by field names, with values ready to store, the column types of each field and their units. Workers
   first count the lines of each chunk, so that they then number lines as in the whole file: line numbers are the
   record ids that link plots, tables and events to the log pane.
