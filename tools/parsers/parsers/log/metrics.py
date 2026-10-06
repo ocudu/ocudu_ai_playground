@@ -6,6 +6,9 @@
 Times are normalized to "us", bitrates to "bps", and SI-prefixed unitless values
 (e.g. 1.2k) to plain numbers. Fields printed without a unit get the one in IMPLIED_UNITS. Unavailable values (n/a, NaN, ovl) become None.
 Slot fields (sfn.slot) are kept as strings.
+
+Lines of a layer mostly share a layout, so after parsing a line the parser learns a pattern of its layout, and parses
+later lines with that layout in one match. Lines that match no learned pattern use the full parser.
 """
 
 from __future__ import annotations
@@ -14,7 +17,7 @@ import logging
 import re
 from collections.abc import Iterable, Sequence
 from datetime import datetime
-from decimal import Decimal
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 from . import preamble
@@ -64,18 +67,10 @@ IMPLIED_UNITS = {
     },
 }
 
-_SI_PREFIX = {
-    "": Decimal(1),
-    "p": Decimal("1e-12"),
-    "n": Decimal("1e-9"),
-    "u": Decimal("1e-6"),
-    "\u00b5": Decimal("1e-6"),
-    "m": Decimal("1e-3"),
-    "k": Decimal("1e3"),
-    "M": Decimal("1e6"),
-    "G": Decimal("1e9"),
-}
-_SECONDS_TO_US = Decimal("1e6")
+# Powers of ten of the SI prefixes.
+_SI_PREFIX = {"": 0, "p": -12, "n": -9, "u": -6, "\u00b5": -6, "m": -3, "k": 3, "M": 6, "G": 9}
+# Power of ten from seconds to the canonical "us".
+_SECONDS_TO_US = 6
 # Units printed apart from the value, mapped to their canonical name.
 _SPACED_UNITS = {"MB": "MB", "Watts": "W", "segments": "segments"}
 
@@ -122,29 +117,47 @@ def _is_slot_key(key: str) -> bool:
     return key == "slot" or (key.endswith("_slot") and not key.endswith("_per_slot"))
 
 
+@lru_cache(maxsize=None)
+def _unit_scale(unit: str) -> tuple[str | None, int | None]:
+    """Canonical unit of a unit and the power of ten that scales values to it, or None for unknown prefixes."""
+    if unit in ("%", "usec"):
+        return ("us" if unit == "usec" else unit), 0
+    if unit.endswith("bps"):
+        prefix, base, exponent = unit[:-3], "bps", 0
+    elif unit.endswith("s"):
+        prefix, base, exponent = unit[:-1], "us", _SECONDS_TO_US
+    else:
+        prefix, base, exponent = unit, None, 0
+    if prefix not in _SI_PREFIX:
+        return unit, None
+    return base, exponent + _SI_PREFIX[prefix]
+
+
+def _scale(num: str, exponent: int) -> int | float:
+    """Scales a number by a power of ten, as an int when it was printed as one and stays integral.
+
+    Integer and float operations are exact or correctly rounded, so results match decimal arithmetic.
+    """
+    if "." in num or "e" in num or "E" in num:
+        if exponent == 0:
+            return float(num)
+        mantissa, _, power = num.lower().partition("e")
+        return float(f"{mantissa}e{int(power or 0) + exponent}")
+    value = int(num)
+    if exponent >= 0:
+        return value * 10**exponent
+    divisor = 10**-exponent
+    return value // divisor if value % divisor == 0 else value / divisor
+
+
 def _normalize(num: str, unit: str | None) -> tuple[int | float, str | None, bool]:
     """Scales a number to its canonical unit, returning (value, unit, unit_is_known)."""
     if unit is None:
         return parse_number(num), None, True
-    if unit == "%":
-        return parse_number(num), "%", True
-    if unit == "usec":
-        return parse_number(num), "us", True
-
-    if unit.endswith("bps"):
-        prefix, base, factor = unit[:-3], "bps", Decimal(1)
-    elif unit.endswith("s"):
-        prefix, base, factor = unit[:-1], "us", _SECONDS_TO_US
-    else:
-        prefix, base, factor = unit, None, Decimal(1)
-    if prefix not in _SI_PREFIX:
-        return parse_number(num), unit, False
-
-    scaled = Decimal(num) * _SI_PREFIX[prefix] * factor
-    printed_as_int = not ("." in num or "e" in num or "E" in num)
-    if printed_as_int and scaled == scaled.to_integral_value():
-        return int(scaled), base, True
-    return float(scaled), base, True
+    base, exponent = _unit_scale(unit)
+    if exponent is None:
+        return parse_number(num), base, False
+    return _scale(num, exponent), base, True
 
 
 def _find_list_end(text: str, start: int) -> int:
@@ -239,19 +252,137 @@ def _add_number(sink: _FieldSink, name: str, num: str, unit: str | None) -> None
 
 def _add_value(sink: _FieldSink, name: str, key: str, m: re.Match) -> None:
     """Adds the scalar value matched by the _VALUE groups of m, if any."""
-    if m.group("num") is not None:
-        if _is_slot_key(key):
-            sink.add(name, m.group("num"))
-        elif m.group("spaced_unit"):
-            sink.add(name, parse_number(m.group("num")), _SPACED_UNITS[m.group("spaced_unit")])
+    _add_scalar(sink, name, _is_slot_key(key), *m.group("hex", "na", "num", "unit", "spaced_unit", "word"))
+
+
+def _add_scalar(
+    sink: _FieldSink,
+    name: str,
+    is_slot: bool,
+    hex_: str | None,
+    na: str | None,
+    num: str | None,
+    unit: str | None,
+    spaced_unit: str | None,
+    word: str | None,
+) -> None:
+    """Adds a scalar value, given by the text of the _VALUE groups that matched it."""
+    if num is not None:
+        if is_slot:
+            sink.add(name, num)
+        elif spaced_unit:
+            sink.add(name, parse_number(num), _SPACED_UNITS[spaced_unit])
         else:
-            _add_number(sink, name, m.group("num"), m.group("unit"))
-    elif m.group("na"):
+            _add_number(sink, name, num, unit)
+    elif na:
         sink.add(name, None)
-    elif m.group("hex"):
-        sink.add(name, m.group("hex"))
-    elif m.group("word"):
-        sink.add(name, m.group("word"))
+    elif hex_:
+        sink.add(name, hex_)
+    elif word:
+        sink.add(name, word)
+
+
+# Value patterns of templates, as atomic groups that keep the first alternative that matches, like the tokenizer.
+# Any value: the _VALUE groups without names, i.e. hex, na, num, unit, spaced unit and word.
+_ANY_VALUE = "(?>" + re.sub(r"\(\?P<\w+>", "(", _VALUE) + ")"
+# A number with an optional unit, or n/a: num, unit and na. Excludes what _VALUE matches as hex, which comes first.
+_NUMBER_VALUE = r"(?>(?!0x[0-9a-fA-F]+\b)([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)([A-Za-z%\u00b5]+)?(?![ ](?:" + "|".join(_SPACED_UNITS) + r")\b)|(n/a|\{na\}|NaN|ovl))"
+# Templates kept per layer, since free text that varies between lines would otherwise create one per line.
+_MAX_TEMPLATES = 32
+
+
+class _Template:
+    """Layout of the metrics texts of one line shape: a pattern capturing each value, and the field of each value.
+
+    Fields whose value was a number with an optional unit, or n/a, match only those and are converted inline. The other
+    fields match any value and go through _add_scalar().
+    """
+
+    def __init__(self, pattern: re.Pattern, fields: list[tuple[str, bool, bool, str | None, int]]):
+        self.pattern = pattern
+        # Name of each field, whether it is a plain number field, whether it is a slot, its implied unit and the index
+        # of its first group.
+        self.fields = fields
+
+    @staticmethod
+    def build(text: str, implied_units: dict[str, str]) -> _Template | None:
+        """Template of a metrics text, or None for texts with lists or valueless fields, which need the full parser.
+
+        Follows _parse_into() token by token, so that a text matching the template parses into the same fields.
+        """
+        parts: list[str] = []
+        fields: list[tuple[str, bool, bool, str | None, int]] = []
+        nof_groups = 0
+        base = ""
+        in_free_text = False
+        pos = 0
+        while (m := _token_re.match(text, pos)) is not None and m.end() > pos:
+            key = m.group("key")
+            if key:
+                in_free_text = False
+                if m.group("list"):
+                    return None
+                value_start = min((m.start(g) for g in ("hex", "na", "num", "word") if m.start(g) >= 0), default=-1)
+                if value_start < 0:
+                    return None
+                parts.append(re.escape(text[pos:value_start]))
+                plain = (m.group("num") is not None and not m.group("spaced_unit")) or m.group("na") is not None
+                parts.append(_NUMBER_VALUE if plain else _ANY_VALUE)
+                name = base + key
+                fields.append((name, plain, _is_slot_key(key), implied_units.get(name), nof_groups))
+                nof_groups += 3 if plain else 6
+            else:
+                parts.append(re.escape(text[pos:m.end()]))
+                if m.group("section"):
+                    if not in_free_text:
+                        base = f"{m.group('section')}_"
+                    in_free_text = False
+                elif m.group("semi"):
+                    base = ""
+                    in_free_text = False
+                else:
+                    in_free_text = True
+            pos = m.end()
+        parts.append(re.escape(text[pos:]))
+        return _Template(re.compile("".join(parts)), fields)
+
+    def parse(self, text: str, sink: _FieldSink) -> bool:
+        """Adds the fields of a text to sink if the text has this layout, returning whether it had."""
+        m = self.pattern.fullmatch(text)
+        if m is None:
+            return False
+        groups = m.groups()
+        fields = sink.fields
+        units = sink.units
+        # Same outcomes as _add_scalar() and _add_number(), inlined for the common plain number fields.
+        for name, plain, is_slot, implied, i in self.fields:
+            if not plain:
+                _add_scalar(sink, name, is_slot, *groups[i:i + 6])
+                continue
+            num = groups[i]
+            if num is None:
+                fields[name] = None
+                continue
+            if is_slot:
+                fields[name] = num
+                continue
+            unit = groups[i + 1]
+            if implied is not None and implied != "s" and (unit is None or unit in _SI_PREFIX):
+                fields[name] = parse_number(num) if unit is None else _scale(num, _SI_PREFIX[unit])
+                units[name] = implied
+            elif implied is not None:
+                _add_number(sink, name, num, unit)
+            elif unit is None:
+                fields[name] = parse_number(num)
+            else:
+                base, exponent = _unit_scale(unit)
+                if exponent is None:
+                    fields[name] = parse_number(num)
+                    sink.unknown_units[name] = unit
+                else:
+                    fields[name] = _scale(num, exponent)
+                    units[name] = base
+        return True
 
 
 def _parse_into(text: str, sink: _FieldSink, prefix: str = "") -> None:
@@ -314,6 +445,8 @@ class MetricsParser:
         self.units: dict[str, dict[str, str]] = {layer: {} for layer in self.layers}
         # (layer, field) pairs already warned about.
         self._warned: set[tuple[str, str]] = set()
+        # Layouts of the metrics texts seen per layer, most recently matched first.
+        self._templates: dict[str, list[_Template]] = {layer: [] for layer in self.layers}
 
     def parse(self, line: str, preamble_match: re.Match | None = None) -> dict[str, Any] | None:
         """Parses a log line into a record, or returns None if it is not a metric of a selected layer."""
@@ -337,7 +470,7 @@ class MetricsParser:
         record.update({k: parse_number(v) for k, v in context_m.groupdict().items()})
 
         sink = _FieldSink(IMPLIED_UNITS.get(layer))
-        _parse_text(text, sink)
+        self._parse_fields(layer, text, sink)
         record.update(sink.fields)
 
         layer_units = self.units[layer]
@@ -348,6 +481,20 @@ class MetricsParser:
         for field, unit in sink.unknown_units.items():
             self._warn_once(layer, field, f"Field {layer}.{field} has unknown unit {unit!r}. Value not normalized.")
         return record
+
+    def _parse_fields(self, layer: str, text: str, sink: _FieldSink) -> None:
+        """Parses the fields of a metrics text, through the template of its layout when one was learned."""
+        templates = self._templates[layer]
+        if "optional(" not in text:
+            for i, template in enumerate(templates):
+                if template.parse(text, sink):
+                    # Lines of a layer mostly share one layout, so the last match is tried first.
+                    if i:
+                        templates.insert(0, templates.pop(i))
+                    return
+            if len(templates) < _MAX_TEMPLATES and (template := _Template.build(text, sink.implied_units)) is not None:
+                templates.insert(0, template)
+        _parse_text(text, sink)
 
     def _warn_once(self, layer: str, field: str, msg: str) -> None:
         if (layer, field) not in self._warned:

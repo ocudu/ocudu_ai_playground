@@ -337,3 +337,49 @@ class ParseSlotTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TemplateTest(unittest.TestCase):
+    """Lines parsed through a learned template must give the same records as the full parser."""
+
+    def assert_same_as_full_parser(self, *lines):
+        learned = metrics.MetricsParser()
+        for line in lines:
+            # The first parse of a layout learns its template, the second goes through it.
+            learned.parse(line)
+            self.assertEqual(learned.parse(line), metrics.MetricsParser().parse(line), line)
+        self.assertEqual(learned.units, self.units_of(lines))
+
+    @staticmethod
+    def units_of(lines):
+        parser = metrics.MetricsParser()
+        for line in lines:
+            parser.parse(line)
+        return parser.units
+
+    def test_real_lines(self):
+        self.assert_same_as_full_parser(DU_MANAGER_LINE, SCHED_UE_LINE, SCHED_UE_LINE_NA, PHY_LINE, MAC_LINE, SCHED_LINE)
+
+    def test_values_that_change_between_lines(self):
+        # Synthetic variations of one layout: other SI prefixes, n/a and units changing.
+        base = SCHED_UE_LINE
+        variants = [
+            base.replace("dl_brate=8.78kbps", "dl_brate=12Mbps"),
+            base.replace("dl_brate=8.78kbps", "dl_brate=n/a"),
+            base.replace("dl_bs=0", "dl_bs=1.2k"),
+            base.replace("ta=-8ns", "ta=5us"),
+            base.replace("cqi=15", "cqi=NaN"),
+        ]
+        learned = metrics.MetricsParser()
+        learned.parse(base)
+        for line in variants:
+            self.assertEqual(learned.parse(line), metrics.MetricsParser().parse(line), line)
+
+    def test_values_the_template_does_not_cover_use_the_full_parser(self):
+        base = SCHED_UE_LINE
+        learned = metrics.MetricsParser()
+        learned.parse(base)
+        # A hex value where the template has a number, a value followed by a spaced unit, and a value that the
+        # tokenizer splits into n/a and free text, which a backtracking pattern would take as a word.
+        for line in (base.replace("cqi=15", "cqi=0xab"), base.replace("cqi=15", "cqi=15 MB"), base.replace("cqi=15", "cqi=NaNx")):
+            self.assertEqual(learned.parse(line), metrics.MetricsParser().parse(line), line)

@@ -9,7 +9,7 @@ build-backend = "setuptools.build_meta"
 name = "ocudu-viz"
 version = "0.1.0"
 description = "Browser-based visualizer for OCUDU artifacts."
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = ["fastapi>=0.110", "uvicorn>=0.29", "ocudu-parsers"]
 
 [project.optional-dependencies]
