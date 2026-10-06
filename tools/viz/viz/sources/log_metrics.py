@@ -16,7 +16,7 @@ from typing import Any
 from parsers.log import config, events, metrics, preamble
 
 from .. import parallel
-from .base import DatasetWriter, EventWriter, ProgressFn
+from .base import DatasetWriter, EventWriter, ProgressFn, column_type, column_value
 
 logger = logging.getLogger("parsers")
 
@@ -82,14 +82,14 @@ def _event_notes(path: Path) -> list[str]:
     return [f"Some UE events are not in the log, whose layers log below info ({levels}): {held}."]
 
 
-def _parse_metrics_chunk(path: str, start: int, end: int) -> dict[str, Any]:
-    """Parses the metrics of the byte range [start, end) of a log, which starts at a line.
+def _parse_metrics_chunk(path: str, start: int, end: int, first_line: int) -> dict[str, Any]:
+    """Parses the metrics of the byte range [start, end) of a log, which starts at line first_line.
 
-    Returns the number of lines of the range, record offsets and rows by line number within the range from 1, the
-    first timestamp and the units seen. Rows are grouped by layer, each with the index of its field names in the
-    shapes of the layer, to keep the result small.
+    Returns the record offsets, the first timestamp, the units seen and, per layer, the rows grouped by their field
+    names in order of first appearance: each group with the column types of each field and the rows as tuples of
+    time, line number and column values, ready to store.
     """
-    result: dict[str, Any] = {"nof_lines": 0, "offsets": [], "first_t": None, "units": {}, "layers": {}}
+    result: dict[str, Any] = {"offsets": [], "first_t": None, "units": {}, "layers": {}}
     if end <= start:
         return result
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
@@ -99,10 +99,11 @@ def _parse_metrics_chunk(path: str, start: int, end: int) -> dict[str, Any]:
         lines.pop()
 
     parser = metrics.MetricsParser()
-    layers: dict[str, tuple[list[tuple], dict[tuple, int], list[tuple]]] = {}
+    # Per layer, the groups of rows by field names: the field names, the column types of each field and the rows.
+    layers: dict[str, dict[tuple, tuple[tuple, dict[str, set[str]], list[tuple]]]] = {}
     first_t = None
     offset = start
-    for line_no, raw in enumerate(lines, start=1):
+    for line_no, raw in enumerate(lines, start=first_line):
         if line_no % _OFFSET_INTERVAL == 1:
             result["offsets"].append((line_no, offset))
         offset += len(raw) + 1
@@ -116,18 +117,23 @@ def _parse_metrics_chunk(path: str, start: int, end: int) -> dict[str, Any]:
             continue
         layer = rec.pop("layer")
         t = rec.pop("timestamp").replace(tzinfo=timezone.utc).timestamp()
-        shapes, shape_ids, rows = layers.setdefault(layer, ([], {}, []))
-        shape = tuple(rec)
-        shape_id = shape_ids.get(shape)
-        if shape_id is None:
-            shape_id = shape_ids[shape] = len(shapes)
-            shapes.append(shape)
-        rows.append((line_no, t, shape_id, tuple(rec.values())))
+        groups = layers.setdefault(layer, {})
+        fields = tuple(rec)
+        group = groups.get(fields)
+        if group is None:
+            group = groups[fields] = (fields, {f: set() for f in fields}, [])
+        _, types, rows = group
+        values = []
+        for field, value in rec.items():
+            vtype = column_type(value)
+            if vtype is not None:
+                types[field].add(vtype)
+            values.append(column_value(value))
+        rows.append((t, line_no, *values))
 
-    result["nof_lines"] = len(lines)
     result["first_t"] = first_t
     result["units"] = parser.units
-    result["layers"] = {layer: (shapes, rows) for layer, (shapes, _, rows) in layers.items()}
+    result["layers"] = {layer: list(groups.values()) for layer, groups in layers.items()}
     return result
 
 
@@ -163,20 +169,20 @@ class LogMetricsSource:
         if total >= _PARALLEL_MIN_SIZE:
             nof_chunks = max(1, min(parallel.nof_workers() * _CHUNKS_PER_WORKER, total // _MIN_CHUNK_SIZE))
         ranges = parallel.chunk_ranges(path, nof_chunks, _ENTRY_START_RE)
-        results = parallel.map_chunks(_parse_metrics_chunk, [(str(path), start, end) for start, end in ranges])
+        first_lines = [n + 1 for n in parallel.lines_before(path, ranges)]
+        args = [(str(path), start, end, first_line) for (start, end), first_line in zip(ranges, first_lines)]
+        results = parallel.map_chunks(_parse_metrics_chunk, args)
 
-        # Results come in file order, so line numbers continue from the previous chunks, and units seen first win
-        # as in a single pass.
+        # Results come in file order, so units seen first win as in a single pass.
         all_units: dict[str, dict[str, str]] = {layer: {} for layer in metrics.LAYER_PATTERNS}
         warned: set[tuple[str, str]] = set()
         first_t = None
-        lines_before = 0
         for (_, end), res in zip(ranges, results):
             for line_no, offset in res["offsets"]:
-                writer.add_record_offset(lines_before + line_no, offset)
-            for layer, (shapes, rows) in res["layers"].items():
-                for line_no, t, shape_id, values in rows:
-                    writer.add_row(layer, lines_before + line_no, t, dict(zip(shapes[shape_id], values)))
+                writer.add_record_offset(line_no, offset)
+            for layer, groups in res["layers"].items():
+                for fields, types, rows in groups:
+                    writer.add_rows(layer, fields, types, rows)
             for layer, chunk_units in res["units"].items():
                 for field, unit in chunk_units.items():
                     known = all_units[layer].setdefault(field, unit)
@@ -185,7 +191,6 @@ class LogMetricsSource:
                         logger.warning(f"Field {layer}.{field} has unit {unit!r}, expected {known!r}.")
             if first_t is None:
                 first_t = res["first_t"]
-            lines_before += res["nof_lines"]
             if progress:
                 progress(end, total)
 

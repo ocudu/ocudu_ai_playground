@@ -5,7 +5,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import json
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -13,11 +14,34 @@ from typing import Any, Protocol
 ProgressFn = Callable[[int, int], None]
 
 
+def column_type(value: Any) -> str | None:
+    """Column type of a field value: "number", "text" or "json", or None for a missing value."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return "text"
+    if isinstance(value, (int, float)):
+        return "number"
+    if isinstance(value, (list, dict)):
+        return "json"
+    return "text"
+
+
+def column_value(value: Any) -> Any:
+    """Field value as stored in a column: lists and dicts as JSON text, other values as they are."""
+    return json.dumps(value) if isinstance(value, (list, dict)) else value
+
+
 class DatasetWriter(Protocol):
     """Sink for the datasets extracted from a source."""
 
     def add_row(self, dataset: str, record: int, t: float, fields: dict[str, Any]) -> None:
         """Adds one time series row. t is in seconds since the epoch, record identifies the raw record."""
+
+    def add_rows(self, dataset: str, fields: Sequence[str], types: dict[str, set[str]], rows: list[tuple]) -> None:
+        """Adds time series rows with the same fields, each a tuple of t, record and the field values in column form
+        (column_value()). types holds the column types (column_type()) of the values of each field.
+        """
 
     def set_dataset_info(
         self,

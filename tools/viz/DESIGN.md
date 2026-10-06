@@ -243,14 +243,17 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 
 - Most of the parse time of a metrics-heavy log goes to parsing the METRICS lines in Python (about 70 us per line),
   not to finding them, so the metrics of logs from 16 MB are parsed in chunks by a pool of worker processes.
-- The pool is shared by all sources for as long as the server runs, with up to 8 workers within the CPUs the process
-  may use. Workers start from a fork server, since forking the multithreaded server could deadlock. A pool whose
+- The pool is shared by all sources for as long as the server runs, with up to 12 workers within the CPUs the process
+  may use: on a 16-core machine, a metrics-heavy log parses no faster with more. Workers start from a fork server, since forking the multithreaded server could deadlock. A pool whose
   worker dies is replaced, and its chunks are parsed in the server process.
 - Chunks are byte ranges, about 4 per worker and at least 4 MB, whose starts are moved to the next line that begins a
   log entry, so that multi-line entries stay whole. Workers read their range from the file and return rows grouped by
-  layer and line number within the chunk, with their units.
-- The server process takes the results in file order, renumbers the lines and merges the units as a single pass
-  would, and writes them to SQLite while later chunks are still parsed. The cache is the same as with a single pass.
+  layer and grouped by field names, with values ready to store, the column types of each field and their units. Workers
+  first count the lines of each chunk, so that they then number lines as in the whole file: line numbers are the
+  record ids that link plots, tables and events to the log pane.
+- The server process takes the results in file order, merges the units as a single pass would, and inserts each
+  group of rows at once while later chunks are still parsed, leaving it mostly waiting for the workers. The cache has
+  the same contents as with a single pass.
 
 ## Open questions
 

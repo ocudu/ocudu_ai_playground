@@ -12,13 +12,13 @@ import os
 import sqlite3
 import tempfile
 import urllib.parse
-from collections.abc import Callable, Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any
 
 from .filters import FilterError, compile_filter
-from .sources.base import ProgressFn, SourceType
+from .sources.base import ProgressFn, SourceType, column_type, column_value
 
 # Bumped when the database layout changes, part of the cache key.
 SCHEMA_VERSION = 5
@@ -59,18 +59,6 @@ def _quote(name: str) -> str:
     return '"' + name.replace('"', '""') + '"'
 
 
-def _value_type(value: Any) -> str | None:
-    if value is None:
-        return None
-    if isinstance(value, bool):
-        return "text"
-    if isinstance(value, (int, float)):
-        return "number"
-    if isinstance(value, (list, dict)):
-        return "json"
-    return "text"
-
-
 class _DatasetBuffer:
     """Columns and pending rows of one dataset table being built."""
 
@@ -101,30 +89,28 @@ class StoreWriter:
         )
 
     def add_row(self, dataset: str, record: int, t: float, fields: dict[str, Any]) -> None:
-        ds = self._datasets.get(dataset)
-        if ds is None:
-            ds = self._datasets[dataset] = _DatasetBuffer(dataset)
-            self._conn.execute(f"CREATE TABLE {_quote('ds_' + dataset)} ({_TS} REAL, {_REC} INTEGER)")
-
-        new_columns = [k for k in fields if k not in ds.types]
-        if new_columns:
-            self._flush(ds)
-            for col in new_columns:
-                ds.columns.append(col)
-                ds.types[col] = ""
-                self._conn.execute(f"ALTER TABLE {_quote('ds_' + dataset)} ADD COLUMN {_quote(col)}")
-
+        ds = self._dataset(dataset, fields)
         row = [t, record]
         for col in ds.columns:
             value = fields.get(col)
-            vtype = _value_type(value)
-            if vtype is not None and ds.types[col] != vtype:
-                ds.types[col] = vtype if ds.types[col] == "" else "text"
-            row.append(json.dumps(value) if vtype == "json" else value)
+            vtype = column_type(value)
+            if vtype is not None:
+                self._merge_type(ds, col, vtype)
+            row.append(column_value(value))
         ds.rows.append(tuple(row))
         if len(ds.rows) >= _BATCH_SIZE:
             self._flush(ds)
 
+    def add_rows(self, dataset: str, fields: Sequence[str], types: dict[str, set[str]], rows: list[tuple]) -> None:
+        ds = self._dataset(dataset, fields)
+        for col, col_types in types.items():
+            for vtype in col_types:
+                self._merge_type(ds, col, vtype)
+        # Buffered rows go first, to keep the rows in the order they were added.
+        self._flush(ds)
+        cols = ", ".join([_TS, _REC] + [_quote(c) for c in fields])
+        marks = ", ".join("?" * (len(fields) + 2))
+        self._conn.executemany(f"INSERT INTO {_quote('ds_' + ds.name)} ({cols}) VALUES ({marks})", rows)
     def set_dataset_info(
         self,
         dataset: str,
@@ -183,6 +169,27 @@ class StoreWriter:
         }
         self._conn.executemany("INSERT INTO meta VALUES (?, ?)", [(k, json.dumps(v)) for k, v in meta.items()])
         self._conn.commit()
+
+    def _dataset(self, dataset: str, fields: Iterable[str]) -> _DatasetBuffer:
+        """Returns the table of a dataset, created if needed, with columns for the given fields."""
+        ds = self._datasets.get(dataset)
+        if ds is None:
+            ds = self._datasets[dataset] = _DatasetBuffer(dataset)
+            self._conn.execute(f"CREATE TABLE {_quote('ds_' + dataset)} ({_TS} REAL, {_REC} INTEGER)")
+        new_columns = [k for k in fields if k not in ds.types]
+        if new_columns:
+            self._flush(ds)
+            for col in new_columns:
+                ds.columns.append(col)
+                ds.types[col] = ""
+                self._conn.execute(f"ALTER TABLE {_quote('ds_' + dataset)} ADD COLUMN {_quote(col)}")
+        return ds
+
+    @staticmethod
+    def _merge_type(ds: _DatasetBuffer, col: str, vtype: str) -> None:
+        """Widens the type of a column to text when its values have different types."""
+        if ds.types[col] != vtype:
+            ds.types[col] = vtype if ds.types[col] == "" else "text"
 
     def _flush(self, ds: _DatasetBuffer) -> None:
         if not ds.rows:
