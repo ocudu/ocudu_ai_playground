@@ -226,6 +226,21 @@ main { padding: 8px 16px 16px; }
 .ev-error .event-dot { background: var(--ev-error); }
 .cursor-event { margin-top: 2px; max-width: 60vw; white-space: normal; color: var(--fg); }
 .cursor-event .event-dot { margin-right: 5px; }
+.trace .chart { min-height: 0; padding-top: 0; padding-bottom: 0; }
+.trace-scroll { overflow: hidden; }
+.trace-scroll.scrollable { overflow-y: auto; scrollbar-width: thin; }
+.trace-scroll.scrollable::-webkit-scrollbar { width: 8px; }
+.trace-scroll.scrollable::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+.trace-sticky { position: sticky; top: 0; }
+.trace-note { margin: 4px 8px 0; font-size: 12px; }
+.event-note { flex-basis: 100%; }
+.trace-legend { display: inline-flex; flex-wrap: wrap; gap: 10px; font-size: 12px; }
+.trace-glyph { margin-right: 3px; }
+.ev-ra .trace-glyph { color: var(--ev-ra); }
+.ev-lifecycle .trace-glyph { color: var(--ev-lifecycle); }
+.ev-rrc .trace-glyph { color: var(--ev-rrc); }
+.ev-mobility .trace-glyph { color: var(--ev-mobility); }
+.ev-failure .trace-glyph { color: var(--ev-failure); }
 .cursor-readout {
   position: absolute;
   top: 6px;

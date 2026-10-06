@@ -202,6 +202,31 @@ class StoreTest(unittest.TestCase):
         self.assertTrue(self.store.events_ready)
         self.assertEqual((self.store.event_counts, self.store.events()["total"]), ({}, 0))
 
+    def test_trace(self):
+        store = self.open_with_events()
+        res = store.trace()
+        lanes = res["lanes"]
+        self.assertEqual([(lane["ue"], lane["rnti"], lane["open"]) for lane in lanes], [(0, "0x4600", True), (1, "0x4601", True)])
+        by_type = {}
+        for e in res["events"]:
+            by_type.setdefault(e["type"], []).append(e["lane"])
+        ue1 = lanes[1]["lane"]
+        self.assertEqual(by_type["prach"], [lanes[0]["lane"], ue1])
+        self.assertEqual((by_type["rlf"], by_type["warning"]), ([ue1], [None]))
+        # Open lanes stay active after their last event, which is before the window.
+        t_min = store.meta["t_min"]
+        late = store.trace(t0=t_min + 6, t1=t_min + 11)
+        self.assertEqual((late["total_lanes"], [e["type"] for e in late["events"]]), (2, ["warning"]))
+        self.assertEqual(store.trace(max_lanes=1)["total_lanes"], 2)
+
+    def test_notes(self):
+        self.assertEqual(self.store.meta["notes"], [])
+        quiet = self.cache.open(write_log(self.dir / "quiet.log", log_level="warning"), LogMetricsSource())
+        self.assertEqual(len(quiet.meta["notes"]), 1)
+        self.assertIn("mac, du, rrc, cu, ngap at warning", quiet.meta["notes"][0])
+        verbose = self.cache.open(write_log(self.dir / "verbose.log", log_level="info"), LogMetricsSource())
+        self.assertEqual(verbose.meta["notes"], [])
+
     def test_events_after_datasets(self):
         store = self.cache.open(write_log(self.dir / "events.log", events=True), LogMetricsSource())
         self.assertFalse(store.events_ready)

@@ -70,8 +70,9 @@ export function decodeView(hash, sources) {
     }
     const plots = [];
     for (const p of t.plots ?? []) {
-      // Datasets are only known for parsed sources, so plots of sources still parsing are kept as they are.
-      if (source.datasets.length && !source.datasets.some((d) => d.name === p.dataset)) {
+      // Datasets are only known for parsed sources, so plots of sources still parsing are kept as they are. Plots
+      // without a dataset, e.g. of a tab never shown, get one when shown.
+      if (p.dataset != null && source.datasets.length && !source.datasets.some((d) => d.name === p.dataset)) {
         warnings.push(`Dataset ${p.dataset} is not in ${t.source}, its plot was skipped.`);
         continue;
       }

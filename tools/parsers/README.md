@@ -77,7 +77,7 @@ with open("gnb.log") as f:
 ```
 
 `events.iter_events()` recognizes the lines of known events (`events.EVENT_PATTERNS`) and reports the other warning and
-error lines as generic `warning` and `error` events. Records have `timestamp`, `type`, `category`, `layer`, `level`,
+error lines as generic `warning` and `error` events, with the `ue=` and RNTI of their message if any. Records have `timestamp`, `type`, `category`, `layer`, `level`,
 `ue`, `rnti`, `cause` and `text`.
 
 | Category    | Types                                                              |
@@ -86,7 +86,7 @@ error lines as generic `warning` and `error` events. Records have `timestamp`, `
 | `lifecycle` | `ue_create`, `ue_delete`                                           |
 | `rrc`       | `rrc_setup_complete`, `rrc_release`, `rrc_reest_request`           |
 | `mobility`  | `ho_trigger`, `ho_preparation`                                     |
-| `failure`   | `rlf`, `rrc_reest_failed`, `rrc_reest_rejected`                    |
+| `failure`   | `rlf`, `rrc_reest_failed`, `rrc_reest_rejected`, `conres_timeout`, `rrc_setup_timeout` |
 | `warning`   | `warning` (other `[W]` lines)                                      |
 | `error`     | `error` (other `[E]` lines)                                        |
 

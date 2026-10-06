@@ -4,6 +4,7 @@
 import uPlot from "uplot";
 import { getJSON } from "../api.js";
 import { displayUnit, formatStat } from "../units.js";
+import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, fmtFull, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
 
 // Distance in pixels within which the cursor is on an event marker.
 const EVENT_HIT_PX = 5;
@@ -15,34 +16,6 @@ const steppedPath = uPlot.paths.stepped({ align: 1 });
 const FETCH_DELAY_MS = 120;
 // Split values listed in the split value picker.
 const MAX_LISTED_SPLITS = 300;
-
-const fmtMs = uPlot.fmtDate("{HH}:{mm}:{ss}.{fff}");
-const fmtSec = uPlot.fmtDate("{HH}:{mm}:{ss}");
-const fmtMin = uPlot.fmtDate("{HH}:{mm}");
-const fmtFull = uPlot.fmtDate("{YYYY}-{MM}-{DD} {HH}:{mm}:{ss}.{fff}");
-
-/** @param {number} ts */
-function utcDate(ts) {
-  return uPlot.tzDate(new Date(ts * 1e3), "Etc/UTC");
-}
-
-/**
- * 24h UTC tick labels, with sub-second digits when zoomed in.
- * @param {any} u
- * @param {number[]} splits
- * @param {number} axisIdx
- * @param {number} space
- * @param {number} incr
- */
-function timeTicks(u, splits, axisIdx, space, incr) {
-  const fmt = incr < 1 ? fmtMs : incr < 60 ? fmtSec : fmtMin;
-  return splits.map((ts) => fmt(utcDate(ts)));
-}
-
-/** @param {string} name */
-function cssVar(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
 
 /** @param {number} i */
 function seriesColor(i) {
@@ -365,10 +338,7 @@ export default {
       const histogram = this.plot.mode === "histogram";
       const unit = this.unit.label ? ` ${this.unit.label}` : "";
       const x = u.posToVal(left, "x");
-      let text;
-      if (histogram) text = `${formatStat(x)}${unit}`;
-      else if (this.timeMode === "absolute") text = fmtFull(utcDate(x));
-      else text = `${x.toFixed(3)} s`;
+      let text = histogram ? `${formatStat(x)}${unit}` : formatTime(x, this.timeMode);
       if (this.hovering && top != null && top >= 0) {
         const y = u.posToVal(top, "y");
         text += histogram ? ` \u00b7 count ${formatStat(Math.max(0, y))}` : ` \u00b7 ${formatStat(y)}${unit}`;
@@ -422,8 +392,7 @@ export default {
       const gridColor = cssVar("--grid");
       const axis = { stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 } };
       const absolute = this.timeMode === "absolute";
-      // Minimum pixels between time ticks, so that HH:mm:ss.fff labels do not overlap.
-      const xAxis = absolute ? { ...axis, values: timeTicks, space: 110 } : { ...axis };
+      const xAxis = absolute ? { ...axis, values: timeTicks, space: TIME_TICK_SPACE } : { ...axis };
       const opts = {
         width: this.$refs.chart.clientWidth,
         height: CHART_HEIGHT,
@@ -436,17 +405,10 @@ export default {
           ...labels.map((label, i) => ({ label, stroke: seriesColor(i), width: 1.25, spanGaps: true })),
         ],
         axes: [xAxis, { ...axis, label: unitLabel, size: 60 }],
-        cursor: { drag: { x: true, y: false, setScale: false }, sync: { key: "ocudu-viz" }, focus: { prox: 16 } },
+        cursor: { drag: { x: true, y: false, setScale: false }, sync: { key: CURSOR_SYNC_KEY }, focus: { prox: 16 } },
         focus: { alpha: 0.35 },
         hooks: {
-          setSelect: [
-            (u) => {
-              if (u.select.width > 2) {
-                this.$emit("zoom", { min: u.posToVal(u.select.left, "x"), max: u.posToVal(u.select.left + u.select.width, "x") });
-              }
-              u.setSelect({ left: 0, top: 0, width: 0, height: 0 }, false);
-            },
-          ],
+          setSelect: [selectToZoom((range) => this.$emit("zoom", range))],
           setSeries: [(u, idx) => { this.focusedSeries = idx ?? -1; }],
           setCursor: [(u) => this.updateCursorReadout(u)],
           draw: [(u) => this.drawEvents(u)],
@@ -454,50 +416,8 @@ export default {
       };
       const chart = new uPlot(opts, data, this.$refs.chart);
       this.trackHover(chart);
-      this.attachInteractions(chart);
+      attachZoomPan(chart, (range) => this.$emit("zoom", range), () => this.drillDown(chart));
       return chart;
-    },
-
-    attachInteractions(chart) {
-      const over = chart.over;
-      const xRange = () => ({ min: chart.scales.x.min, max: chart.scales.x.max });
-
-      over.addEventListener("wheel", (e) => {
-        e.preventDefault();
-        const { min, max } = xRange();
-        const at = chart.posToVal(e.offsetX, "x");
-        const factor = e.deltaY < 0 ? 0.8 : 1.25;
-        this.$emit("zoom", { min: at - (at - min) * factor, max: at + (max - at) * factor });
-      }, { passive: false });
-
-      // Shift+drag pans. Registered as capture to run before the uPlot drag-to-zoom handler.
-      over.addEventListener("mousedown", (e) => {
-        if (!e.shiftKey || e.button !== 0) return;
-        e.stopImmediatePropagation();
-        e.preventDefault();
-        const start = xRange();
-        const startX = e.clientX;
-        const valPerPx = (start.max - start.min) / over.clientWidth;
-        const onMove = (ev) => {
-          const dv = (ev.clientX - startX) * valPerPx;
-          this.$emit("zoom", { min: start.min - dv, max: start.max - dv });
-        };
-        const onUp = () => {
-          window.removeEventListener("mousemove", onMove);
-          window.removeEventListener("mouseup", onUp);
-        };
-        window.addEventListener("mousemove", onMove);
-        window.addEventListener("mouseup", onUp);
-      }, { capture: true });
-
-      let downX = null;
-      over.addEventListener("mousedown", (e) => { downX = e.clientX; });
-      over.addEventListener("click", (e) => {
-        // Clicks ending a drag-to-zoom are not drill-downs.
-        if (downX === null || Math.abs(e.clientX - downX) > 3) return;
-        this.drillDown(chart);
-      });
-      over.addEventListener("dblclick", () => this.$emit("zoom", null));
     },
 
     /**

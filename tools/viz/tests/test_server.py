@@ -145,11 +145,19 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(src["event_counts"], {"ra": 2, "lifecycle": 2, "failure": 1, "warning": 1})
         res = self.client.get("/api/events", params={"source": 0, "categories": ["failure"]}).json()
         self.assertEqual([e["type"] for e in res["events"]], ["rlf"])
-        self.assertEqual(set(res["events"][0]), {"t", "record", "type", "category", "layer", "level", "ue", "rnti", "cause", "text"})
+        self.assertEqual(set(res["events"][0]), {"t", "record", "type", "category", "layer", "level", "ue", "rnti", "cause", "text", "lane"})
+
+    def test_trace(self):
+        res = self.client.get("/api/trace", params={"source": 0}).json()
+        self.assertEqual([(lane["ue"], lane["rnti"], lane["open"]) for lane in res["lanes"]], [(0, "0x4600", True), (1, "0x4601", True)])
+        self.assertEqual((res["total_lanes"], res["total_events"], res["truncated"]), (2, 6, False))
+        limited = self.client.get("/api/trace", params={"source": 0, "max_lanes": 1, "limit": 2}).json()
+        self.assertEqual((len(limited["lanes"]), limited["total_lanes"], len(limited["events"]), limited["truncated"]), (1, 2, 2, True))
 
     def test_sources_status(self):
         src = self.client.get("/api/sources").json()[0]
         self.assertEqual((src["status"], src["progress"], src["error"]), ("ready", 1.0, None))
+        self.assertEqual(src["notes"], [])
 
     def test_open_from_page(self):
         from fastapi.testclient import TestClient

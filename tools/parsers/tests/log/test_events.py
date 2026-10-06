@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
 import unittest
+from datetime import datetime
 
 from parsers.log import events, preamble
 
@@ -24,6 +25,9 @@ LINES = {
     "rlf_du": '2026-07-30T21:10:05.100000 [DU-MNG  ] [W] ue=11 rnti=0x460f: RLF detected with cause "RLC max ReTxs reached". Timer of 1000 msec to release UE started...',
     "reest_failed": '2026-07-30T21:10:09.000000 [RRC     ] [W] ue=12 c-rnti=0x460f: "RRC Reestablishment Procedure" for old_ue=3 failed. Cause: timed out after 4000ms',
     "reest_rejected": "2026-07-30T21:10:10.000000 [RRC     ] [I] ue=18 c-rnti=0x4617: Rejecting RRC Reestablishment to old UE c-rnti=0x4611, pci=1. Cause: Old UE bearers were not fully established. Fallback to RRC Setup Procedure...",
+    "conres_timeout": "2026-10-05T20:09:22.471074 [SCHED   ] [W] [   959.6] ue=201 rnti=0x46d4: ra-ContentionResolutionTimer, for prach/msg3 rx at slot=952.18, expired (64ms) before ConRes CE was scheduled. UE will stop being scheduled",
+    "rrc_setup_timeout": '2026-10-05T20:09:24.415087 [RRC     ] [W] ue=201 c-rnti=0x46d4: "RRC Setup Procedure" timed out after 2000ms',
+    "warning_rnti": "2026-10-05T20:11:10.204373 [MAC     ] [W] [  468.12] UL rnti=0x5ec8 lcid=0x3a CE: Discarding PDU. Cause: C-RNTI in C-RNTI CE is not associated with any existing UE.",
     "warning": "2026-07-30T21:10:11.000000 [SCHED   ] [W] UE creation (ue=4): latency1=500us",
     "error": "2026-07-30T21:10:12.000000 [PHY     ] [E] [   300.1] Something failed",
     "noise": "2026-07-30T21:10:13.000000 [RRC     ] [I] ue=0 c-rnti=0x4601: DCCH DL rrcReconfiguration",
@@ -111,6 +115,16 @@ class EventsTest(unittest.TestCase):
         self.assertEqual(parse("reest_failed")["cause"], "timed out after 4000ms")
         self.assertEqual(parse("reest_rejected")["cause"], "Old UE bearers were not fully established")
 
+    def test_attach_timeouts(self):
+        conres, setup = parse("conres_timeout"), parse("rrc_setup_timeout")
+        self.assertEqual((conres["type"], conres["category"], conres["ue"], conres["rnti"]), ("conres_timeout", "failure", 201, "0x46d4"))
+        self.assertEqual((setup["type"], setup["category"], setup["ue"], setup["rnti"]), ("rrc_setup_timeout", "failure", 201, "0x46d4"))
+
+    def test_generic_warning_ue(self):
+        w = parse("warning_rnti")
+        self.assertEqual((w["type"], w["ue"], w["rnti"]), ("warning", None, "0x5ec8"))
+        self.assertEqual((parse("warning")["ue"], parse("warning")["rnti"]), (4, None))
+
     def test_warning_and_error_levels(self):
         w, e = parse("warning"), parse("error")
         self.assertEqual((w["type"], w["category"], w["text"]), ("warning", "warning", "UE creation (ue=4): latency1=500us"))
@@ -123,6 +137,33 @@ class EventsTest(unittest.TestCase):
         self.assertIsNone(parse("noise"))
         self.assertIsNone(parse("wrong_layer"))
         self.assertEqual(events.parse("continuation line without preamble"), [])
+
+    def test_ue_tracker(self):
+        def ev(t, type_, layer, ue=None, rnti=None):
+            return {"timestamp": datetime(2026, 1, 1, 0, 0, t), "type": type_, "layer": layer, "ue": ue, "rnti": rnti}
+
+        tracker = events.UeTracker()
+        assigned = [
+            tracker.assign(e)
+            for e in [
+                ev(0, "prach", "SCHED", rnti="0x4601"),
+                ev(1, "ue_create", "DU-MNG", ue=0, rnti="0x4601"),
+                ev(2, "rrc_setup_complete", "RRC", ue=5, rnti="0x4601"),
+                ev(3, "ho_trigger", "CU-CP", ue=5),
+                ev(4, "rlf", "MAC", ue=0),
+                ev(5, "ue_delete", "DU-MNG", ue=0),
+                ev(6, "warning", "SCHED"),
+                ev(7, "prach", "SCHED", rnti="0x4601"),
+                ev(8, "ue_create", "DU-MNG", ue=1),
+                ev(9, "conres", "MAC", ue=1, rnti="0x4602"),
+            ]
+        ]
+        self.assertEqual(assigned, [0, 0, 0, 0, 0, 0, None, 1, 2, 2])
+        first, retry, created = tracker.lanes
+        self.assertEqual((first.du_ue, first.rnti, first.created, first.deleted), (0, "0x4601", True, True))
+        self.assertEqual((first.t_end - first.t_start).seconds, 5)
+        self.assertEqual((retry.du_ue, retry.created, retry.t_end), (None, False, None))
+        self.assertEqual((created.du_ue, created.rnti), (1, "0x4602"))
 
     def test_categories_cover_patterns(self):
         self.assertTrue({p.category for p in events.EVENT_PATTERNS} <= set(events.CATEGORIES))

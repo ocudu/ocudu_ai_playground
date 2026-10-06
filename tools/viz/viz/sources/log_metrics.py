@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
 
-from parsers.log import events, metrics, preamble
+from parsers.log import config, events, metrics, preamble
 
 from .base import DatasetWriter, EventWriter, ProgressFn
 
@@ -24,6 +24,14 @@ _OFFSET_INTERVAL = 1000
 _PROGRESS_INTERVAL = 8 << 20
 _EVENT_CANDIDATE_RE = re.compile(events.CANDIDATE_PATTERN.encode())
 _ENTRY_START_RE = re.compile(events.ENTRY_START_PATTERN.encode())
+# Log level options of the layers whose info lines hold the UE events, with the events they hold.
+_EVENT_LEVEL_OPTIONS = {
+    "mac": "random access, RLF",
+    "du": "UE creation and deletion",
+    "rrc": "RRC messages, reestablishment",
+    "cu": "handover",
+    "ngap": "handover preparation",
+}
 # Bytes read from the end of the log to find its last timestamp.
 _TAIL_SIZE = 64 << 10
 
@@ -45,6 +53,24 @@ def _last_timestamp(path: Path) -> float | None:
         if m and (t := _epoch(m.group("timestamp"))) is not None:
             return t
     return None
+
+
+def _event_notes(path: Path) -> list[str]:
+    """Notes about the UE events that the log levels of the log exclude, from its configuration echo."""
+    with path.open(encoding="utf-8", errors="replace") as f:
+        cfg = config.from_log(f)
+    if cfg is None:
+        return []
+    info = config.LEVELS.index("info")
+    quiet = [(option, held) for option, held in _EVENT_LEVEL_OPTIONS.items() if config.LEVELS.index(cfg.level(option)) < info]
+    if not quiet:
+        return []
+    by_level: dict[str, list[str]] = {}
+    for option, _ in quiet:
+        by_level.setdefault(cfg.level(option), []).append(option)
+    levels = "; ".join(f"{', '.join(options)} at {level}" for level, options in by_level.items())
+    held = ", ".join(held for _, held in quiet)
+    return [f"Some UE events are not in the log, whose layers log below info ({levels}): {held}."]
 
 
 def _parsers_version() -> str:
@@ -74,6 +100,7 @@ class LogMetricsSource:
 
     def parse(self, path: Path, writer: DatasetWriter, progress: ProgressFn | None = None) -> None:
         parser = metrics.MetricsParser()
+        writer.set_notes(_event_notes(path))
         total = path.stat().st_size
         offset = 0
         next_progress = 0
@@ -111,9 +138,11 @@ class LogMetricsSource:
     def parse_events(self, path: Path, writer: EventWriter) -> None:
         # Header line number, line, preamble match and continuation lines of the entry whose events are pending.
         pending: tuple[int, str, re.Match, list[str]] | None = None
+        tracker = events.UeTracker()
 
         def add_events(line_no: int, line: str, m: re.Match, body: list[str]) -> None:
             for ev in events.parse(line, body, m):
+                ev["lane"] = tracker.assign(ev)
                 ev_t = ev.pop("timestamp").replace(tzinfo=timezone.utc).timestamp()
                 writer.add_event(line_no, ev_t, ev)
 
@@ -136,3 +165,5 @@ class LogMetricsSource:
                         add_events(line_no, line, m, [])
         if pending is not None:
             add_events(*pending)
+        for lane in tracker.lanes:
+            writer.add_lane(lane.id, lane.du_ue, lane.rnti)

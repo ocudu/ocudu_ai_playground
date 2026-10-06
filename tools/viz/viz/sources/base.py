@@ -38,12 +38,18 @@ class DatasetWriter(Protocol):
     def add_record_offset(self, record: int, offset: int) -> None:
         """Registers the byte offset where a raw record starts. Not every record needs one."""
 
+    def set_notes(self, notes: list[str]) -> None:
+        """Sets notes about the source shown with it, e.g. why some data is missing."""
+
 
 class EventWriter(Protocol):
     """Sink for the events extracted from a source."""
 
     def add_event(self, record: int, t: float, event: dict[str, Any]) -> None:
-        """Adds an event with its type, category, layer, level, ue, rnti, cause and text."""
+        """Adds an event with its type, category, layer, level, ue, rnti, cause, text and UE lane."""
+
+    def add_lane(self, lane: int, ue: int | None, rnti: str | None) -> None:
+        """Sets the DU UE index and RNTI of a UE lane."""
 
 
 class SourceType(Protocol):

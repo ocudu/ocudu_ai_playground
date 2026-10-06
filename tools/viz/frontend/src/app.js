@@ -9,6 +9,7 @@ import FileBrowser from "./components/file-browser.js";
 import PlotPanel from "./components/plot-panel.js";
 import RecordView from "./components/record-view.js";
 import TablePanel from "./components/table-panel.js";
+import TracePanel from "./components/trace-panel.js";
 import { applyTheme, loadThemePreference, onSystemThemeChange, saveThemePreference } from "./theme.js";
 import { addRecent, removeRecent } from "./recent.js";
 import { decodeView, encodeView } from "./view-state.js";
@@ -40,7 +41,7 @@ const URL_UPDATE_DELAY_MS = 300;
 let nextPlotId = 1;
 
 /**
- * Creates a widget: a plot, or a table of a whole dataset with kind "table".
+ * Creates a widget: a plot, a table of a whole dataset with kind "table", or the UE trace with kind "trace".
  * @param {{source: number, dataset?: string | null, kind?: string} & Record<string, any>} init
  */
 function newPlot(init) {
@@ -65,7 +66,7 @@ function newTab() {
 }
 
 const App = {
-  components: { FileBrowser, PlotPanel, RecordView, TablePanel },
+  components: { FileBrowser, PlotPanel, RecordView, TablePanel, TracePanel },
   data() {
     return {
       sources: [],
@@ -116,6 +117,10 @@ const App = {
     eventCategoryChips() {
       const counts = this.activeSource?.event_counts ?? {};
       return EVENT_CATEGORIES.filter(([c]) => counts[c]).map(([c, label]) => ({ category: c, label, count: counts[c] }));
+    },
+    /** Notes about the active source, e.g. why some events are missing. */
+    activeNotes() {
+      return this.activeSource?.notes ?? [];
     },
     /** State of the events of the active source while they are not ready: "parsing" or "error". */
     eventsState() {
@@ -288,12 +293,12 @@ const App = {
       }
     },
 
-    /** @param {"plot" | "table"} kind */
+    /** @param {"plot" | "table" | "trace"} kind */
     async addPlot(kind) {
       const tab = this.activeTab;
       if (!tab) return;
-      const last = tab.plots[tab.plots.length - 1];
-      tab.plots.push(newPlot({ source: this.activeId, dataset: last?.dataset, kind }));
+      const last = tab.plots.findLast((p) => p.dataset);
+      tab.plots.push(newPlot({ source: this.activeId, dataset: kind === "trace" ? null : last?.dataset, kind }));
       await this.$nextTick();
       [...document.querySelectorAll("main > .panel")].at(-1)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     },
@@ -404,7 +409,7 @@ const App = {
       </div>
       <template v-else-if="activeTab">
         <p class="hint muted">Drag to zoom, wheel to zoom, Shift+drag to pan, double-click to reset, click a point or an event marker to see its log line.</p>
-        <div v-if="eventCategoryChips.length || eventsState" class="event-bar">
+        <div v-if="eventCategoryChips.length || eventsState || activeNotes.length" class="event-bar">
           <span class="muted">events</span>
           <span v-if="eventsState === 'parsing'" class="muted">parsing…</span>
           <span v-else-if="eventsState === 'error'" class="error">could not be parsed</span>
@@ -414,9 +419,12 @@ const App = {
             <span class="event-dot"></span>{{ c.label }} <span class="muted">{{ c.count }}</span>
           </button>
           <span v-if="eventsTruncated" class="muted">only the first {{ events.length }} events of the window are shown, zoom in for all</span>
+          <span v-for="n in activeNotes" :key="n" class="muted event-note">{{ n }}</span>
         </div>
         <template v-for="p in activeTab.plots" :key="p.id">
-          <table-panel v-if="p.kind === 'table'" :panel="p" :sources="sources" :view="view" :shifts="shifts" :show-source="false"
+          <trace-panel v-if="p.kind === 'trace'" :panel="p" :sources="sources" :view="view" :shifts="shifts" :time-mode="timeMode"
+                       :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" />
+          <table-panel v-else-if="p.kind === 'table'" :panel="p" :sources="sources" :view="view" :shifts="shifts" :show-source="false"
                        @remove="removePlot(p.id)" @select-record="selection = $event" />
           <plot-panel v-else :plot="p" :sources="sources" :view="view" :shifts="shifts" :time-mode="timeMode"
                       :theme-version="themeVersion" :show-source="false" :events="events"
@@ -425,6 +433,7 @@ const App = {
         <div class="add-buttons">
           <button class="add-plot" title="Plot of a metric over time, or its histogram" @click="addPlot('plot')">+ plot</button>
           <button class="add-plot" title="Table of all the metrics of a layer" @click="addPlot('table')">+ table</button>
+          <button class="add-plot" title="Timeline of each UE, with its events" @click="addPlot('trace')">+ trace</button>
         </div>
       </template>
     </main>

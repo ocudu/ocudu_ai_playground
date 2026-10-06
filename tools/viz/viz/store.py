@@ -21,15 +21,17 @@ from .filters import FilterError, compile_filter
 from .sources.base import ProgressFn, SourceType
 
 # Bumped when the database layout changes, part of the cache key.
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 # Time series windows up to this many points are returned at full resolution.
 MAX_FULL_RES_POINTS = 50_000
 # Split values returned when none are selected.
 MAX_DEFAULT_SPLITS = 20
 # Columns of the events table, after the timestamp and record id.
-EVENT_COLUMNS = ("type", "category", "layer", "level", "ue", "rnti", "cause", "text")
+EVENT_COLUMNS = ("type", "category", "layer", "level", "ue", "rnti", "cause", "text", "lane")
 # Events returned by default for a time window.
 DEFAULT_MAX_EVENTS = 5000
+# UE lanes returned by default for a trace window.
+DEFAULT_MAX_LANES = 300
 # Rows returned by default for a table.
 DEFAULT_TABLE_ROWS = 1000
 # Bins of a histogram, unless the field has few integer values.
@@ -87,6 +89,7 @@ class StoreWriter:
         self._datasets: dict[str, _DatasetBuffer] = {}
         self._info: dict[str, tuple[dict[str, str], list[str], str | None, str | None]] = {}
         self._time_range: tuple[float, float] | None = None
+        self._notes: list[str] = []
         self._conn.executescript(
             """
             CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
@@ -135,6 +138,9 @@ class StoreWriter:
     def set_time_range(self, t_min: float, t_max: float) -> None:
         self._time_range = (t_min, t_max)
 
+    def set_notes(self, notes: list[str]) -> None:
+        self._notes = list(notes)
+
     def add_record_offset(self, record: int, offset: int) -> None:
         self._conn.execute("INSERT OR REPLACE INTO record_offsets VALUES (?, ?)", (record, offset))
 
@@ -172,6 +178,7 @@ class StoreWriter:
             "source_type": source_type,
             "t_min": t_min,
             "t_max": t_max,
+            "notes": self._notes,
             "complete": True,
         }
         self._conn.executemany("INSERT INTO meta VALUES (?, ?)", [(k, json.dumps(v)) for k, v in meta.items()])
@@ -192,11 +199,12 @@ class EventStoreWriter:
     def __init__(self, conn: sqlite3.Connection):
         self._conn = conn
         self._events: list[tuple] = []
-        cols = ", ".join(f"{c} {'INTEGER' if c == 'ue' else 'TEXT'}" for c in EVENT_COLUMNS)
+        cols = ", ".join(f"{c} {'INTEGER' if c in ('ue', 'lane') else 'TEXT'}" for c in EVENT_COLUMNS)
         self._conn.executescript(
             f"""
             CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
             CREATE TABLE events ({_TS} REAL, {_REC} INTEGER, {cols});
+            CREATE TABLE lane_info (lane INTEGER PRIMARY KEY, ue INTEGER, rnti TEXT);
             """
         )
 
@@ -205,10 +213,27 @@ class EventStoreWriter:
         if len(self._events) >= _BATCH_SIZE:
             self._flush()
 
+    def add_lane(self, lane: int, ue: int | None, rnti: str | None) -> None:
+        self._conn.execute("INSERT OR REPLACE INTO lane_info VALUES (?, ?, ?)", (lane, ue, rnti))
+
     def finish(self) -> None:
-        """Flushes pending events and writes the index."""
+        """Flushes pending events, writes the UE lanes and the indexes."""
         self._flush()
         self._conn.execute(f"CREATE INDEX idx_events ON events ({_TS})")
+        # A lane spans the events of one UE context; created but never deleted ones last until the end of the log.
+        self._conn.execute(
+            f"""
+            CREATE TABLE lanes AS SELECT
+                e.lane,
+                MIN(e.{_TS}) AS t_start,
+                MAX(e.{_TS}) AS t_end,
+                i.ue,
+                i.rnti,
+                MAX(e.type = 'ue_create') AND NOT MAX(e.type = 'ue_delete') AS open
+            FROM events e LEFT JOIN lane_info i ON i.lane = e.lane WHERE e.lane IS NOT NULL GROUP BY e.lane
+            """
+        )
+        self._conn.execute("CREATE INDEX idx_lanes ON lanes (t_start)")
         self._conn.execute("INSERT INTO meta VALUES ('complete', 'true')")
         self._conn.commit()
 
@@ -511,6 +536,52 @@ class Store:
             ).fetchall()
         events = [dict(zip(("t", "record", *EVENT_COLUMNS), r)) for r in rows]
         return {"total": total, "truncated": total > len(events), "events": events}
+
+    def trace(
+        self,
+        t0: float | None = None,
+        t1: float | None = None,
+        max_lanes: int = DEFAULT_MAX_LANES,
+        limit: int = DEFAULT_MAX_EVENTS,
+    ) -> dict[str, Any]:
+        """Returns the UE lanes active in a time window, in start order, and the events of the window in those lanes
+        or in no lane.
+
+        Open lanes have no deletion and last until the end of the log. At most max_lanes lanes and limit events are
+        returned; total_lanes and total_events count all of them.
+        """
+        empty = {"lanes": [], "total_lanes": 0, "events": [], "total_events": 0, "truncated": False}
+        if self._events_uri is None:
+            return empty
+        lo = -float("inf") if t0 is None else t0
+        hi = float("inf") if t1 is None else t1
+        with closing(sqlite3.connect(self._events_uri, uri=True, check_same_thread=False)) as conn:
+            where = "t_start <= ? AND (t_end >= ? OR open)"
+            total_lanes = conn.execute(f"SELECT COUNT(*) FROM lanes WHERE {where}", (hi, lo)).fetchone()[0]
+            lanes = [
+                {"lane": r[0], "t_start": r[1], "t_end": r[2], "ue": r[3], "rnti": r[4], "open": bool(r[5])}
+                for r in conn.execute(
+                    f"SELECT lane, t_start, t_end, ue, rnti, open FROM lanes WHERE {where} ORDER BY t_start, lane LIMIT ?",
+                    (hi, lo, max_lanes),
+                )
+            ]
+            ids = [lane["lane"] for lane in lanes]
+            in_lanes = f"(lane IS NULL OR lane IN ({', '.join('?' * len(ids))}))"
+            params = [lo, hi, *ids]
+            event_where = f"{_TS} >= ? AND {_TS} <= ? AND {in_lanes}"
+            total_events = conn.execute(f"SELECT COUNT(*) FROM events WHERE {event_where}", params).fetchone()[0]
+            rows = conn.execute(
+                f"SELECT {_TS}, {_REC}, {', '.join(EVENT_COLUMNS)} FROM events WHERE {event_where} ORDER BY {_TS}, {_REC} LIMIT ?",
+                params + [limit],
+            ).fetchall()
+        events = [dict(zip(("t", "record", *EVENT_COLUMNS), r)) for r in rows]
+        return {
+            "lanes": lanes,
+            "total_lanes": total_lanes,
+            "events": events,
+            "total_events": total_events,
+            "truncated": total_events > len(events),
+        }
 
     def context_values(self, dataset: str, field: str, limit: int = 1000) -> list[Any]:
         """Returns the distinct values of a field."""

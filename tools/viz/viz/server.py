@@ -84,6 +84,7 @@ def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
         "t_max": None,
         "datasets": [],
         "events_status": entry.events_status,
+        "notes": [],
         "event_counts": {},
     }
     s = entry.store
@@ -91,6 +92,7 @@ def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
         return info
     info["t_min"], info["t_max"] = s.meta.get("t_min"), s.meta.get("t_max")
     info["event_counts"] = s.event_counts
+    info["notes"] = s.meta.get("notes") or []
     info["datasets"] = [
         {
             "name": ds["name"],
@@ -295,6 +297,16 @@ def create_app(sources: SourceRegistry | list[Store], static_dir: Path = STATIC_
         limit: int = Query(5000, ge=1, le=50_000),
     ) -> dict[str, Any]:
         return get_store(source).events(t0, t1, categories, ue, limit)
+
+    @app.get("/api/trace")
+    def trace(
+        source: int,
+        t0: float | None = None,
+        t1: float | None = None,
+        max_lanes: int = Query(300, ge=1, le=5000),
+        limit: int = Query(5000, ge=1, le=50_000),
+    ) -> dict[str, Any]:
+        return get_store(source).trace(t0, t1, max_lanes, limit)
 
     @app.get("/api/context")
     def context(source: int, dataset: str, field: str) -> list[Any]:

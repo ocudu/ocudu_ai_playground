@@ -14,16 +14,26 @@ def _ts(seconds: float) -> str:
     return (START + timedelta(seconds=seconds)).isoformat(timespec="microseconds")
 
 
-def write_log(path: Path, nof_seconds: int = 10, nof_ues: int = 2, executors: bool = False, events: bool = False) -> Path:
+def write_log(
+    path: Path,
+    nof_seconds: int = 10,
+    nof_ues: int = 2,
+    executors: bool = False,
+    events: bool = False,
+    log_level: str | None = None,
+) -> Path:
     """Writes a log with one MAC and one Scheduler UE line per UE per second, among other lines.
 
     Metrics start at START. The log starts 2 s before the first and ends 2 s after the last metrics lines.
 
     With executors, it also writes one line per second for executors "cell_exec" and "du_ctrl_exec". With events,
     it writes a debug scheduler entry with the PRACHs of both UEs in continuation lines at 0.4 s, UE creation lines at
-    0.5 s, an RLF of UE 1 at 3.5 s and a warning at 6.5 s.
+    0.5 s, an RLF of UE 1 at 3.5 s and a warning at 6.5 s. With log_level, it starts with a configuration echo that sets
+    all_level.
     """
     lines = [f"{_ts(-2)} [GNB     ] [I] Built in Release mode\n"]
+    if log_level:
+        lines.append(f"{_ts(-2)} [CONFIG  ] [D] gNB input configuration (all values): \nlog:\n  all_level: {log_level}\n")
     for s in range(nof_seconds):
         ts = _ts(s)
         lines.append(f"{ts} [SCHED   ] [I] [  {s}.0] Slot decisions\n")

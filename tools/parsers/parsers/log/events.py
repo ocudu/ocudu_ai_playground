@@ -66,13 +66,16 @@ EVENT_PATTERNS = (
     _p("rlf", "failure", "DU-MNG", r'ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+): RLF detected with cause "(?P<cause>[^"]+)"'),
     _p("rrc_reest_failed", "failure", "RRC", r'ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): "RRC Reestablishment Procedure".* failed\. Cause: (?P<cause>.*)'),
     _p("rrc_reest_rejected", "failure", "RRC", r"ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): Rejecting RRC Reestablishment.*Cause: (?P<cause>.*?)\.(?: |$)"),
+    _p("conres_timeout", "failure", "SCHED", r"ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+): ra-ContentionResolutionTimer.* expired"),
+    _p("rrc_setup_timeout", "failure", "RRC", r'ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): "RRC Setup Procedure" timed out'),
 )
 
 # Substrings of the entry headers that can hold events, to skip the other lines without parsing them. Usable as a
 # bytes pattern too, to skip lines before decoding them.
 CANDIDATE_PATTERN = (
     r'Processed slot events|subPDUs: \[CCCH|CON_RES|proc="UE (?:Create|Delete)"|rrcSetupComplete|rrcRelease'
-    r"|rrcReestablishmentRequest|Trigger intra-CU|Starting HO preparation|RLF detected|Reestablishment|\] \[[WE]\] "
+    r"|rrcReestablishmentRequest|Trigger intra-CU|Starting HO preparation|RLF detected|Reestablishment"
+    r'|ra-ContentionResolutionTimer|"RRC Setup Procedure" timed out|\] \[[WE]\] '
 )
 # Start of the lines that begin a log entry. Other lines continue the previous entry. Usable as a bytes pattern too.
 ENTRY_START_PATTERN = r"\d{4}-\d\d-\d\dT"
@@ -80,6 +83,9 @@ ENTRY_START_PATTERN = r"\d{4}-\d\d-\d\dT"
 _CANDIDATE_RE = re.compile(CANDIDATE_PATTERN)
 _ENTRY_START_RE = re.compile(ENTRY_START_PATTERN)
 _LEVEL_EVENTS = {"W": "warning", "E": "error"}
+# UE identifiers of the warning and error lines that no pattern recognizes.
+_GENERIC_UE_RE = re.compile(r"\bue=(?P<ue>\d+)\b")
+_GENERIC_RNTI_RE = re.compile(r"\b(?:c-|tc-)?rnti=(?P<rnti>0x[0-9a-fA-F]+)\b")
 _BODY_KEYS = {(p.layer, p.level) for p in EVENT_PATTERNS if p.in_body}
 
 
@@ -130,7 +136,9 @@ def parse(line: str, body: Sequence[str] = (), preamble_match: re.Match | None =
                 found.append((ev.type, ev.category, {**m.groupdict(), **im.groupdict()}, im.group(0)))
         break
     if not found and (level_type := _LEVEL_EVENTS.get(level or "")):
-        found.append((level_type, level_type, {}, text))
+        ue_m, rnti_m = _GENERIC_UE_RE.search(text), _GENERIC_RNTI_RE.search(text)
+        groups = {"ue": ue_m and ue_m.group("ue"), "rnti": rnti_m and rnti_m.group("rnti")}
+        found.append((level_type, level_type, groups, text))
 
     timestamp = datetime.fromisoformat(preamble_match.group("timestamp"))
     return [
@@ -170,3 +178,85 @@ def iter_events(lines: Iterable[str]) -> Iterator[tuple[int, dict[str, Any]]]:
     if pending is not None:
         for ev in parse(pending[1], pending[3], pending[2]):
             yield pending[0], ev
+
+
+# Loggers of the DU, whose "ue" is the DU UE index. The others log the CU-CP UE index.
+_DU_LOGGERS = frozenset({"MAC", "SCHED", "DU-MNG", "DU-F1", "PHY"})
+
+
+@dataclass
+class UeLane:
+    """One UE context of the DU, from its random access or creation to its deletion."""
+
+    id: int
+    du_ue: int | None
+    rnti: str | None
+    t_start: datetime
+    t_end: datetime | None = None
+    created: bool = False
+    deleted: bool = False
+
+
+class UeTracker:
+    """Assigns events to the UE contexts they belong to, given the events in log order.
+
+    A UE context is identified by its RNTI, from the random access to the UE deletion, and by its DU UE index once
+    created. Events of the CU-CP are matched through the RNTI of the RRC messages of the same CU-CP UE index.
+    """
+
+    def __init__(self):
+        self.lanes: list[UeLane] = []
+        self._by_rnti: dict[str, UeLane] = {}
+        self._by_du_ue: dict[int, UeLane] = {}
+        self._cu_ue_rnti: dict[int, str] = {}
+
+    def assign(self, event: dict[str, Any]) -> int | None:
+        """Returns the id of the UE context of an event, or None for events of no UE."""
+        lane = self._lane(event)
+        if lane is not None and event["timestamp"] > (lane.t_end or lane.t_start):
+            lane.t_end = event["timestamp"]
+        return lane.id if lane is not None else None
+
+    def _lane(self, event: dict[str, Any]) -> UeLane | None:
+        t, ue, rnti = event["timestamp"], event["ue"], event["rnti"]
+        du = event["layer"] in _DU_LOGGERS
+        if event["type"] == "ue_create":
+            lane = self._by_rnti.get(rnti) if rnti else None
+            if lane is None or lane.du_ue is not None:
+                lane = self._new_lane(t, rnti)
+            lane.du_ue, lane.created = ue, True
+            self._by_du_ue[ue] = lane
+            return lane
+        if event["type"] == "ue_delete":
+            lane = self._by_du_ue.pop(ue, None)
+            if lane is not None:
+                lane.deleted = True
+                if lane.rnti and self._by_rnti.get(lane.rnti) is lane:
+                    del self._by_rnti[lane.rnti]
+            return lane
+        if rnti:
+            if not du and ue is not None:
+                self._cu_ue_rnti[ue] = rnti
+            lane = self._by_du_ue.get(ue) if du and ue is not None else None
+            if lane is None:
+                lane = self._by_rnti.get(rnti) or self._new_lane(t, rnti)
+            if lane.rnti is None:
+                lane.rnti = rnti
+                self._by_rnti[rnti] = lane
+            if du and ue is not None and lane.du_ue is None:
+                lane.du_ue = ue
+                self._by_du_ue[ue] = lane
+            return lane
+        if ue is None:
+            return None
+        if du:
+            return self._by_du_ue.get(ue)
+        cu_rnti = self._cu_ue_rnti.get(ue)
+        return self._by_rnti.get(cu_rnti) if cu_rnti else None
+
+    def _new_lane(self, t: datetime, rnti: str | None) -> UeLane:
+        lane = UeLane(len(self.lanes), None, rnti, t)
+        self.lanes.append(lane)
+        if rnti:
+            self._by_rnti[rnti] = lane
+        return lane

@@ -46,6 +46,10 @@ In the page:
 - The `events` chips above the plots show event markers on the time plots, per category (random access, UE
   lifecycle, RRC, mobility, failures, warnings and errors), with their count in the file. All start hidden.
   Hover a marker to see its event, click it to see its log line.
+- `+ trace` adds a timeline of the UEs: a bar per UE from its random access or creation to its deletion, with a glyph
+  per event (random access, lifecycle, RRC, mobility, failures), and a last row with the events of no UE such as
+  warnings and errors. Each UE has its own row, labelled with its UE index and RNTI;
+  scroll the trace for more UEs. Hover a bar or glyph for details, click a glyph to see its log line.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,
   double-click it to reset the height.
 - The top-right corner of a plot shows the time and value under the mouse. The legend below shows the
@@ -63,7 +67,7 @@ In the page:
   Strings can be quoted or bare (`type == ue_create`). A bare word naming a field compares two fields.
 - Switch a plot from `time series` to `histogram` to see the value distribution of the visible window,
   one curve per split value. Integer fields with few values (e.g. MCS) get one bin per value.
-- `+ plot` and `+ table` below the panels of a tab add a plot or a table. A table shows all the metrics of
+- `+ plot`, `+ table` and `+ trace` below the panels of a tab add a plot, a table or a UE trace. A table shows all the metrics of
   a layer for the visible window at full resolution, one row per metrics line. Type words in its column box
   to show only the metric columns whose name contains any of them (e.g. `latency brate`), and use the row
   filter like in plots. Click a row to see its log line. `export CSV` downloads all rows of the visible
