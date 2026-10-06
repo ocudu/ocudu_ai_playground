@@ -239,6 +239,19 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   configuration echo at the top of the log (`parsers.log.config`), and `/api/sources` reports a note naming the quiet
   layers and the events they hide, shown in the event bar and the trace.
 
+### D15. Parallel parsing
+
+- Most of the parse time of a metrics-heavy log goes to parsing the METRICS lines in Python (about 70 us per line),
+  not to finding them, so the metrics of logs from 16 MB are parsed in chunks by a pool of worker processes.
+- The pool is shared by all sources for as long as the server runs, with up to 8 workers within the CPUs the process
+  may use. Workers start from a fork server, since forking the multithreaded server could deadlock. A pool whose
+  worker dies is replaced, and its chunks are parsed in the server process.
+- Chunks are byte ranges, about 4 per worker and at least 4 MB, whose starts are moved to the next line that begins a
+  log entry, so that multi-line entries stay whole. Workers read their range from the file and return rows grouped by
+  layer and line number within the chunk, with their units.
+- The server process takes the results in file order, renumbers the lines and merges the units as a single pass
+  would, and writes them to SQLite while later chunks are still parsed. The cache is the same as with a single pass.
+
 ## Open questions
 
 None yet.

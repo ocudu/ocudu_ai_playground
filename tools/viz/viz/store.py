@@ -318,7 +318,7 @@ class Store:
             downsampled = count > max_points and hi is not None and hi > lo
             if not downsampled:
                 rows = conn.execute(
-                    f"SELECT {split_col}, {_TS}, {value}, {_REC} FROM {table} WHERE {where_sql} ORDER BY {_TS}", params
+                    f"SELECT {split_col}, {_TS}, {value}, {_REC} FROM {table} WHERE {where_sql} ORDER BY {_TS}, {_REC}", params
                 ).fetchall()
             else:
                 start = t0 if t0 is not None else lo
