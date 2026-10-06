@@ -232,8 +232,7 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - The `+ trace` widget shows the events per UE on the time axis of the tab: one bar per UE context, from its random
   access or creation to its deletion, with a glyph per event, and a last row with the events of no UE. Each UE has its own
   row, labelled with its DU UE index and RNTI, in start order. The trace shows 25 UE rows at a time and scrolls over the
-  others with its own scrollbar, keeping the time axis and the row of events of no UE in view; the mouse wheel still
-  zooms. Events are assigned to UE contexts by `parsers.log.events.UeTracker` while they are parsed: by
+  others with its own scrollbar, keeping the time axis and the row of events of no UE in view. Events are assigned to UE contexts by `parsers.log.events.UeTracker` while they are parsed: by
   RNTI, by DU UE index, and for CU-CP events by the RNTI of the RRC messages of their CU-CP UE index.
   `GET /api/trace?source&t0&t1&max_lanes&limit` returns the UE contexts active in a window and its events.
 - Most UE events are info lines, so logs whose layers log below info lack them. The log levels come from the

@@ -40,7 +40,7 @@ In the page:
   combines with split by to compare them.
 - Pick source, dataset (METRICS layer), field and optionally a context field to split by, giving one
   series per value (e.g. one per `ue`). Without a selection of values, the first 20 are shown.
-- Drag or use the wheel to zoom, Shift+drag to pan, double-click to reset. The plots of a tab share the time
+- Drag to zoom, Shift+drag to pan, double-click to reset. The mouse wheel scrolls the page. The plots of a tab share the time
   axis.
   `reset zoom` shows the whole time range of the logs, `fit metrics` the time range of the plotted metrics.
 - The `events` chips above the plots show event markers on the time plots, per category (random access, UE

@@ -46,8 +46,8 @@ export function formatTime(t, timeMode) {
 }
 
 /**
- * Makes a time chart zoom with the wheel and Shift+drag pan, reporting the new range with onZoom (null to reset on
- * double-click), and calls onClick for clicks that do not end a drag.
+ * Makes a time chart pan with Shift+drag, reporting the new range with onZoom (null to reset on double-click), and
+ * calls onClick for clicks that do not end a drag. The mouse wheel is left to scroll the page.
  * @param {any} chart
  * @param {(range: {min: number, max: number} | null) => void} onZoom
  * @param {() => void} onClick
@@ -55,14 +55,6 @@ export function formatTime(t, timeMode) {
 export function attachZoomPan(chart, onZoom, onClick) {
   const over = chart.over;
   const xRange = () => ({ min: chart.scales.x.min, max: chart.scales.x.max });
-
-  over.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const { min, max } = xRange();
-    const at = chart.posToVal(e.offsetX, "x");
-    const factor = e.deltaY < 0 ? 0.8 : 1.25;
-    onZoom({ min: at - (at - min) * factor, max: at + (max - at) * factor });
-  }, { passive: false });
 
   // Shift+drag pans. Registered as capture to run before the uPlot drag-to-zoom handler.
   over.addEventListener("mousedown", (e) => {

@@ -12,7 +12,7 @@ const EVENT_HIT_PX = 5;
 const NOF_SERIES_COLORS = 10;
 const CHART_HEIGHT = 260;
 const steppedPath = uPlot.paths.stepped({ align: 1 });
-// Delay before fetching after the view changes, to coalesce wheel and pan events.
+// Delay before fetching after the view changes, to coalesce pan events.
 const FETCH_DELAY_MS = 120;
 // Split values listed in the split value picker.
 const MAX_LISTED_SPLITS = 300;

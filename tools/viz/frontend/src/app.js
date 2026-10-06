@@ -408,7 +408,7 @@ const App = {
         <p class="error">{{ activeSource.error }}</p>
       </div>
       <template v-else-if="activeTab">
-        <p class="hint muted">Drag to zoom, wheel to zoom, Shift+drag to pan, double-click to reset, click a point or an event marker to see its log line.</p>
+        <p class="hint muted">Drag to zoom, Shift+drag to pan, double-click to reset, click a point or an event marker to see its log line.</p>
         <div v-if="eventCategoryChips.length || eventsState || activeNotes.length" class="event-bar">
           <span class="muted">events</span>
           <span v-if="eventsState === 'parsing'" class="muted">parsing…</span>
