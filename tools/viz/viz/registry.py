@@ -20,7 +20,10 @@ class OpenError(ValueError):
 
 @dataclass
 class SourceEntry:
-    """One source and its state: "parsing", "ready", "error" or "closed"."""
+    """One source and its state: "parsing", "ready", "error" or "closed".
+
+    Events are parsed once the source is ready, with their own state: "pending", "parsing", "ready" or "error".
+    """
 
     id: int
     path: Path
@@ -28,6 +31,7 @@ class SourceEntry:
     progress: float = 0.0
     error: str | None = None
     store: Store | None = None
+    events_status: str = "pending"
 
 
 class SourceRegistry:
@@ -42,12 +46,18 @@ class SourceRegistry:
         # Guards _entries, which background parsing threads update.
         self._lock = threading.Lock()
 
-    def add_store(self, store: Store) -> SourceEntry:
-        """Adds a source parsed before the server started."""
+    def add_store(self, store: Store, source_type: SourceType | None = None) -> SourceEntry:
+        """Adds a source parsed before the server started. With its source type, its events are parsed in the
+        background, unless the store serves them already.
+        """
         with self._lock:
             entry = SourceEntry(len(self._entries), store.path, "ready", 1.0, store=store)
+            if store.events_ready:
+                entry.events_status = "ready"
             self._entries.append(entry)
-            return entry
+        if not store.events_ready and source_type is not None and self.cache is not None:
+            threading.Thread(target=self._parse_events, args=(entry, source_type, store), daemon=True, name=f"events-{entry.id}").start()
+        return entry
 
     def open(self, path: str | Path) -> SourceEntry:
         """Opens a file within the roots, parsing it in the background. A file already open is not reopened."""
@@ -102,5 +112,17 @@ class SourceRegistry:
             return
         with self._lock:
             # A source closed while it was parsing stays closed.
-            if entry.status == "parsing":
-                entry.store, entry.status, entry.progress = store, "ready", 1.0
+            if entry.status != "parsing":
+                return
+            entry.store, entry.status, entry.progress = store, "ready", 1.0
+        self._parse_events(entry, source_type, store)
+
+    def _parse_events(self, entry: SourceEntry, source_type: SourceType, store: Store) -> None:
+        entry.events_status = "parsing"
+        try:
+            self.cache.open_events(store, source_type)
+        except Exception:
+            # Failing events leave the datasets of the source usable.
+            entry.events_status = "error"
+            return
+        entry.events_status = "ready"

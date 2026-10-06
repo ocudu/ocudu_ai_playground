@@ -29,6 +29,11 @@ const MAX_EVENTS = 5000;
 const EVENTS_FETCH_DELAY_MS = 150;
 // Interval between refreshes of the sources while some are being parsed.
 const SOURCES_POLL_MS = 500;
+
+/** Returns whether a source or its events are still being parsed. */
+function isParsing(s) {
+  return s.status === "parsing" || (s.status === "ready" && ["pending", "parsing"].includes(s.events_status));
+}
 // Delay before writing the view to the URL, to coalesce zoom and pan events.
 const URL_UPDATE_DELAY_MS = 300;
 
@@ -104,12 +109,19 @@ const App = {
     },
     /** Inputs of the events request of the active tab. */
     eventsQuery() {
-      return [this.activeId, this.activeSource?.status, this.view, this.activeTab?.eventCategories, this.timeMode];
+      const s = this.activeSource;
+      return [this.activeId, s?.status, s?.events_status, this.view, this.activeTab?.eventCategories, this.timeMode];
     },
     /** Event categories of the active source that have events, with their labels and counts. */
     eventCategoryChips() {
       const counts = this.activeSource?.event_counts ?? {};
       return EVENT_CATEGORIES.filter(([c]) => counts[c]).map(([c, label]) => ({ category: c, label, count: counts[c] }));
+    },
+    /** State of the events of the active source while they are not ready: "parsing" or "error". */
+    eventsState() {
+      const s = this.activeSource;
+      if (s?.status !== "ready" || s.events_status === "ready") return null;
+      return s.events_status === "error" ? "error" : "parsing";
     },
     view() {
       return this.activeTab?.userRange ?? this.fullRange;
@@ -180,7 +192,7 @@ const App = {
     }
     await this.restoreView();
     this.syncTabs();
-    if (this.openSources.some((s) => s.status === "parsing")) this.pollSources();
+    if (this.openSources.some(isParsing)) this.pollSources();
 
     this.$watch(
       () => [this.tabs, this.activeId, this.timeMode],
@@ -325,7 +337,7 @@ const App = {
       await this.pollSources();
     },
 
-    /** Refreshes the sources, and again shortly after while some are being parsed. */
+    /** Refreshes the sources, and again shortly after while some sources or their events are being parsed. */
     async pollSources() {
       clearTimeout(this.pollTimer);
       try {
@@ -341,7 +353,7 @@ const App = {
         }
       }
       this.syncTabs();
-      if (this.openSources.some((s) => s.status === "parsing")) {
+      if (this.openSources.some(isParsing)) {
         this.pollTimer = setTimeout(() => this.pollSources(), SOURCES_POLL_MS);
       }
     },
@@ -392,8 +404,10 @@ const App = {
       </div>
       <template v-else-if="activeTab">
         <p class="hint muted">Drag to zoom, wheel to zoom, Shift+drag to pan, double-click to reset, click a point or an event marker to see its log line.</p>
-        <div v-if="eventCategoryChips.length" class="event-bar">
+        <div v-if="eventCategoryChips.length || eventsState" class="event-bar">
           <span class="muted">events</span>
+          <span v-if="eventsState === 'parsing'" class="muted">parsing…</span>
+          <span v-else-if="eventsState === 'error'" class="error">could not be parsed</span>
           <button v-for="c in eventCategoryChips" :key="c.category"
                   :class="['event-chip', 'ev-' + c.category, { off: !(activeTab.eventCategories || []).includes(c.category) }]"
                   :title="'Show or hide the ' + c.label + ' events'" @click="toggleEventCategory(c.category)">

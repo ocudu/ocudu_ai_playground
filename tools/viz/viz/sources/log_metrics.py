@@ -12,7 +12,7 @@ from pathlib import Path
 
 from parsers.log import events, metrics, preamble
 
-from .base import DatasetWriter, ProgressFn
+from .base import DatasetWriter, EventWriter, ProgressFn
 
 # Fields that identify the entity a metric belongs to, besides the ones in the line context.
 _IDENTITY_FIELDS = ("du", "ue", "rb", "drb")
@@ -78,14 +78,6 @@ class LogMetricsSource:
         offset = 0
         next_progress = 0
         first_t = None
-        # Header line number, line, preamble match and continuation lines of the entry whose events are pending.
-        pending: tuple[int, str, re.Match, list[str]] | None = None
-
-        def add_events(line_no: int, line: str, m: re.Match, body: list[str]) -> None:
-            for ev in events.parse(line, body, m):
-                ev_t = ev.pop("timestamp").replace(tzinfo=timezone.utc).timestamp()
-                writer.add_event(line_no, ev_t, ev)
-
         with path.open("rb") as f:
             for line_no, raw in enumerate(f, start=1):
                 if line_no % _OFFSET_INTERVAL == 1:
@@ -97,21 +89,8 @@ class LogMetricsSource:
                 if first_t is None and (m := preamble.match_preamble(raw.decode("utf-8", "replace"))):
                     first_t = _epoch(m.group("timestamp"))
 
-                if pending is not None:
-                    if not _ENTRY_START_RE.match(raw):
-                        pending[3].append(raw.decode("utf-8", "replace"))
-                        continue
-                    add_events(*pending)
-                    pending = None
-                # Cheap checks before decoding, most lines are neither metrics nor events.
+                # Cheap check before decoding, most lines are not metrics.
                 if b"[METRICS" not in raw:
-                    if _EVENT_CANDIDATE_RE.search(raw):
-                        line = raw.decode("utf-8", "replace")
-                        if m := preamble.match_preamble(line):
-                            if events.has_body(m):
-                                pending = (line_no, line, m, [])
-                            else:
-                                add_events(line_no, line, m, [])
                     continue
                 rec = parser.parse(raw.decode("utf-8", "replace"))
                 if rec is None:
@@ -120,8 +99,6 @@ class LogMetricsSource:
                 t = rec.pop("timestamp").replace(tzinfo=timezone.utc).timestamp()
                 writer.add_row(layer, line_no, t, rec)
 
-        if pending is not None:
-            add_events(*pending)
         if progress:
             progress(total, total)
         last_t = _last_timestamp(path)
@@ -130,3 +107,32 @@ class LogMetricsSource:
         for layer, units in parser.units.items():
             context = list(dict.fromkeys([*metrics.LAYER_PATTERNS[layer].groupindex, *_IDENTITY_FIELDS]))
             writer.set_dataset_info(layer, units, context, **_DATASET_INFO.get(layer, {}))
+
+    def parse_events(self, path: Path, writer: EventWriter) -> None:
+        # Header line number, line, preamble match and continuation lines of the entry whose events are pending.
+        pending: tuple[int, str, re.Match, list[str]] | None = None
+
+        def add_events(line_no: int, line: str, m: re.Match, body: list[str]) -> None:
+            for ev in events.parse(line, body, m):
+                ev_t = ev.pop("timestamp").replace(tzinfo=timezone.utc).timestamp()
+                writer.add_event(line_no, ev_t, ev)
+
+        with path.open("rb") as f:
+            for line_no, raw in enumerate(f, start=1):
+                if pending is not None:
+                    if not _ENTRY_START_RE.match(raw):
+                        pending[3].append(raw.decode("utf-8", "replace"))
+                        continue
+                    add_events(*pending)
+                    pending = None
+                # Cheap check before decoding, most lines are not events.
+                if not _EVENT_CANDIDATE_RE.search(raw):
+                    continue
+                line = raw.decode("utf-8", "replace")
+                if m := preamble.match_preamble(line):
+                    if events.has_body(m):
+                        pending = (line_no, line, m, [])
+                    else:
+                        add_events(line_no, line, m, [])
+        if pending is not None:
+            add_events(*pending)

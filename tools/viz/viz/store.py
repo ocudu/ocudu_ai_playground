@@ -12,7 +12,7 @@ import os
 import sqlite3
 import tempfile
 import urllib.parse
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import closing, contextmanager
 from pathlib import Path
 from typing import Any
@@ -21,7 +21,7 @@ from .filters import FilterError, compile_filter
 from .sources.base import ProgressFn, SourceType
 
 # Bumped when the database layout changes, part of the cache key.
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 # Time series windows up to this many points are returned at full resolution.
 MAX_FULL_RES_POINTS = 50_000
 # Split values returned when none are selected.
@@ -43,6 +43,8 @@ _REC = "_rec"
 # Rows buffered per dataset before an insert.
 _BATCH_SIZE = 5000
 _CACHE_SUFFIX = ".sqlite"
+# Suffix of the cache files of the events, built after the datasets.
+_EVENTS_SUFFIX = ".events" + _CACHE_SUFFIX
 
 _memory_db_ids = itertools.count()
 
@@ -85,7 +87,6 @@ class StoreWriter:
         self._datasets: dict[str, _DatasetBuffer] = {}
         self._info: dict[str, tuple[dict[str, str], list[str], str | None, str | None]] = {}
         self._time_range: tuple[float, float] | None = None
-        self._events: list[tuple] = []
         self._conn.executescript(
             """
             CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
@@ -93,8 +94,6 @@ class StoreWriter:
                 name TEXT PRIMARY KEY, kind TEXT, fields TEXT, units TEXT, context TEXT, label TEXT, instance TEXT
             );
             CREATE TABLE record_offsets (record INTEGER PRIMARY KEY, offset INTEGER);
-            CREATE TABLE events (_ts REAL, _rec INTEGER, type TEXT, category TEXT, layer TEXT, level TEXT, ue INTEGER,
-                                 rnti TEXT, cause TEXT, text TEXT);
             """
         )
 
@@ -136,18 +135,11 @@ class StoreWriter:
     def set_time_range(self, t_min: float, t_max: float) -> None:
         self._time_range = (t_min, t_max)
 
-    def add_event(self, record: int, t: float, event: dict[str, Any]) -> None:
-        self._events.append((t, record, *(event.get(c) for c in EVENT_COLUMNS)))
-        if len(self._events) >= _BATCH_SIZE:
-            self._flush_events()
-
     def add_record_offset(self, record: int, offset: int) -> None:
         self._conn.execute("INSERT OR REPLACE INTO record_offsets VALUES (?, ?)", (record, offset))
 
     def finish(self, source_path: Path, source_type: str) -> None:
         """Flushes pending rows, writes the dataset metadata and indexes."""
-        self._flush_events()
-        self._conn.execute(f"CREATE INDEX idx_events ON events ({_TS})")
         t_min = t_max = None
         for ds in self._datasets.values():
             self._flush(ds)
@@ -185,12 +177,6 @@ class StoreWriter:
         self._conn.executemany("INSERT INTO meta VALUES (?, ?)", [(k, json.dumps(v)) for k, v in meta.items()])
         self._conn.commit()
 
-    def _flush_events(self) -> None:
-        if self._events:
-            marks = ", ".join("?" * (len(EVENT_COLUMNS) + 2))
-            self._conn.executemany(f"INSERT INTO events VALUES ({marks})", self._events)
-            self._events.clear()
-
     def _flush(self, ds: _DatasetBuffer) -> None:
         if not ds.rows:
             return
@@ -200,6 +186,39 @@ class StoreWriter:
         ds.rows.clear()
 
 
+class EventStoreWriter:
+    """Writes the events of a source into a SQLite database."""
+
+    def __init__(self, conn: sqlite3.Connection):
+        self._conn = conn
+        self._events: list[tuple] = []
+        cols = ", ".join(f"{c} {'INTEGER' if c == 'ue' else 'TEXT'}" for c in EVENT_COLUMNS)
+        self._conn.executescript(
+            f"""
+            CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE events ({_TS} REAL, {_REC} INTEGER, {cols});
+            """
+        )
+
+    def add_event(self, record: int, t: float, event: dict[str, Any]) -> None:
+        self._events.append((t, record, *(event.get(c) for c in EVENT_COLUMNS)))
+        if len(self._events) >= _BATCH_SIZE:
+            self._flush()
+
+    def finish(self) -> None:
+        """Flushes pending events and writes the index."""
+        self._flush()
+        self._conn.execute(f"CREATE INDEX idx_events ON events ({_TS})")
+        self._conn.execute("INSERT INTO meta VALUES ('complete', 'true')")
+        self._conn.commit()
+
+    def _flush(self) -> None:
+        if self._events:
+            marks = ", ".join("?" * (len(EVENT_COLUMNS) + 2))
+            self._conn.executemany(f"INSERT INTO events VALUES ({marks})", self._events)
+            self._events.clear()
+
+
 class Store:
     """Read access to the datasets of one source. Safe to use from several threads."""
 
@@ -207,6 +226,12 @@ class Store:
         """Opens the database at the SQLite URI. keepalive holds an in-memory database open."""
         self._uri = uri
         self._keepalive = keepalive
+        # Database of the events, set once they are parsed, and the connection holding it open when in memory.
+        self._events_uri: str | None = None
+        self._events_keepalive: sqlite3.Connection | None = None
+        self.events_ready = False
+        # Event count per category, empty until the events are parsed.
+        self.event_counts: dict[str, int] = {}
         with self._connect() as conn:
             self.meta = {k: json.loads(v) for k, v in conn.execute("SELECT key, value FROM meta")}
             self.datasets = {
@@ -226,11 +251,19 @@ class Store:
             # Time span of each dataset, from the indexed timestamp column.
             for name, ds in self.datasets.items():
                 ds["t_min"], ds["t_max"] = conn.execute(f"SELECT MIN({_TS}), MAX({_TS}) FROM {_quote('ds_' + name)}").fetchone()
-            self.event_counts = dict(conn.execute("SELECT category, COUNT(*) FROM events GROUP BY category"))
 
     @property
     def path(self) -> Path:
         return Path(self.meta["path"])
+
+    def set_events(self, uri: str | None, keepalive: sqlite3.Connection | None = None) -> None:
+        """Serves the events of the database at the SQLite URI, or no events for None."""
+        counts: dict[str, int] = {}
+        if uri is not None:
+            with closing(sqlite3.connect(uri, uri=True, check_same_thread=False)) as conn:
+                counts = dict(conn.execute("SELECT category, COUNT(*) FROM events GROUP BY category"))
+        self._events_uri, self._events_keepalive, self.event_counts = uri, keepalive, counts
+        self.events_ready = True
 
     def series(
         self,
@@ -454,7 +487,7 @@ class Store:
 
         At most limit events are returned; total counts all the matching ones.
         """
-        if categories is not None and not categories:
+        if self._events_uri is None or (categories is not None and not categories):
             return {"total": 0, "truncated": False, "events": []}
         where, params = ["1"], []
         if t0 is not None:
@@ -470,7 +503,7 @@ class Store:
             where.append("ue = ?")
             params.append(ue)
         where_sql = " AND ".join(where)
-        with self._connect() as conn:
+        with closing(sqlite3.connect(self._events_uri, uri=True, check_same_thread=False)) as conn:
             total = conn.execute(f"SELECT COUNT(*) FROM events WHERE {where_sql}", params).fetchone()[0]
             rows = conn.execute(
                 f"SELECT {_TS}, {_REC}, {', '.join(EVENT_COLUMNS)} FROM events WHERE {where_sql} ORDER BY {_TS}, {_REC} LIMIT ?",
@@ -632,6 +665,18 @@ def _build(conn: sqlite3.Connection, path: Path, source_type: SourceType, progre
     writer.finish(path, source_type.name)
 
 
+def _build_events(conn: sqlite3.Connection, path: Path, source_type: SourceType) -> None:
+    conn.execute("PRAGMA journal_mode = OFF")
+    conn.execute("PRAGMA synchronous = OFF")
+    writer = EventStoreWriter(conn)
+    source_type.parse_events(path, writer)
+    writer.finish()
+
+
+def _memory_uri() -> str:
+    return f"file:ocudu-viz-{os.getpid()}-{next(_memory_db_ids)}?mode=memory&cache=shared"
+
+
 def default_cache_dir() -> Path:
     """Per-user directory under the system temp dir."""
     return Path(tempfile.gettempdir()) / f"ocudu-viz-{os.getuid()}"
@@ -649,26 +694,39 @@ class StoreCache:
         """Returns the store of a source, parsing it if there is no valid cache."""
         path = path.resolve()
         if not self.enabled:
-            uri = f"file:ocudu-viz-{os.getpid()}-{next(_memory_db_ids)}?mode=memory&cache=shared"
+            uri = _memory_uri()
             keepalive = sqlite3.connect(uri, uri=True, check_same_thread=False)
             _build(keepalive, path, source_type, progress)
             return Store(uri, keepalive)
 
         self._make_dir()
         db = self.cache_dir / (self._key(path, source_type) + _CACHE_SUFFIX)
-        if not self._is_complete(db):
-            tmp = db.with_suffix(f".{os.getpid()}.tmp")
-            tmp.unlink(missing_ok=True)
-            conn = sqlite3.connect(tmp)
-            try:
-                _build(conn, path, source_type, progress)
-            finally:
-                conn.close()
-            os.replace(tmp, db)
-        # The mtime of a cache file marks its last use, for eviction.
-        os.utime(db)
+        self._build_file(db, lambda conn: _build(conn, path, source_type, progress))
         self.evict(keep={db})
         return Store(_file_uri(db))
+
+    def open_events(self, store: Store, source_type: SourceType) -> None:
+        """Serves the events of a source in its store, parsing them if there is no valid cache.
+
+        Source types without events give no events.
+        """
+        if not hasattr(source_type, "parse_events"):
+            store.set_events(None)
+            return
+        path = store.path
+        if not self.enabled:
+            uri = _memory_uri()
+            keepalive = sqlite3.connect(uri, uri=True, check_same_thread=False)
+            _build_events(keepalive, path, source_type)
+            store.set_events(uri, keepalive)
+            return
+
+        self._make_dir()
+        key = self._key(path, source_type)
+        db = self.cache_dir / (key + _EVENTS_SUFFIX)
+        self._build_file(db, lambda conn: _build_events(conn, path, source_type))
+        self.evict(keep={db, self.cache_dir / (key + _CACHE_SUFFIX)})
+        store.set_events(_file_uri(db))
 
     def evict(self, keep: Iterable[Path] = ()) -> None:
         """Removes the least recently used caches until the cache dir fits in max_bytes."""
@@ -688,6 +746,21 @@ class StoreCache:
         if self.cache_dir.is_dir():
             for p in self.cache_dir.glob("*" + _CACHE_SUFFIX):
                 p.unlink(missing_ok=True)
+
+    def _build_file(self, db: Path, build: Callable[[sqlite3.Connection], None]) -> None:
+        """Builds a cache file, unless it is complete already, and marks its use."""
+        if not self._is_complete(db):
+            # Built aside and renamed, so that readers never see a partial database.
+            tmp = db.with_suffix(f".{os.getpid()}.tmp")
+            tmp.unlink(missing_ok=True)
+            conn = sqlite3.connect(tmp)
+            try:
+                build(conn)
+            finally:
+                conn.close()
+            os.replace(tmp, db)
+        # The mtime of a cache file marks its last use, for eviction.
+        os.utime(db)
 
     def _make_dir(self) -> None:
         self.cache_dir.mkdir(mode=0o700, parents=True, exist_ok=True)

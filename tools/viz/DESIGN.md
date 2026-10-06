@@ -218,9 +218,12 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 
 ### D14. Events overlay
 
-- Events are recognized by `parsers.log.events` while the log is parsed, and stored in an `events` table of the
-  source cache with their time, record, type, category, logger, level, UE, RNTI, cause and text.
-- `/api/sources` reports the event count per category, and `GET /api/events?source&t0&t1&categories&ue&limit`
+- Events are recognized by `parsers.log.events` in a second pass over the log, after the datasets are served, so that
+  plots do not wait for them: on large logs, recognizing events takes longer than parsing the metrics. They are stored
+  in their own cache file, built aside and renamed when complete, with their time, record, type, category, logger,
+  level, UE, RNTI, cause and text. Source types without events skip the pass.
+- `/api/sources` reports the state of the events of each source (`pending`, `parsing`, `ready`, `error`) and their
+  count per category, and `GET /api/events?source&t0&t1&categories&ue&limit`
   returns the events of a window, capped at 5000.
 - Events are dashed vertical lines over the time plots of the tab, coloured by category. Hovering one shows its text,
   clicking it opens its log line.

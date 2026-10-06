@@ -15,10 +15,12 @@ from .helpers import write_log
 
 
 def wait_ready(registry, source_id, timeout=10.0):
+    """Waits for the parsing of a source and of its events."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         entry = registry.entries()[source_id]
-        if entry.status != "parsing":
+        busy = entry.status == "parsing" or entry.events_status == "parsing"
+        if not busy and not (entry.status == "ready" and entry.events_status == "pending"):
             return entry
         time.sleep(0.02)
     raise AssertionError("parsing did not finish")
@@ -43,6 +45,22 @@ class RegistryTest(unittest.TestCase):
         entry = wait_ready(self.registry, 0)
         self.assertEqual((entry.status, entry.progress), ("ready", 1.0))
         self.assertIn("sched_ue", self.registry.get_ready(0).datasets)
+
+    def test_events_parsed_after_datasets(self):
+        log = write_log(self.dir / "events.log", events=True)
+        entry = wait_ready(self.registry, self.registry.open(log).id)
+        self.assertEqual(entry.events_status, "ready")
+        self.assertEqual(entry.store.event_counts["ra"], 2)
+
+    def test_add_store_parses_events(self):
+        cache = self.registry.cache
+        store = cache.open(write_log(self.dir / "events.log", events=True), LogMetricsSource())
+        self.assertFalse(store.events_ready)
+        entry = wait_ready(self.registry, self.registry.add_store(store, LogMetricsSource()).id)
+        self.assertEqual((entry.events_status, store.event_counts["failure"]), ("ready", 1))
+        parsed = cache.open(store.path, LogMetricsSource())
+        cache.open_events(parsed, LogMetricsSource())
+        self.assertEqual(self.registry.add_store(parsed).events_status, "ready")
 
     def test_open_same_file_twice(self):
         first = self.registry.open(self.log)

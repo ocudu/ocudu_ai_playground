@@ -90,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
         if source_type is None:
             print(f"ocudu-viz: {path}: unsupported file type.", file=sys.stderr)
             return 2
-        registry.add_store(cache.open(path, source_type, _progress(path.name)))
+        registry.add_store(cache.open(path, source_type, _progress(path.name)), source_type)
 
     # Imported late so that --help and argument errors do not pay for the web stack.
     import uvicorn

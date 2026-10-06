@@ -34,7 +34,9 @@ class ServerTest(unittest.TestCase):
 
         self.tmp = tempfile.TemporaryDirectory()
         tmp = Path(self.tmp.name)
-        store = StoreCache(tmp / "cache").open(write_log(tmp / "gnb.log", executors=True, events=True), LogMetricsSource())
+        cache = StoreCache(tmp / "cache")
+        store = cache.open(write_log(tmp / "gnb.log", executors=True, events=True), LogMetricsSource())
+        cache.open_events(store, LogMetricsSource())
         # A stand-in for the built frontend, so that the tests do not need Node.
         static = tmp / "static"
         (static / "assets").mkdir(parents=True)
@@ -139,6 +141,7 @@ class ServerTest(unittest.TestCase):
 
     def test_events(self):
         src = self.client.get("/api/sources").json()[0]
+        self.assertEqual(src["events_status"], "ready")
         self.assertEqual(src["event_counts"], {"ra": 2, "lifecycle": 2, "failure": 1, "warning": 1})
         res = self.client.get("/api/events", params={"source": 0, "categories": ["failure"]}).json()
         self.assertEqual([e["type"] for e in res["events"]], ["rlf"])

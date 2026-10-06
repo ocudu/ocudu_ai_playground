@@ -169,8 +169,14 @@ class StoreTest(unittest.TestCase):
         store = self.cache.open(log, LogMetricsSource())
         self.assertEqual(store.count_table_rows("exec", instance="du_ctrl_exec"), 10)
 
+    def open_with_events(self, cache=None):
+        cache = cache or self.cache
+        store = cache.open(write_log(self.dir / "events.log", events=True), LogMetricsSource())
+        cache.open_events(store, LogMetricsSource())
+        return store
+
     def test_events(self):
-        store = self.cache.open(write_log(self.dir / "events.log", events=True), LogMetricsSource())
+        store = self.open_with_events()
         self.assertEqual(store.event_counts, {"ra": 2, "lifecycle": 2, "failure": 1, "warning": 1})
         res = store.events()
         self.assertEqual([e["type"] for e in res["events"]], ["prach", "prach", "ue_create", "ue_create", "rlf", "warning"])
@@ -182,7 +188,7 @@ class StoreTest(unittest.TestCase):
         self.assertIn("RLF detected", store.records(around=rlf["record"], count=1)[0]["text"])
 
     def test_events_selection(self):
-        store = self.cache.open(write_log(self.dir / "events.log", events=True), LogMetricsSource())
+        store = self.open_with_events()
         t_min = store.meta["t_min"]
         self.assertEqual([e["type"] for e in store.events(categories=["failure", "warning"])["events"]], ["rlf", "warning"])
         self.assertEqual([e["type"] for e in store.events(ue=1)["events"]], ["ue_create", "rlf"])
@@ -192,7 +198,31 @@ class StoreTest(unittest.TestCase):
         self.assertEqual(store.events(categories=[])["events"], [])
 
     def test_no_events(self):
+        self.cache.open_events(self.store, LogMetricsSource())
+        self.assertTrue(self.store.events_ready)
         self.assertEqual((self.store.event_counts, self.store.events()["total"]), ({}, 0))
+
+    def test_events_after_datasets(self):
+        store = self.cache.open(write_log(self.dir / "events.log", events=True), LogMetricsSource())
+        self.assertFalse(store.events_ready)
+        self.assertEqual((store.event_counts, store.events()["total"]), ({}, 0))
+        self.cache.open_events(store, LogMetricsSource())
+        self.assertEqual((store.events_ready, store.events()["total"]), (True, 6))
+
+    def test_events_cache(self):
+        self.open_with_events()
+        cached = sorted(p.name for p in (self.dir / "cache").iterdir())
+        self.assertEqual(len(cached), 3)
+        self.assertEqual(sum(name.endswith(".events.sqlite") for name in cached), 1)
+        events_db = next((self.dir / "cache").glob("*.events.sqlite"))
+        mtime = events_db.stat().st_mtime_ns
+        self.assertEqual(self.open_with_events().events()["total"], 6)
+        self.assertGreaterEqual(events_db.stat().st_mtime_ns, mtime)
+        self.assertEqual(len(list((self.dir / "cache").glob("*.tmp"))), 0)
+
+    def test_events_without_cache(self):
+        store = self.open_with_events(StoreCache(enabled=False))
+        self.assertEqual(store.events()["total"], 6)
 
     def test_invalid_queries(self):
         with self.assertRaises(QueryError):

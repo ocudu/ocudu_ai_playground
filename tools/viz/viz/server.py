@@ -83,6 +83,7 @@ def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
         "t_min": None,
         "t_max": None,
         "datasets": [],
+        "events_status": entry.events_status,
         "event_counts": {},
     }
     s = entry.store

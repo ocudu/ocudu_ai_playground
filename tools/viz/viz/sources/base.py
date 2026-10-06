@@ -32,9 +32,6 @@ class DatasetWriter(Protocol):
         The instance field identifies the entity each row belongs to (e.g. the executor name).
         """
 
-    def add_event(self, record: int, t: float, event: dict[str, Any]) -> None:
-        """Adds an event with its type, category, layer, ue, rnti, cause and text."""
-
     def set_time_range(self, t_min: float, t_max: float) -> None:
         """Sets the time span of the source, which may be wider than the span of its datasets."""
 
@@ -42,8 +39,19 @@ class DatasetWriter(Protocol):
         """Registers the byte offset where a raw record starts. Not every record needs one."""
 
 
+class EventWriter(Protocol):
+    """Sink for the events extracted from a source."""
+
+    def add_event(self, record: int, t: float, event: dict[str, Any]) -> None:
+        """Adds an event with its type, category, layer, level, ue, rnti, cause and text."""
+
+
 class SourceType(Protocol):
-    """Adapter from one artifact kind to datasets."""
+    """Adapter from one artifact kind to datasets.
+
+    A source type may also define parse_events(path, writer: EventWriter) to extract events, which runs after parse()
+    while the datasets are already served.
+    """
 
     # Unique name, part of the cache key.
     name: str
