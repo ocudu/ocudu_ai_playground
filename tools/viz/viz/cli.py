@@ -119,7 +119,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Serving {nof_sources} source(s) at {url}, more can be opened from the page (Ctrl+C to stop)", file=sys.stderr)
     if not args.no_browser:
         threading.Timer(1.0, webbrowser.open, (url,)).start()
-    uvicorn.run(create_app(registry), host=args.host, port=port, log_level="warning")
+    # The pool is shut down with the server: on SIGTERM, uvicorn exits through the default handler, skipping atexit.
+    uvicorn.run(create_app(registry, on_shutdown=parallel.shutdown), host=args.host, port=port, log_level="warning")
     return 0
 
 

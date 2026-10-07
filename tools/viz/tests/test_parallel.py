@@ -64,6 +64,15 @@ class ParallelTest(unittest.TestCase):
         self.assertEqual(list(parallel.map_chunks(double_or_die, [(1,), (2,), (3,)])), [2, 4, 6])
         self.assertIsNot(parallel.get_pool(), first)
 
+    @unittest.skipIf(parallel.nof_workers() < 2, "needs several CPUs")
+    def test_shutdown_stops_the_workers(self):
+        pool = parallel.get_pool()
+        self.assertEqual(list(parallel.map_chunks(abs, [(-1,), (-2,)])), [1, 2])
+        workers = list(pool._processes.values())
+        parallel.shutdown()
+        self.assertFalse(any(w.is_alive() for w in workers))
+        self.assertIsNot(parallel.get_pool(), pool)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import multiprocessing
 import os
+import signal
 import threading
 from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ProcessPoolExecutor
@@ -48,8 +49,19 @@ def get_pool() -> ProcessPoolExecutor | None:
     with _pool_lock:
         if _pool is None and nof_workers() > 1:
             # Forking a multithreaded server can deadlock the child, so workers start from a fork server.
-            _pool = ProcessPoolExecutor(nof_workers(), mp_context=multiprocessing.get_context("forkserver"))
+            _pool = ProcessPoolExecutor(
+                nof_workers(), mp_context=multiprocessing.get_context("forkserver"), initializer=_ignore_sigint
+            )
         return _pool
+
+
+def shutdown() -> None:
+    """Stops the pool and its workers, waiting for the running tasks. A later call starts a new pool."""
+    global _pool
+    with _pool_lock:
+        pool, _pool = _pool, None
+    if pool is not None:
+        pool.shutdown(wait=True, cancel_futures=True)
 
 
 def map_chunks(fn: Callable[..., Any], args: Iterable[tuple]) -> Iterator[Any]:
@@ -73,6 +85,11 @@ def map_chunks(fn: Callable[..., Any], args: Iterable[tuple]) -> Iterator[Any]:
             except BrokenProcessPool:
                 _discard_pool(pool)
         yield fn(*a)
+
+
+def _ignore_sigint() -> None:
+    # Ctrl+C reaches the whole process group; the server alone handles it and shuts the pool down.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
 def _start_workers() -> None:

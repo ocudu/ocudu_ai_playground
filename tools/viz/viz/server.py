@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import csv
 import io
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Callable, Iterator
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -113,10 +114,12 @@ class _OpenRequest(BaseModel):
     path: str
 
 
-def create_app(sources: SourceRegistry | list[Store], static_dir: Path = STATIC_DIR) -> FastAPI:
+def create_app(
+    sources: SourceRegistry | list[Store], static_dir: Path = STATIC_DIR, on_shutdown: Callable[[], None] | None = None
+) -> FastAPI:
     """Serves the sources of a registry, or a fixed list of stores, and the frontend in static_dir.
 
-    Source ids are the positions of the sources in opening order.
+    Source ids are the positions of the sources in opening order. on_shutdown runs when the server stops.
     """
     if isinstance(sources, SourceRegistry):
         registry = sources
@@ -124,7 +127,14 @@ def create_app(sources: SourceRegistry | list[Store], static_dir: Path = STATIC_
         registry = SourceRegistry()
         for store in sources:
             registry.add_store(store)
-    app = FastAPI(title="ocudu-viz")
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        yield
+        if on_shutdown is not None:
+            on_shutdown()
+
+    app = FastAPI(title="ocudu-viz", lifespan=lifespan)
 
     def get_store(source: int) -> Store:
         try:
