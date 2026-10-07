@@ -80,9 +80,21 @@ behaviour) **and** the `[CONFIG  ] [D] gNB input configuration` echo at the top 
 `gnb.log` (the effective value after defaults and merges). Mention both if they
 differ.
 
-**Metrics questions** — for "max throughput", "BLER", "any late HARQs", parse
-`metrics.json` with python; never `cat` it whole. The summary script already does
-the common rollups — prefer it.
+**Metrics questions** — for "max throughput", "BLER", "MCS of UE X", "any late
+HARQs", query the `[METRICS]` lines of the log with the metrics script. Values are
+normalized (times in `us`, bitrates in `bps`); it parses large logs in parallel:
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_metrics.py <gnb.log>                     # layers and fields
+python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_metrics.py <gnb.log> --layer sched_ue \
+  [--fields dl_brate,ul_brate,dl_mcs] [--by ue|rnti|pci] [--where rnti=0x4601] \
+  [--after <HH:MM:SS>] [--before <HH:MM:SS>] [--rows] [-j <workers>]
+```
+
+Without `--rows` it prints count/min/mean/max per field, with `--rows` the matching
+rows with their log line numbers. When the log has no `[METRICS]` lines, parse
+`metrics.json` with python instead; never `cat` it whole. The summary script
+already does the common rollups of it.
 
 ## answer shape
 
