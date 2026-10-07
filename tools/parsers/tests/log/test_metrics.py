@@ -321,6 +321,37 @@ class ExtractMetricFieldsTest(unittest.TestCase):
         self.assertEqual(fields, {"a": 1, "b": 2, "ether_rx_cpu_usage": 0.3, "ether_rx_x": 1, "ecpri_y": 2, "rcv_ul_z": 3, "w": 4})
 
 
+class FieldSpansTest(unittest.TestCase):
+    def spans_text(self, line):
+        return {name: line[s:e] for name, (s, e) in metrics.field_spans(line).items()}
+
+    def test_every_field_has_a_span(self):
+        parser = metrics.MetricsParser()
+        for line in (MAC_LINE, SCHED_LINE, SCHED_UE_LINE, RLC_LINE, OFH_SECTOR_LINE, PDCP_LINE, EXEC_LINE):
+            record = parser.parse(line)
+            self.assertEqual(set(metrics.field_spans(line)), set(record) - {"timestamp", "layer"})
+
+    def test_span_texts(self):
+        spans = self.spans_text(SCHED_UE_LINE)
+        self.assertEqual(spans["rnti"], "rnti=0x4666")
+        self.assertEqual(spans["dl_brate"], "dl_brate=8.78kbps")
+        spans = self.spans_text(MAC_LINE)
+        self.assertEqual(spans["slots_end"], "slots=[853.19, 864.0)")
+        self.assertEqual(spans["sched_latency_max"], "max=61usec")
+        self.assertEqual(self.spans_text(OFH_SECTOR_LINE)["ether_tx_max_latency"], "max_latency=2.79us")
+        self.assertEqual(self.spans_text(RLC_LINE)["rx_ctrl_pdus"], "ctrl_pdus=3")
+        self.assertEqual(self.spans_text(SCHED_LINE)["latency_hist"], "latency_hist=[1864, 132, 4, 0, 0, 0, 0, 0, 0, 0]")
+
+    def test_optional_values(self):
+        line = RLC_LINE.replace("t_poll_nof_expiration=0", "t_poll_latency_min=optional(3)us t_poll_nof_expiration=0")
+        spans = self.spans_text(line)
+        self.assertEqual(spans["tx_t_poll_latency_min"], "t_poll_latency_min=optional(3)us")
+        self.assertEqual(spans["tx_t_poll_nof_expiration"], "t_poll_nof_expiration=0")
+
+    def test_not_metrics(self):
+        self.assertEqual(metrics.field_spans("2026-06-29T14:10:11.345500 [SCHED   ] [I] dl_brate=1"), {})
+
+
 @unittest.skipUnless(importlib.util.find_spec("pandas"), "pandas not installed")
 class ToDataFrameTest(unittest.TestCase):
     def test_one_row_per_layer_record(self):

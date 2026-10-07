@@ -80,7 +80,8 @@ class SourceType(Protocol):
     """Adapter from one artifact kind to datasets.
 
     A source type may also define parse_events(path, writer: EventWriter) to extract events, which runs after parse()
-    while the datasets are already served.
+    while the datasets are already served, and field_spans(text) to return the span of each field in the text of a
+record, by field name.
     """
 
     # Unique name, part of the cache key.

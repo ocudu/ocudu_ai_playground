@@ -14,6 +14,8 @@
   --accent: #3d71d9;
   --error: #c62828;
   --selected: #fff3c4;
+  --mark-bg: #ffc04d;
+  --mark-fg: #1f1f1f;
   /* Series colors, distinct and readable on the background. */
   --s0: #4e79a7;
   --s1: #f28e2b;
@@ -48,6 +50,8 @@
   --accent: #6e9fff;
   --error: #ff7383;
   --selected: rgba(110, 159, 255, 0.16);
+  --mark-bg: #d9a032;
+  --mark-fg: #141414;
   --s0: #73bf69;
   --s1: #fade2a;
   --s2: #5794f2;
@@ -296,6 +300,7 @@ main { padding: 8px 16px 16px; }
 
 .record-line { padding: 0 8px; }
 .record-line.selected { background: var(--selected); }
+.record-line mark { padding: 0 2px; border-radius: 3px; background: var(--mark-bg); color: var(--mark-fg); }
 .lineno { display: inline-block; min-width: 7ch; margin-right: 12px; text-align: right; color: var(--fg-muted); user-select: none; }
 
 .filter { flex: 1; min-width: 220px; max-width: 480px; }

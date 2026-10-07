@@ -316,8 +316,23 @@ def create_app(sources: SourceRegistry | list[Store], static_dir: Path = STATIC_
             raise HTTPException(400, str(e)) from None
 
     @app.get("/api/records")
-    def records(source: int, around: int = Query(..., ge=1), count: int = Query(50, ge=1, le=1000)) -> list[dict[str, Any]]:
-        return get_store(source).records(around, count)
+    def records(
+        source: int,
+        around: int = Query(..., ge=1),
+        count: int = Query(50, ge=1, le=1000),
+        mark: int | None = None,
+        field: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Returns the records around a record. With mark and field, the record mark gets the spans of the field in
+        its text, as "marks".
+        """
+        out = get_store(source).records(around, count)
+        spans_fn = getattr(registry.source_type(source), "field_spans", None)
+        if mark is not None and field and spans_fn is not None:
+            for r in out:
+                if r["record"] == mark and (span := spans_fn(r["text"]).get(field)) is not None:
+                    r["marks"] = [list(span)]
+        return out
 
     if (static_dir / "index.html").is_file():
         app.mount("/", _RevalidatedStaticFiles(directory=static_dir, html=True), name="static")

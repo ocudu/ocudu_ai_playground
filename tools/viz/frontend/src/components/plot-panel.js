@@ -475,7 +475,7 @@ export default {
       let si = this.focusedSeries > 0 ? this.focusedSeries - 1 : this.records.findIndex((r) => r[idx] != null);
       if (si < 0) si = 0;
       const j = nearestDefined(this.records[si], idx);
-      if (j >= 0) this.$emit("select-record", { source: this.plot.source, record: this.records[si][j] });
+      if (j >= 0) this.$emit("select-record", { source: this.plot.source, record: this.records[si][j], field: this.plot.field });
     },
   },
   template: `

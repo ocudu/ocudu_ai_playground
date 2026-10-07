@@ -432,6 +432,92 @@ def extract_metric_fields(text: str) -> dict[str, Any]:
     return sink.fields
 
 
+def field_spans(line: str) -> dict[str, tuple[int, int]]:
+    """Returns the span in a METRICS line of the "key=value" text of each record field, by field name.
+
+    Fields of a list, like slots_start of "slots=[a, b)", span the whole list. Lines of no known layer give no spans.
+    """
+    preamble_match = preamble.match_preamble(line)
+    if not preamble_match or preamble_match.group("layer") != "METRICS":
+        return {}
+    start = preamble_match.end()
+    text = line[start:]
+    context_m = next((m for p in LAYER_PATTERNS.values() if (m := p.match(text))), None)
+    if context_m is None:
+        return {}
+
+    spans = {}
+    for name, value in context_m.groupdict().items():
+        if value is None:
+            continue
+        s, e = context_m.span(name)
+        if text.startswith(f"{name}=", s - len(name) - 1):
+            s -= len(name) + 1
+        spans[name] = (start + s, start + e)
+
+    body_start = start + context_m.end()
+    body, index = _strip_optional(line[body_start:])
+    body_spans: dict[str, tuple[int, int]] = {}
+    _spans_into(body, body_spans)
+    for name, (s, e) in body_spans.items():
+        spans[name] = (body_start + index[s], body_start + index[e - 1] + 1)
+    return spans
+
+
+def _strip_optional(text: str) -> tuple[str, list[int]]:
+    """Removes the "optional(...)" wrappers like _parse_text, also returning the original index of each character."""
+    parts: list[str] = []
+    index: list[int] = []
+    pos = 0
+    for m in _optional_re.finditer(text):
+        parts += [text[pos:m.start()], m.group("value")]
+        index += [*range(pos, m.start()), *range(*m.span("value"))]
+        pos = m.end()
+    parts.append(text[pos:])
+    index += range(pos, len(text))
+    return "".join(parts), index
+
+
+def _spans_into(text: str, spans: dict[str, tuple[int, int]], prefix: str = "", offset: int = 0) -> None:
+    """Adds the spans of the fields of a metrics text, named like _parse_into() names them."""
+    base = prefix
+    in_free_text = False
+    pos = 0
+    while (m := _token_re.match(text, pos)) is not None and m.end() > pos:
+        pos = m.end()
+        key = m.group("key")
+        if key:
+            in_free_text = False
+            name = base + key
+            if not m.group("list"):
+                spans[name] = (offset + m.start("key"), offset + m.end())
+                continue
+            end = _find_list_end(text, pos - 1)
+            span = (offset + m.start("key"), offset + end + 1)
+            body = text[pos:end]
+            if key == "slots" and _slots_range_re.match(body):
+                for suffix in ("_start", "_end", "_hfn_wraps"):
+                    spans[name + suffix] = span
+            elif body.lstrip().startswith("{"):
+                spans[name] = span
+                if remaining := _remaining_re.search(body):
+                    spans[f"{name}_remaining"] = (offset + pos + remaining.start(), offset + pos + remaining.end())
+            elif "=" in body:
+                _spans_into(body, spans, f"{base}{key.lower()}_", offset + pos)
+            else:
+                spans[name] = span
+            pos = end + 1
+        elif m.group("section"):
+            if not in_free_text:
+                base = f"{prefix}{m.group('section')}_"
+            in_free_text = False
+        elif m.group("semi"):
+            base = prefix
+            in_free_text = False
+        else:
+            in_free_text = True
+
+
 class MetricsParser:
     """Parses METRICS log lines of the selected layers into flat records."""
 

@@ -225,7 +225,8 @@ export default {
               <tr v-for="r in rows" :key="r[1]" class="clickable" title="Show the log line"
                   @click="$emit('select-record', { source: panel.source, record: r[1] })">
                 <td>{{ formatTime(r[0]) }}</td><td>{{ r[1] }}</td>
-                <td v-for="i in shownColumns" :key="fields[i].name" :title="typeof r[i + 2] === 'string' ? r[i + 2] : undefined">{{ cell(r, i) }}</td>
+                <td v-for="i in shownColumns" :key="fields[i].name" :title="typeof r[i + 2] === 'string' ? r[i + 2] : undefined"
+                    @click.stop="$emit('select-record', { source: panel.source, record: r[1], field: fields[i].name })">{{ cell(r, i) }}</td>
               </tr>
             </tbody>
           </table>

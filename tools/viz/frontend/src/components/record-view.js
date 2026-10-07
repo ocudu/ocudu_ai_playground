@@ -71,6 +71,22 @@ export default {
       handle.addEventListener("pointerup", onUp);
     },
 
+    /**
+     * Splits the text of a record at its marks, which are [start, end) spans.
+     * @returns {{text: string, mark: boolean}[]}
+     */
+    segments(r) {
+      const parts = [];
+      let pos = 0;
+      for (const [start, end] of r.marks ?? []) {
+        if (start > pos) parts.push({ text: r.text.slice(pos, start), mark: false });
+        parts.push({ text: r.text.slice(start, end), mark: true });
+        pos = end;
+      }
+      if (pos < r.text.length || !parts.length) parts.push({ text: r.text.slice(pos), mark: false });
+      return parts;
+    },
+
     resetHeight() {
       this.height = null;
       saveHeight(null);
@@ -79,7 +95,8 @@ export default {
     async load(center) {
       this.center = Math.max(1, center);
       try {
-        this.records = await getJSON("/api/records", { source: this.selection.source, around: this.center, count: WINDOW });
+        const { source, record, field } = this.selection;
+        this.records = await getJSON("/api/records", { source, around: this.center, count: WINDOW, mark: field ? record : null, field });
         this.error = "";
       } catch (e) {
         this.error = e.message;
@@ -89,6 +106,14 @@ export default {
       const lines = this.$refs.lines;
       const selected = lines?.querySelector(".record-line.selected");
       if (selected) lines.scrollTop = selected.offsetTop - (lines.clientHeight - selected.offsetHeight) / 2;
+      const mark = selected?.querySelector("mark");
+      if (mark) {
+        // Marks near the end of long lines would be out of view.
+        const left = mark.getBoundingClientRect().left - lines.getBoundingClientRect().left + lines.scrollLeft;
+        if (left < lines.scrollLeft || left + mark.offsetWidth > lines.scrollLeft + lines.clientWidth) {
+          lines.scrollLeft = Math.max(0, left - lines.clientWidth / 3);
+        }
+      }
     },
   },
   template: `
@@ -105,7 +130,7 @@ export default {
       <div ref="lines" class="record-lines" :style="height ? { height: height + 'px' } : null">
         <div v-for="r in records" :key="r.record"
              :class="['record-line', { selected: r.record === selection.record }]">
-          <span class="lineno">{{ r.record }}</span><span class="text">{{ r.text }}</span>
+          <span class="lineno">{{ r.record }}</span><span class="text"><template v-for="(part, i) in segments(r)" :key="i"><mark v-if="part.mark">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>
         </div>
       </div>
     </aside>

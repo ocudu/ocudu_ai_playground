@@ -32,6 +32,7 @@ class SourceEntry:
     error: str | None = None
     store: Store | None = None
     events_status: str = "pending"
+    source_type: SourceType | None = None
 
 
 class SourceRegistry:
@@ -51,7 +52,7 @@ class SourceRegistry:
         background, unless the store serves them already.
         """
         with self._lock:
-            entry = SourceEntry(len(self._entries), store.path, "ready", 1.0, store=store)
+            entry = SourceEntry(len(self._entries), store.path, "ready", 1.0, store=store, source_type=source_type)
             if store.events_ready:
                 entry.events_status = "ready"
             self._entries.append(entry)
@@ -73,7 +74,7 @@ class SourceRegistry:
             for entry in self._entries:
                 if entry.path == resolved and entry.status in ("parsing", "ready"):
                     return entry
-            entry = SourceEntry(len(self._entries), resolved, "parsing")
+            entry = SourceEntry(len(self._entries), resolved, "parsing", source_type=source_type)
             self._entries.append(entry)
         threading.Thread(target=self._parse, args=(entry, source_type), daemon=True, name=f"parse-{entry.id}").start()
         return entry
@@ -97,6 +98,13 @@ class SourceRegistry:
             if not 0 <= source_id < len(self._entries):
                 raise KeyError(source_id)
             return self._entries[source_id].store
+
+    def source_type(self, source_id: int) -> SourceType | None:
+        """Returns the source type of a source, None if unknown. Raises KeyError for unknown ids."""
+        with self._lock:
+            if not 0 <= source_id < len(self._entries):
+                raise KeyError(source_id)
+            return self._entries[source_id].source_type
 
     def _parse(self, entry: SourceEntry, source_type: SourceType) -> None:
         def progress(done: int, total: int) -> None:

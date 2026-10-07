@@ -35,7 +35,7 @@ class ServerTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         tmp = Path(self.tmp.name)
         cache = StoreCache(tmp / "cache")
-        store = cache.open(write_log(tmp / "gnb.log", executors=True, events=True), LogMetricsSource())
+        self.store = store = cache.open(write_log(tmp / "gnb.log", executors=True, events=True), LogMetricsSource())
         cache.open_events(store, LogMetricsSource())
         # A stand-in for the built frontend, so that the tests do not need Node.
         static = tmp / "static"
@@ -127,6 +127,27 @@ class ServerTest(unittest.TestCase):
     def test_records(self):
         res = self.client.get("/api/records", params={"source": 0, "around": 2, "count": 1})
         self.assertEqual(res.json()[0]["record"], 2)
+
+    def test_records_marks(self):
+        from fastapi.testclient import TestClient
+
+        from viz.registry import SourceRegistry
+        from viz.server import create_app
+        from viz.sources.log_metrics import LogMetricsSource
+
+        registry = SourceRegistry()
+        registry.add_store(self.store, LogMetricsSource())
+        client = TestClient(create_app(registry, Path(self.tmp.name) / "missing"))
+        lines = client.get("/api/records", params={"source": 0, "around": 1, "count": 20}).json()
+        mac = next(r["record"] for r in lines if "MAC cell" in r["text"])
+        params = {"source": 0, "around": mac, "count": 3, "mark": mac, "field": "wall_clock_latency_max"}
+        res = client.get("/api/records", params=params).json()
+        marked = [r for r in res if "marks" in r]
+        self.assertEqual([r["record"] for r in marked], [mac])
+        (s, e), = marked[0]["marks"]
+        self.assertTrue(marked[0]["text"][s:e].startswith("max="))
+        # Without the source type, records carry no marks.
+        self.assertFalse(any("marks" in r for r in self.client.get("/api/records", params=params).json()))
 
     def test_static_index(self):
         res = self.client.get("/")

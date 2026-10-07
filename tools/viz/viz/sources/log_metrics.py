@@ -196,6 +196,9 @@ class LogMetricsSource:
             context = list(dict.fromkeys([*metrics.LAYER_PATTERNS[layer].groupindex, *_IDENTITY_FIELDS]))
             writer.set_dataset_info(layer, units, context, **_DATASET_INFO.get(layer, {}))
 
+    def field_spans(self, text: str) -> dict[str, tuple[int, int]]:
+        return metrics.field_spans(text)
+
     def parse_events(self, path: Path, writer: EventWriter) -> None:
         # Header line number, line, preamble match and continuation lines of the entry whose events are pending.
         pending: tuple[int, str, re.Match, list[str]] | None = None
