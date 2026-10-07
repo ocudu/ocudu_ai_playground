@@ -178,7 +178,9 @@ button.icon { border: none; background: none; padding: 0 4px; }
 .file-list td.recent-dir { max-width: 460px; text-align: left; }
 .file-list td:nth-child(2) { text-align: right; }
 
-main { padding: 8px 16px 16px; }
+/* Short pages still keep the log lines at the bottom of the window, so that resizing them moves their top edge. */
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+main { flex: 1 0 auto; padding: 8px 16px 16px; }
 .hint { margin: 0 0 8px; font-size: 12px; }
 
 .add-buttons { display: flex; gap: 8px; }
