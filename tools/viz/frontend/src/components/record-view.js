@@ -160,7 +160,7 @@ export default {
         <span class="muted">{{ hasDetail ? "frame" : "line" }} {{ current }}</span>
         <button @click="load(center - WINDOW)">earlier</button>
         <button @click="load(center + WINDOW)">later</button>
-        <span v-if="error" class="error">{{ error }}</span>
+        <span class="status"><span v-if="error" class="error">{{ error }}</span></span>
         <button class="icon" title="Close" @click="$emit('close')">✕</button>
       </header>
       <div :class="['record-body', { split: hasDetail }]">
