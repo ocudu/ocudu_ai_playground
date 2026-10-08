@@ -6,12 +6,15 @@
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import socket
 import sys
 import tempfile
 import threading
 import webbrowser
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from . import parallel
@@ -28,12 +31,41 @@ def source_types(work_dir: Path) -> list[SourceType]:
     return [LogMetricsSource(), PcapSource(work_dir)]
 
 
-def _progress(name: str):
-    def report(done: int, total: int) -> None:
-        pct = 100 * done // total if total else 100
-        print(f"\rParsing {name}: {pct:3d}%", end="" if done < total else "\n", file=sys.stderr, flush=True)
+class _Progress:
+    """One progress line on stderr for files parsed together, rewritten in place: the files done and the least advanced
+    of the others.
+    """
 
-    return report
+    def __init__(self, names: list[str]):
+        self._names = names
+        self._fractions = [0.0] * len(names)
+        self._lock = threading.Lock()
+
+    def reporter(self, index: int) -> Callable[[int, int], None]:
+        """Progress function of the file at index."""
+
+        def report(done: int, total: int) -> None:
+            with self._lock:
+                self._fractions[index] = done / total if total else 1.0
+                self._print()
+
+        return report
+
+    def finish(self) -> None:
+        with self._lock:
+            self._fractions = [1.0] * len(self._names)
+            self._print()
+        print(file=sys.stderr, flush=True)
+
+    def _print(self) -> None:
+        nof_done = sum(1 for f in self._fractions if f >= 1.0)
+        line = f"Parsing {len(self._names)} file(s): {nof_done} done"
+        pending = [(f, name) for f, name in zip(self._fractions, self._names) if f < 1.0]
+        if pending:
+            fraction, name = min(pending)
+            line += f", {name} {int(100 * fraction)}%"
+        # Padded, so that a shorter line overwrites a longer one.
+        print(f"\r{line:<70}", end="", file=sys.stderr, flush=True)
 
 
 def _free_port(host: str, preferred: int) -> int:
@@ -115,6 +147,8 @@ def main(argv: list[str] | None = None) -> int:
     types = source_types(tshark_dir)
     registry = SourceRegistry(cache, types, roots)
 
+    # The files of each run given, checked before any is parsed.
+    runs: list[tuple[Path, bool, list[tuple[Path, SourceType]]]] = []
     for path in args.files:
         is_dir = path.is_dir()
         if is_dir:
@@ -127,15 +161,27 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"ocudu-viz: {path}: not a file or directory.", file=sys.stderr)
             return 2
-        source_ids = []
+        typed = []
         for f in files:
             source_type = next((st for st in types if st.accepts(f)), None)
             if source_type is None:
                 print(f"ocudu-viz: {f}: unsupported file type.", file=sys.stderr)
                 return 2
-            store = cache.open(f.resolve(), source_type, _progress(f.name))
-            source_ids.append(registry.add_store(store, source_type).id)
-        registry.add_run(path.resolve(), is_dir, source_ids)
+            typed.append((f.resolve(), source_type))
+        runs.append((path.resolve(), is_dir, typed))
+
+    # All the files are parsed at once, like the files of a run opened from the page: logs in the worker pool, pcaps
+    # in tshark processes.
+    tasks = [task for _, _, typed in runs for task in typed]
+    if tasks:
+        progress = _Progress([f.name for f, _ in tasks])
+        with ThreadPoolExecutor(min(len(tasks), os.cpu_count() or 1), thread_name_prefix="parse") as executor:
+            futures = [executor.submit(cache.open, f, st, progress.reporter(i)) for i, (f, st) in enumerate(tasks)]
+            stores = iter([future.result() for future in futures])
+        progress.finish()
+        for path, is_dir, typed in runs:
+            source_ids = [registry.add_store(next(stores), st).id for _, st in typed]
+            registry.add_run(path, is_dir, source_ids)
 
     # Imported late so that --help and argument errors do not pay for the web stack.
     import uvicorn
