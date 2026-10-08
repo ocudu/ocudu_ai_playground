@@ -98,7 +98,9 @@ class EventWriter(Protocol):
         """Adds an event with its type, category, layer, level, ue, rnti, cause, text and UE lane."""
 
     def add_event_rows(self, rows: list[tuple]) -> None:
-        """Adds events as rows of time, record, type, category, layer, level, ue, rnti, cause, text and UE lane."""
+        """Adds events as rows of time, record, type, category, layer, level, ue, rnti, cause, text, UE lane, count and
+        span, see store.EVENT_COLUMNS.
+        """
 
     def add_lane(self, lane: int, ue: int | None, rnti: str | None, label: str | None = None) -> None:
         """Sets the DU UE index and RNTI of a UE lane, or the label shown for it instead."""

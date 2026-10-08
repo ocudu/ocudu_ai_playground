@@ -33,6 +33,12 @@ _MIN_CHUNK_SIZE = 4 << 20
 _CHUNKS_PER_WORKER = 4
 _EVENT_CANDIDATE_RE = re.compile(events.CANDIDATE_PATTERN.encode())
 _ENTRY_START_RE = re.compile(events.ENTRY_START_PATTERN.encode())
+# Generic warnings and errors of the same logger, level, UE and message but for its numbers, each within REPEAT_GAP_S of
+# the previous one, are stored as one event, up to REPEAT_MAX_SPAN_S long, with their count and span.
+REPEAT_TYPES = frozenset({"warning", "error"})
+REPEAT_GAP_S = 1.0
+REPEAT_MAX_SPAN_S = 10.0
+_NUMBERS_RE = re.compile(r"\d+")
 # Log level options of the layers whose info lines hold the UE events, with the events they hold.
 _EVENT_LEVEL_OPTIONS = {
     "mac": "random access, RLF",
@@ -135,19 +141,35 @@ def _parse_metrics_chunk(path: str, start: int, end: int, first_line: int) -> di
 def _parse_events_chunk(path: str, start: int, end: int, first_line: int) -> list[tuple]:
     """Parses the events of the byte range [start, end) of a log, which starts at line first_line and at a log entry.
 
-    Returns them as rows of time, line number, type, category, layer, level, ue, rnti, cause and text, in file order,
-    with the BINDING records of events.parse().
+    Returns them as rows of time, line number, type, category, layer, level, ue, rnti, cause, text, count and span, in
+    file order, with the BINDING records of events.parse(). Repeated generic warnings and errors are one row, see
+    REPEAT_TYPES, with their count and span; other rows have None.
     """
-    rows: list[tuple] = []
+    rows: list[list] = []
     if end <= start:
         return rows
     # Header line number, line, preamble match and continuation lines of the entry whose events are pending.
     pending: tuple[int, str, re.Match, list[str]] | None = None
+    # Row of the last run of each repeated warning or error, and the time of its last line.
+    runs: dict[tuple, tuple[list, float]] = {}
 
     def add(line_no: int, line: str, m: re.Match, body: list[str]) -> None:
         for ev in events.parse(line, body, m):
             t = ev["timestamp"].replace(tzinfo=timezone.utc).timestamp()
-            rows.append((t, line_no, ev["type"], ev["category"], ev["layer"], ev["level"], ev["ue"], ev["rnti"], ev["cause"], ev["text"]))
+            key = None
+            if ev["type"] in REPEAT_TYPES:
+                key = (ev["type"], ev["layer"], ev["level"], ev["ue"], ev["rnti"], _NUMBERS_RE.sub("#", ev["text"]))
+                run = runs.get(key)
+                if run is not None and t - run[1] <= REPEAT_GAP_S and t - run[0][0] <= REPEAT_MAX_SPAN_S:
+                    row = run[0]
+                    row[10] = (row[10] or 1) + 1
+                    row[11] = t - row[0]
+                    runs[key] = (row, t)
+                    continue
+            row = [t, line_no, ev["type"], ev["category"], ev["layer"], ev["level"], ev["ue"], ev["rnti"], ev["cause"], ev["text"], None, None]
+            rows.append(row)
+            if key is not None:
+                runs[key] = (row, t)
 
     for line_no, raw in enumerate(chunks.read_lines(path, start, end), start=first_line):
         if pending is not None:
@@ -192,7 +214,7 @@ class LogMetricsSource:
     """
 
     name = "log_metrics"
-    version = f"4+parsers-{_parsers_version()}"
+    version = f"5+parsers-{_parsers_version()}"
 
     def accepts(self, path: Path) -> bool:
         try:
@@ -260,10 +282,10 @@ class LogMetricsSource:
         for rows in parallel.map_chunks(_parse_events_chunk, args):
             out = []
             for row in rows:
-                t, _, type_, category, layer, _, ue, rnti, _, _ = row
+                t, _, type_, category, layer, _, ue, rnti, _, text, count, span = row
                 lane = tracker.assign_ids(t, type_, category, layer, ue, rnti)
                 if category != events.BINDING:
-                    out.append((*row, lane))
+                    out.append((*row[:10], lane, count, span))
             writer.add_event_rows(out)
         for lane in tracker.lanes:
             writer.add_lane(lane.id, lane.du_ue, lane.rnti)

@@ -5,7 +5,7 @@ import uPlot from "uplot";
 import { buildQuery, getJSON } from "../api.js";
 import ExportDialog from "./export-dialog.js";
 import { displayUnit, formatStat } from "../units.js";
-import { CURSOR_SYNC_KEY, MAX_LEGEND_SERIES, TIME_TICK_SPACE, attachZoomPan, capLegend, cssVar, fmtFull, formatTime, selectToZoom, seriesColor, seriesData, timeTicks, utcDate } from "./chart-utils.js";
+import { CURSOR_SYNC_KEY, MAX_LEGEND_SERIES, TIME_TICK_SPACE, attachZoomPan, capLegend, cssVar, eventText, fmtFull, formatTime, selectToZoom, seriesColor, seriesData, timeTicks, utcDate } from "./chart-utils.js";
 
 // Distance in pixels within which the cursor is on an event marker.
 const EVENT_HIT_PX = 5;
@@ -185,6 +185,8 @@ export default {
     this.chart?.destroy();
   },
   methods: {
+    eventText,
+
     /** DEFAULT_DATASET if the source has it, else its first dataset. */
     defaultDataset() {
       return (this.datasets.find((d) => d.name === DEFAULT_DATASET) ?? this.datasets[0])?.name ?? null;
@@ -556,7 +558,7 @@ export default {
         <div v-if="cursorText" class="cursor-readout">
           {{ cursorText }}
           <div v-if="cursorEvent" :class="['cursor-event', 'ev-' + cursorEvent.category]">
-            <span class="event-dot"></span>{{ cursorEvent.type }}: {{ cursorEvent.text }}
+            <span class="event-dot"></span>{{ eventText(cursorEvent) }}
           </div>
         </div>
       </div>

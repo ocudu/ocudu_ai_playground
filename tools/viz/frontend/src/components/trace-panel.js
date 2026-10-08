@@ -3,7 +3,7 @@
 
 import uPlot from "uplot";
 import { getJSON } from "../api.js";
-import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
+import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, eventText, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
 
 // Height of a row of the trace in CSS pixels, and of the space taken by the time axis.
 const ROW_HEIGHT = 18;
@@ -266,6 +266,8 @@ export default {
     this.chart?.destroy();
   },
   methods: {
+    eventText,
+
     applyFilter() {
       this.panel.filter = this.filterDraft.trim();
     },
@@ -559,7 +561,7 @@ export default {
             <div v-if="cursorText" class="cursor-readout">
               {{ cursorText }}<span v-if="cursorLane"> · {{ cursorLane }}</span>
               <div v-if="cursorEvent" :class="['cursor-event', 'ev-' + cursorEvent.category]">
-                <span class="event-dot"></span>{{ cursorEvent.type }}: {{ cursorEvent.text }}
+                <span class="event-dot"></span>{{ eventText(cursorEvent) }}
               </div>
             </div>
           </div>

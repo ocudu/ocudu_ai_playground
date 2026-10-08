@@ -29,7 +29,10 @@ MAX_DEFAULT_SPLITS = 256
 # Split values whose statistics are returned when none are selected, the first of the plotted ones.
 MAX_STATS_SPLITS = 16
 # Columns of the events table, after the timestamp and record id.
-EVENT_COLUMNS = ("type", "category", "layer", "level", "ue", "rnti", "cause", "text", "lane")
+# count and span are the lines and the seconds from the first to the last of an event that stands for repeated ones,
+# else None.
+EVENT_COLUMNS = ("type", "category", "layer", "level", "ue", "rnti", "cause", "text", "lane", "count", "span")
+_EVENT_COLUMN_TYPES = {"ue": "INTEGER", "lane": "INTEGER", "count": "INTEGER", "span": "REAL"}
 # Events returned by default for a time window.
 DEFAULT_MAX_EVENTS = 5000
 # UE lanes returned by default for a trace window.
@@ -212,7 +215,7 @@ class EventStoreWriter:
     def __init__(self, conn: sqlite3.Connection):
         self._conn = conn
         self._events: list[tuple] = []
-        cols = ", ".join(f"{c} {'INTEGER' if c in ('ue', 'lane') else 'TEXT'}" for c in EVENT_COLUMNS)
+        cols = ", ".join(f"{c} {_EVENT_COLUMN_TYPES.get(c, 'TEXT')}" for c in EVENT_COLUMNS)
         self._conn.executescript(
             f"""
             CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
@@ -244,7 +247,7 @@ class EventStoreWriter:
             CREATE TABLE lanes AS SELECT
                 e.lane,
                 MIN(e.{_TS}) AS t_start,
-                MAX(e.{_TS}) AS t_end,
+                MAX(e.{_TS} + COALESCE(e.span, 0)) AS t_end,
                 i.ue,
                 i.rnti,
                 i.label,
@@ -307,8 +310,9 @@ class Store:
         type_counts: dict[str, int] = {}
         if uri is not None:
             with closing(sqlite3.connect(uri, uri=True, check_same_thread=False)) as conn:
-                counts = dict(conn.execute("SELECT category, COUNT(*) FROM events GROUP BY category"))
-                type_counts = dict(conn.execute("SELECT type, COUNT(*) FROM events GROUP BY type"))
+                # Events that stand for repeated ones count each.
+                counts = dict(conn.execute("SELECT category, SUM(COALESCE(count, 1)) FROM events GROUP BY category"))
+                type_counts = dict(conn.execute("SELECT type, SUM(COALESCE(count, 1)) FROM events GROUP BY type"))
         self._events_uri, self._events_keepalive = uri, keepalive
         self.event_counts, self.event_type_counts = counts, type_counts
         self.events_ready = True

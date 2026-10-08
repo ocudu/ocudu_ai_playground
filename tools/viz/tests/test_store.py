@@ -8,7 +8,7 @@ from pathlib import Path
 from viz.sources.log_metrics import LogMetricsSource
 from viz.store import QueryError, StoreCache
 
-from .helpers import write_log
+from .helpers import _ts, write_log
 
 
 class StoreTest(unittest.TestCase):
@@ -186,6 +186,22 @@ class StoreTest(unittest.TestCase):
         rlf = res["events"][4]
         self.assertEqual((rlf["category"], rlf["layer"], rlf["ue"], rlf["cause"]), ("failure", "MAC", 1, "100 consecutive HARQ-ACK KOs"))
         self.assertIn("RLF detected", store.records(around=rlf["record"], count=1)[0]["text"])
+
+    def test_repeated_warnings(self):
+        late = "[OFH     ] [W] Real-time timing worker woke up late, skipped '{}' symbols."
+        lines = [f"{_ts(1 + 0.2 * i)} {late.format(i % 3)}" for i in range(5)]
+        # The same warning after a gap, a warning of another message, and one of a UE.
+        lines += [f"{_ts(4)} {late.format(9)}", f"{_ts(4.1)} [OFH     ] [W] Other warning", f"{_ts(4.2)} [MAC     ] [W] ue=3: Late HARQ 5"]
+        lines += [f"{_ts(4.3)} [MAC     ] [W] ue=3: Late HARQ 6", f"{_ts(4.4)} [MAC     ] [W] ue=4: Late HARQ 7"]
+        path = self.dir / "repeated.log"
+        path.write_text("\n".join(lines) + "\n")
+        store = self.cache.open(path, LogMetricsSource())
+        self.cache.open_events(store, LogMetricsSource())
+        evs = store.events()["events"]
+        self.assertEqual([(e["record"], e["count"], e["ue"]) for e in evs], [(1, 5, None), (6, None, None), (7, None, None), (8, 2, 3), (10, None, 4)])
+        self.assertAlmostEqual(evs[0]["span"], 0.8)
+        # Counts are of the lines.
+        self.assertEqual(store.event_counts, {"warning": 10})
 
     def test_events_selection(self):
         store = self.open_with_events()

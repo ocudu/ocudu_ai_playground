@@ -234,6 +234,11 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   the tab: `RACH` (PRACH detections), `RLF`, `warnings` and `errors`, disabled at 0 so that a clean log reads as one.
   `/api/events` selects events by category and by type. All start hidden, and the shown ones are kept in the URL view
   state. The trace shows all the events of all the categories.
+- Repeated generic warnings and errors are stored as one event, since a log can repeat one millions of times (e.g. 3.1M
+  OFH "woke up late" lines in a 485 MB log): the ones of the same logger, level, UE and message but for its numbers,
+  each within 1 s of the previous one, up to 10 s, with their `count` and `span`. Event counts are of lines. They are
+  collapsed in the worker of each chunk, so runs end at chunk edges. On the 485 MB log, 3.2M events become 11k rows,
+  and the events phase takes 3.5 s instead of 8 s.
 - The `+ trace` widget shows the events per UE on the time axis of the tab: one bar per UE context, from its random
   access or creation to its deletion, with a glyph per event, and a last row, `common`, with the events of no UE. Each UE has its own
   row, labelled with its DU UE index and RNTI, in start order. The trace shows 25 UE rows at a time and scrolls over the

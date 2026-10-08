@@ -11,6 +11,17 @@ export const TIME_TICK_SPACE = 110;
 // Series listed in legends, as many as the statistics of the server list. Charts draw all.
 export const MAX_LEGEND_SERIES = 16;
 
+/**
+ * Text of an event under the cursor: its type and message, and for an event of repeated lines, their count and span.
+ * @param {{type: string, text: string, count?: number | null, span?: number | null}} ev
+ */
+export function eventText(ev) {
+  const span = ev.span ?? 0;
+  const over = span < 1 ? `${Math.round(span * 1000)} ms` : `${span.toFixed(1)} s`;
+  const repeated = ev.count > 1 ? ` (×${ev.count} over ${over})` : "";
+  return `${ev.type}: ${ev.text}${repeated}`;
+}
+
 /** Hides the legend rows of a uPlot chart past the first MAX_LEGEND_SERIES series. */
 export function capLegend(chart) {
   // Row 0 is the one of the x values.

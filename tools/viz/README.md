@@ -59,7 +59,9 @@ In the page:
   plots, tables and traces.
 - The `events` chips above the plots mark log events on the time plots: `RACH` (PRACH detections), `RLF`,
   `warnings` and `errors`, with their count in the logs of the tab, greyed out when there are none. All start hidden.
-  Hover a marker to see its event, click it to see its log line. The trace shows all the events.
+  Hover a marker to see its event, click it to see its log line. The trace shows all the events. A warning or error
+  repeated within a second, e.g. a late real-time worker, is one event: its hover gives the count and span of its
+  lines, and its click opens the first one.
 - `+ trace` adds a timeline of the UEs, of the F1AP pcap of the tab by default. With `log events` ticked (off by default), the UE events of
   the logs of the tab, e.g. random access, join the F1AP UE contexts, matched by C-RNTI and time, since pcaps
   identify UEs more reliably than logs. A trace of a log of a tab with an F1AP pcap also identifies its UEs by the F1AP

@@ -27,7 +27,7 @@ class PcapSource:
     """
 
     name = "pcap"
-    version = f"3+parsers-{_parsers_version()}"
+    version = f"4+parsers-{_parsers_version()}"
 
     def __init__(self, work_dir: str | os.PathLike[str] | None = None):
         """work_dir holds the pcaps staged for tshark, see parsers.pcap.tshark."""

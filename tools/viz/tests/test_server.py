@@ -186,7 +186,7 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(src["event_counts"], {"ra": 2, "lifecycle": 2, "failure": 1, "warning": 1})
         res = self.client.get("/api/events", params={"source": 0, "categories": ["failure"]}).json()
         self.assertEqual([e["type"] for e in res["events"]], ["rlf"])
-        self.assertEqual(set(res["events"][0]), {"t", "record", "type", "category", "layer", "level", "ue", "rnti", "cause", "text", "lane"})
+        self.assertEqual(set(res["events"][0]), {"t", "record", "type", "category", "layer", "level", "ue", "rnti", "cause", "text", "lane", "count", "span"})
 
     def test_trace(self):
         res = self.client.get("/api/trace", params={"source": 0}).json()
