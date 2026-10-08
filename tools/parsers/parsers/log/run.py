@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 
 from . import preamble
 
@@ -19,7 +19,7 @@ _build_re = re.compile(r"Built in (?P<mode>\S+) mode using commit (?P<commit>\S+
 
 @dataclass(frozen=True)
 class LogRun:
-    """Build and time span, in epoch seconds, of the run that wrote a log."""
+    """Build and time span, in epoch seconds with log times taken as UTC, of the run that wrote a log."""
 
     mode: str
     commit: str
@@ -61,7 +61,8 @@ def same_run(a: LogRun, b: LogRun, slack_s: float = 60.0) -> bool:
 
 
 def _epoch(timestamp: str) -> float | None:
+    # OCUDU logs UTC times without a zone, which pcap packet times can then be compared with.
     try:
-        return datetime.fromisoformat(timestamp).timestamp()
+        return datetime.fromisoformat(timestamp).replace(tzinfo=timezone.utc).timestamp()
     except ValueError:
         return None
