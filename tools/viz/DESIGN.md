@@ -238,7 +238,9 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   access or creation to its deletion, with a glyph per event, and a last row, `common`, with the events of no UE. Each UE has its own
   row, labelled with its DU UE index and RNTI, in start order. The trace shows 25 UE rows at a time and scrolls over the
   others with its own scrollbar, keeping the time axis and the row of events of no UE in view. Events are assigned to UE contexts by `parsers.log.events.UeTracker` while they are parsed: by
-  RNTI, by DU UE index, and for CU-CP events by the RNTI of the RRC messages of their CU-CP UE index.
+  RNTI, by DU UE index, and for CU-CP events by the RNTI of the RRC messages of their CU-CP UE index. A UE created
+  without RNTI, e.g. a handover target, gets it from its first `UE Configuration` line, within its lifetime only,
+  since DU UE indexes are soon reused while RNTIs and protocol UE ids are not.
   `GET /api/trace?source&t0&t1&max_lanes&limit` returns the UE contexts active in a window and its events.
 - The trace has a filter like the plots (D6), over the event fields type, category, layer, level, ue, rnti, cause and
   text, evaluated by SQLite over the events of the window, with the UE index and RNTI of their lane for events
@@ -300,8 +302,9 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   identifiers of all of them, whatever events are shown. The trace of an F1AP pcap of a run with logs is on these UEs
   (`/api/runs/{id}/trace`), with the events of the logs too with `log events`, off by default: a log lane with
   an RNTI joins the F1AP UE context with that C-RNTI whose lifetime, with 2 s of slack, overlaps it, and a log lane
-  without one joins the context starting nearest its creation, within 1 s, i.e. its InitialULRRCMessageTransfer or
-  UEContextSetup. Log lanes of no context keep their own row. A trace of a log of a run with an F1AP pcap also shows
+  without one, which is rare, joins the context starting nearest its creation, within 1 s, i.e. its
+  InitialULRRCMessageTransfer or UEContextSetup. The UEs are indexed by RNTI and by creation time, so that joining
+  takes n log n. Log lanes of a random access of no UE, i.e. a PRACH only, are expected to have no context. Log lanes of no context keep their own row. A trace of a log of a run with an F1AP pcap also shows
   its events on these UE contexts, the ones it has events in. RNTIs are compared as logs print them
   (`parsers.ran.rnti`). The F1AP gNB-DU-UE-F1AP-ID is not the DU UE index of the logs, so they are not compared. A
   trace row shows the DU UE index, RNTI and protocol identifiers of its UE. Joining NGAP and E1AP contexts, which

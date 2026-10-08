@@ -145,7 +145,7 @@ class LogMetricsSource:
     """
 
     name = "log_metrics"
-    version = f"3+parsers-{_parsers_version()}"
+    version = f"4+parsers-{_parsers_version()}"
 
     def accepts(self, path: Path) -> bool:
         try:
@@ -212,6 +212,8 @@ class LogMetricsSource:
         def add_events(line_no: int, line: str, m: re.Match, body: list[str]) -> None:
             for ev in events.parse(line, body, m):
                 ev["lane"] = tracker.assign(ev)
+                if ev["category"] == events.BINDING:
+                    continue
                 ev_t = ev.pop("timestamp").replace(tzinfo=timezone.utc).timestamp()
                 writer.add_event(line_no, ev_t, ev)
 

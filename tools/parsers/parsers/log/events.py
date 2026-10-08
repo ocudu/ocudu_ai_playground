@@ -24,6 +24,8 @@ from . import preamble
 
 # Event categories, in display order.
 CATEGORIES = ("ra", "lifecycle", "rrc", "mobility", "failure", "warning", "error")
+# Category of the records that are not events but bind a DU UE index to its RNTI, for UeTracker.
+BINDING = "binding"
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,8 @@ EVENT_PATTERNS = (
     _p("msg3", "ra", "MAC", r"UL rnti=(?P<rnti>0x\w+) subPDUs: \[CCCH"),
     _p("conres", "ra", "MAC", r"DL PDU: ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+) size=\d+: CON_RES"),
     _p("ue_create", "lifecycle", "DU-MNG", r'ue=(?P<ue>\d+)(?: rnti=(?P<rnti>0x\w+))? proc="UE Create": Procedure started'),
+    # A UE created without its RNTI, e.g. the target of a handover, gets it at its first configuration.
+    _p("ue_config", BINDING, "DU-MNG", r'ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+) proc="UE Configuration": Procedure started'),
     _p("ue_delete", "lifecycle", "DU-MNG", r'ue=(?P<ue>\d+) proc="UE Delete": Procedure finished successfully'),
     _p("rrc_setup_complete", "rrc", "RRC", r"ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): DCCH UL rrcSetupComplete$"),
     _p("rrc_release", "rrc", "RRC", r"ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): DCCH DL rrcRelease$"),
@@ -73,7 +77,7 @@ EVENT_PATTERNS = (
 # Substrings of the entry headers that can hold events, to skip the other lines without parsing them. Usable as a
 # bytes pattern too, to skip lines before decoding them.
 CANDIDATE_PATTERN = (
-    r'Processed slot events|subPDUs: \[CCCH|CON_RES|proc="UE (?:Create|Delete)"|rrcSetupComplete|rrcRelease'
+    r'Processed slot events|subPDUs: \[CCCH|CON_RES|proc="UE (?:Create|Delete|Configuration)"|rrcSetupComplete|rrcRelease'
     r"|rrcReestablishmentRequest|Trigger intra-CU|Starting HO preparation|RLF detected|Reestablishment"
     r'|ra-ContentionResolutionTimer|"RRC Setup Procedure" timed out|\] \[[WE]\] '
 )
@@ -108,7 +112,7 @@ def parse(line: str, body: Sequence[str] = (), preamble_match: re.Match | None =
     """Parses a log entry, given by its header line and continuation lines, into its event records.
 
     Each record has the timestamp, type, category, layer, level, ue and rnti (None when not logged), cause (or None)
-    and the message text.
+    and the message text. Records of category BINDING are not events, see UeTracker.
     """
     if preamble_match is None:
         preamble_match = preamble.match_preamble(line)
@@ -158,7 +162,9 @@ def parse(line: str, body: Sequence[str] = (), preamble_match: re.Match | None =
 
 
 def iter_events(lines: Iterable[str]) -> Iterator[tuple[int, dict[str, Any]]]:
-    """Yields the events of a log, with the line number of the entry header they come from, starting at 1."""
+    """Yields the events of a log, with the line number of the entry header they come from, starting at 1, and the
+    BINDING records, see parse().
+    """
     pending: tuple[int, str, re.Match, list[str]] | None = None
     for line_no, line in enumerate(lines, start=1):
         if pending is not None:
@@ -201,7 +207,9 @@ class UeTracker:
     """Assigns events to the UE contexts they belong to, given the events in log order.
 
     A UE context is identified by its RNTI, from the random access to the UE deletion, and by its DU UE index once
-    created. Events of the CU-CP are matched through the RNTI of the RRC messages of the same CU-CP UE index.
+    created. Events of the CU-CP are matched through the RNTI of the RRC messages of the same CU-CP UE index. BINDING
+    records give the RNTI of a context created without it, which its later events, e.g. a contention-free random
+    access, are then matched by.
     """
 
     def __init__(self):
@@ -226,6 +234,13 @@ class UeTracker:
                 lane = self._new_lane(t, rnti)
             lane.du_ue, lane.created = ue, True
             self._by_du_ue[ue] = lane
+            return lane
+        if event.get("category") == BINDING:
+            # Only within the lifetime of the context, since DU UE indexes are soon reused.
+            lane = self._by_du_ue.get(ue) if ue is not None else None
+            if lane is not None and lane.rnti is None and rnti:
+                lane.rnti = rnti
+                self._by_rnti[rnti] = lane
             return lane
         if event["type"] == "ue_delete":
             lane = self._by_du_ue.pop(ue, None)

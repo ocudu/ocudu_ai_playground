@@ -7,6 +7,7 @@ combined into one UE each, with the identifiers of all of them.
 
 from __future__ import annotations
 
+import bisect
 from dataclasses import dataclass, field
 from typing import Any, Hashable
 
@@ -48,6 +49,8 @@ class Ue:
     ids: dict[str, list[str]]
     # Contexts, as (source, lane).
     parts: list[tuple[Hashable, Hashable]]
+    # Start of the context it was made from.
+    created: float = 0.0
 
     def first(self, name: str) -> str | None:
         """First value of an identifier, or None."""
@@ -59,18 +62,19 @@ def combine(*sources: list[Context]) -> list[Ue]:
     """The UEs of a run from the contexts of its sources, the most reliable first, e.g. an F1AP pcap, then its logs.
 
     The contexts of the first source are UEs of their own. A context of a later source joins a UE made from an earlier
-    one: with an RNTI, the UE of that RNTI whose lifetime, within RNTI_SLACK_S, overlaps it; without, the UE starting
-    nearest its creation, within CREATION_SLACK_S. Contexts of no UE are UEs of their own. UEs are in start order.
+    one: with an RNTI, the UE of that RNTI whose lifetime, within RNTI_SLACK_S, overlaps it; without, the UE whose first
+    context started nearest its creation, within CREATION_SLACK_S. Contexts of no UE are UEs of their own. UEs are in
+    start order.
     """
     ues: list[Ue] = []
     for contexts in sources:
-        earlier = list(ues)
+        index = _Index(ues)
         for ctx in contexts:
             ids = _normalized(ctx.ids)
-            target = _target(earlier, ctx, ids.get("rnti"))
+            target = index.target(ctx, ids.get("rnti"))
             if target is None:
                 ues.append(Ue(f"{ctx.source}:{ctx.lane}", ctx.t_start, ctx.t_end, ctx.open, {k: [v] for k, v in ids.items()},
-                              [(ctx.source, ctx.lane)]))
+                              [(ctx.source, ctx.lane)], ctx.t_start))
                 continue
             target.parts.append((ctx.source, ctx.lane))
             target.t_start = min(target.t_start, ctx.t_start)
@@ -94,12 +98,25 @@ def _normalized(ids: dict[str, Any]) -> dict[str, str]:
     return out
 
 
-def _target(ues: list[Ue], ctx: Context, rnti: str | None) -> Ue | None:
-    if rnti is not None:
-        candidates = [
-            ue for ue in ues
-            if rnti in ue.ids.get("rnti", ()) and ue.t_start - RNTI_SLACK_S <= ctx.t_end and ctx.t_start <= ue.t_end + RNTI_SLACK_S
-        ]
-    else:
-        candidates = [ue for ue in ues if abs(ue.t_start - ctx.t_start) <= CREATION_SLACK_S]
-    return min(candidates, key=lambda ue: abs(ue.t_start - ctx.t_start), default=None)
+class _Index:
+    """The UEs that the contexts of a source can join, by RNTI and by creation time."""
+
+    def __init__(self, ues: list[Ue]):
+        self._by_rnti: dict[str, list[Ue]] = {}
+        for ue in ues:
+            for rnti in ue.ids.get("rnti", ()):
+                self._by_rnti.setdefault(rnti, []).append(ue)
+        self._by_created = sorted(ues, key=lambda ue: ue.created)
+        self._created = [ue.created for ue in self._by_created]
+
+    def target(self, ctx: Context, rnti: str | None) -> Ue | None:
+        """The UE a context joins, see combine(), or None."""
+        if rnti is not None:
+            candidates = [
+                ue for ue in self._by_rnti.get(rnti, ())
+                if ue.t_start - RNTI_SLACK_S <= ctx.t_end and ctx.t_start <= ue.t_end + RNTI_SLACK_S
+            ]
+            return min(candidates, key=lambda ue: abs(ue.t_start - ctx.t_start), default=None)
+        lo = bisect.bisect_left(self._created, ctx.t_start - CREATION_SLACK_S)
+        hi = bisect.bisect_right(self._created, ctx.t_start + CREATION_SLACK_S)
+        return min(self._by_created[lo:hi], key=lambda ue: abs(ue.created - ctx.t_start), default=None)

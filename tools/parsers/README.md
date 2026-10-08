@@ -99,7 +99,8 @@ with open("gnb.log") as f:
 
 `events.iter_events()` recognizes the lines of known events (`events.EVENT_PATTERNS`) and reports the other warning and
 error lines as generic `warning` and `error` events, with the `ue=` and RNTI of their message if any. Records have `timestamp`, `type`, `category`, `layer`, `level`,
-`ue`, `rnti`, `cause` and `text`.
+`ue`, `rnti`, `cause` and `text`. Records of category `events.BINDING` (`ue_config`) are not events: they give
+`events.UeTracker` the RNTI of a UE created without it, e.g. a handover target.
 
 | Category    | Types                                                              |
 |-------------|--------------------------------------------------------------------|

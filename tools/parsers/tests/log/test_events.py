@@ -15,6 +15,7 @@ LINES = {
     "conres": "2026-07-30T21:09:59.557939 [MAC     ] [I] [    34.5] DL PDU: ue=0 rnti=0x4601 size=9: CON_RES: id=1c51f3668666",
     "ue_create": '2026-07-30T20:53:14.482176 [DU-MNG  ] [I] ue=0 rnti=0x4601 proc="UE Create": Procedure started....',
     "ue_create_no_rnti": '2026-07-30T20:53:20.100000 [DU-MNG  ] [I] ue=3 proc="UE Create": Procedure started....',
+    "ue_config": '2026-07-30T20:53:20.100100 [DU-MNG  ] [I] ue=3 rnti=0x4605 proc="UE Configuration": Procedure started....',
     "ue_delete": '2026-07-30T20:53:25.816892 [DU-MNG  ] [I] ue=0 proc="UE Delete": Procedure finished successfully.',
     "rrc_setup_complete": "2026-07-30T20:53:14.500000 [RRC     ] [I] ue=0 c-rnti=0x4601: DCCH UL rrcSetupComplete",
     "rrc_release": "2026-07-30T20:53:40.000000 [RRC     ] [I] ue=12 c-rnti=0x460f: DCCH DL rrcRelease",
@@ -142,6 +143,9 @@ class EventsTest(unittest.TestCase):
         def ev(t, type_, layer, ue=None, rnti=None):
             return {"timestamp": datetime(2026, 1, 1, 0, 0, t), "type": type_, "layer": layer, "ue": ue, "rnti": rnti}
 
+        def binding(t, ue, rnti):
+            return {**ev(t, "ue_config", "DU-MNG", ue, rnti), "category": events.BINDING}
+
         tracker = events.UeTracker()
         assigned = [
             tracker.assign(e)
@@ -156,17 +160,28 @@ class EventsTest(unittest.TestCase):
                 ev(7, "prach", "SCHED", rnti="0x4601"),
                 ev(8, "ue_create", "DU-MNG", ue=1),
                 ev(9, "conres", "MAC", ue=1, rnti="0x4602"),
+                # A handover target, created without RNTI, gets it from its configuration before its random access.
+                ev(10, "ue_create", "DU-MNG", ue=2),
+                binding(11, 2, "0x4605"),
+                ev(12, "prach", "SCHED", rnti="0x4605"),
+                # A configuration of no live context binds nothing.
+                binding(13, 7, "0x4609"),
             ]
         ]
-        self.assertEqual(assigned, [0, 0, 0, 0, 0, 0, None, 1, 2, 2])
-        first, retry, created = tracker.lanes
+        self.assertEqual(assigned, [0, 0, 0, 0, 0, 0, None, 1, 2, 2, 3, 3, 3, None])
+        first, retry, created, target = tracker.lanes
+        self.assertEqual((target.du_ue, target.rnti), (2, "0x4605"))
         self.assertEqual((first.du_ue, first.rnti, first.created, first.deleted), (0, "0x4601", True, True))
         self.assertEqual((first.t_end - first.t_start).seconds, 5)
         self.assertEqual((retry.du_ue, retry.created, retry.t_end), (None, False, None))
         self.assertEqual((created.du_ue, created.rnti), (1, "0x4602"))
 
     def test_categories_cover_patterns(self):
-        self.assertTrue({p.category for p in events.EVENT_PATTERNS} <= set(events.CATEGORIES))
+        self.assertTrue({p.category for p in events.EVENT_PATTERNS} <= {*events.CATEGORIES, events.BINDING})
+
+    def test_binding(self):
+        rec = parse("ue_config")
+        self.assertEqual((rec["type"], rec["category"], rec["ue"], rec["rnti"]), ("ue_config", events.BINDING, 3, "0x4605"))
 
 
 if __name__ == "__main__":
