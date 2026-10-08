@@ -92,9 +92,9 @@ In the page:
   to show only the metric columns whose name contains any of them (e.g. `latency brate`), and use the row
   filter like in plots. Click a row to see its log line. `export CSV` downloads all rows of the visible
   window with the shown columns, values in the canonical unit.
-- 💾 on a time plot opens it in a dialog to save as a PNG image, or copy it to the clipboard: on white with the light
-  theme colors, at the size typed or dragged from its corner, with its title, legend and event markers. Its series
-  are fetched again for a wider image.
+- 💾 on a time plot opens it in a dialog to save as a PNG or SVG image, or copy it to the clipboard: on white with
+  the light theme colors, at the size typed or dragged from its corner, with its title, legend and event markers. Its
+  series are fetched again for a wider image. The SVG has vector lines and text, laid out like the plot.
 - Below each plot, a table shows count, min, mean, p50, p95, p99 and max of each series in the visible
   window, with the plot filter applied. Percentiles are sampled for windows over 2M points.
 - Time mode `relative` shows the time since the start of the files of the tab.

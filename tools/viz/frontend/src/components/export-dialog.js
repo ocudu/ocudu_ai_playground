@@ -4,6 +4,7 @@
 import uPlot from "uplot";
 import { getJSON } from "../api.js";
 import { TIME_TICK_SPACE, cssVar, seriesColor, seriesData, timeTicks, utcDate } from "./chart-utils.js";
+import { chartSvg, escapeXml } from "./svg-export.js";
 
 // Size of the image, in CSS pixels, when the dialog opens.
 const DEFAULT_WIDTH = 1000;
@@ -21,8 +22,23 @@ const COPIED_MS = 1500;
  * File name of an exported plot, without unsafe characters.
  * @param {string[]} parts
  */
-function fileName(parts) {
-  return parts.filter(Boolean).join("_").replace(/[^\w.-]+/g, "_") + ".png";
+function fileName(parts, extension) {
+  return parts.filter(Boolean).join("_").replace(/[^\w.-]+/g, "_") + extension;
+}
+
+/**
+ * Downloads a blob as a file.
+ * @param {Blob} blob
+ * @param {string} name
+ */
+function download(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  // Released later, since revoking it at once can cancel the download.
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
 }
 
 export default {
@@ -53,6 +69,10 @@ export default {
     };
   },
   watch: {
+    // Events can arrive after the chart is drawn, e.g. when their category was just shown.
+    events() {
+      this.chart?.redraw(false, true);
+    },
     width() {
       this.resized();
     },
@@ -176,14 +196,48 @@ export default {
 
     /** Saves the image as a PNG file. */
     async savePng() {
-      const blob = await this.renderPng();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName(this.nameParts);
-      a.click();
-      // Released later, since revoking it at once can cancel the download.
-      setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
+      download(await this.renderPng(), fileName(this.nameParts, ".png"));
+    },
+
+    /** Saves the image as an SVG file: vector lines and text, laid out like the PNG. */
+    saveSvg() {
+      download(new Blob([this.renderSvg()], { type: "image/svg+xml" }), fileName(this.nameParts, ".svg"));
+    },
+
+    /** The frame as an SVG document: its title, chart and legend, where the frame shows them, on white. */
+    renderSvg() {
+      const frame = this.$refs.frame;
+      const box = frame.getBoundingClientRect();
+      const at = (el) => {
+        const r = el.getBoundingClientRect();
+        return { x: r.left - box.left, y: r.top - box.top, w: r.width, h: r.height };
+      };
+      const text = (el, value) => {
+        const style = getComputedStyle(el);
+        const r = at(el);
+        return `<text x="${r.x}" y="${r.y + r.h / 2}" dominant-baseline="middle" fill="${style.color}" font-family="${escapeXml(style.fontFamily)}" font-size="${style.fontSize}" font-weight="${style.fontWeight}">${escapeXml(value)}</text>`;
+      };
+      const parts = [`<rect width="100%" height="100%" fill="#ffffff"/>`, text(this.$refs.titleText, this.title)];
+      // The chart canvas starts at the origin of the chart layout, in which uPlot places its plot box and axes.
+      const canvas = at(this.$refs.chart.querySelector("canvas"));
+      const style = {
+        axis: cssVar("--fg-muted", frame),
+        grid: cssVar("--grid", frame),
+        series: this.labels.map((_, i) => seriesColor(i, frame)),
+        lineWidth: 1.5,
+        events: this.events.map((ev) => ({ t: ev.t, color: cssVar(`--ev-${ev.category}`, frame) })),
+      };
+      parts.push(chartSvg(this.chart, canvas.x, canvas.y, style, "plot-area"));
+      for (const item of this.$refs.legend.querySelectorAll(".export-legend-item")) {
+        const swatch = item.querySelector(".swatch");
+        const r = at(swatch);
+        parts.push(`<rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${getComputedStyle(swatch).backgroundColor}"/>`);
+        const label = item.querySelector(".label");
+        parts.push(text(label, label.textContent));
+      }
+      const width = Math.round(box.width);
+      const height = Math.round(box.height);
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">\n${parts.join("\n")}\n</svg>\n`;
     },
 
     /** Puts the image on the clipboard, as a PNG. */
@@ -262,6 +316,7 @@ export default {
           <span v-if="error" class="error">{{ error }}</span>
           <span class="status"></span>
           <button :disabled="!ready || loading" title="Copy the image to the clipboard, e.g. to paste it in a chat or slide" @click="copyPng">{{ copied ? "Copied" : "Copy" }}</button>
+          <button :disabled="!ready || loading" title="Save the image as an SVG file, with vector lines and text" @click="saveSvg">Save SVG</button>
           <button class="primary" :disabled="!ready || loading" title="Save the image as a PNG file" @click="savePng">Save PNG</button>
           <button class="icon" title="Close" @click="$emit('close')">✕</button>
         </header>
