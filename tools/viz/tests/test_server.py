@@ -100,6 +100,26 @@ class ServerTest(unittest.TestCase):
         self.assertEqual((brate["unit"], brate["context"]), ("bps", False))
         self.assertEqual(len(res["rows"][0]), 2 + len(names))
 
+    def test_series_csv(self):
+        params = {"source": 0, "dataset": "sched_ue", "field": "dl_brate", "split_by": "ue"}
+        res = self.client.get("/api/series.csv", params=params)
+        self.assertEqual(res.status_code, 200)
+        self.assertIn('filename="gnb_sched_ue_dl_brate.csv"', res.headers["content-disposition"])
+        lines = res.text.splitlines()
+        self.assertEqual(lines[0], "time_utc,ue,dl_brate_bps")
+        # All the samples, one per UE per second, not a downsampled series.
+        self.assertEqual(len(lines), 1 + 20)
+        self.assertEqual({line.split(",")[1] for line in lines[1:]}, {"0", "1"})
+        one_ue = self.client.get("/api/series.csv", params={**params, "split_values": ["1"]}).text.splitlines()
+        self.assertEqual(len(one_ue), 1 + 10)
+        unsplit = self.client.get("/api/series.csv", params={"source": 0, "dataset": "mac", "field": "nof_slots"}).text
+        self.assertEqual(unsplit.splitlines()[0], "time_utc,nof_slots")
+
+    def test_series_csv_errors(self):
+        base = {"source": 0, "dataset": "sched_ue", "field": "dl_brate"}
+        self.assertEqual(self.client.get("/api/series.csv", params={**base, "filter": "nope > 1"}).status_code, 400)
+        self.assertEqual(self.client.get("/api/series.csv", params={**base, "field": "nope"}).status_code, 400)
+
     def test_table_csv(self):
         params = {"source": 0, "dataset": "exec", "instance": "cell_exec", "fields": ["executor", "task_avg"]}
         res = self.client.get("/api/table.csv", params=params)

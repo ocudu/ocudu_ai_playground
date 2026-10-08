@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import csv
 import io
+import itertools
 from collections.abc import AsyncIterator, Callable, Iterator
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -379,6 +380,47 @@ def create_app(
             yield buf.getvalue()
 
         name_parts = [store.path.stem, dataset] + ([instance] if instance else [])
+        filename = _csv_name("_".join(name_parts)) + ".csv"
+        return StreamingResponse(
+            generate(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+
+    @app.get("/api/series.csv")
+    def series_csv(
+        source: int,
+        dataset: str,
+        field: str,
+        t0: float | None = None,
+        t1: float | None = None,
+        split_by: str | None = None,
+        split_values: list[str] | None = Query(None),
+        filter_expr: str | None = Query(None, alias="filter"),
+        instance: str | None = None,
+    ) -> StreamingResponse:
+        """Streams the samples of the series of a plot at full resolution, one row per sample."""
+        store = get_store(source)
+        rows = store.series_rows(dataset, field, t0, t1, split_by, split_values, filter_expr, instance)
+        try:
+            # Runs the query before the response starts, so errors get a proper status.
+            first = next(rows, None)
+        except QueryError as e:
+            raise HTTPException(400, str(e)) from None
+        unit = store.datasets[dataset]["units"].get(field)
+        header = ["time_utc", *([split_by] if split_by else []), f"{field}_{unit.replace('%', 'pct')}" if unit else field]
+
+        def generate() -> Iterator[str]:
+            buf = io.StringIO()
+            writer = csv.writer(buf)
+            writer.writerow(header)
+            for i, (t, _, split, value) in enumerate(itertools.chain([first] if first else [], rows), start=1):
+                writer.writerow([_utc_iso(t), *([split] if split_by else []), value])
+                if i % _CSV_CHUNK_ROWS == 0:
+                    yield buf.getvalue()
+                    buf.seek(0)
+                    buf.truncate()
+            yield buf.getvalue()
+
+        name_parts = [store.path.stem, dataset] + ([instance] if instance else []) + [field]
         filename = _csv_name("_".join(name_parts)) + ".csv"
         return StreamingResponse(
             generate(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'}

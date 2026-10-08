@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
 import uPlot from "uplot";
-import { getJSON } from "../api.js";
+import { buildQuery, getJSON } from "../api.js";
 import ExportDialog from "./export-dialog.js";
 import { displayUnit, formatStat } from "../units.js";
 import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, fmtFull, formatTime, selectToZoom, seriesColor, seriesData, timeTicks, utcDate } from "./chart-utils.js";
@@ -105,6 +105,10 @@ export default {
         const scale = (v) => formatStat(v == null ? v : v / this.unit.divisor);
         return { label: s.label, color, count: s.count.toLocaleString(), min: scale(s.min), mean: scale(s.mean), p50: scale(s.p50), p95: scale(s.p95), p99: scale(s.p99), max: scale(s.max) };
       });
+    },
+    /** CSV of the samples of the plot in the visible window, at full resolution. */
+    csvHref() {
+      return `/api/series.csv?${buildQuery(this.queryParams())}`;
     },
     filterDirty() {
       return this.filterDraft.trim() !== this.plot.filter;
@@ -536,6 +540,8 @@ export default {
           <span v-else-if="downsampled" class="muted" title="min/max per pixel; zoom in for full resolution">downsampled</span>
           <span v-if="error" class="error">{{ error }}</span>
         </span>
+        <a v-if="labels.length" class="button" :href="csvHref" download
+           title="Samples of the plotted series in the visible window, at full resolution, values in the canonical unit">CSV</a>
         <button class="icon" :disabled="plot.mode === 'histogram' || !labels.length" title="Save the plot as an image" @click="exporting = true">💾</button>
         <button class="icon" title="Remove plot" @click="$emit('remove')">✕</button>
       </header>

@@ -92,6 +92,8 @@ In the page:
   to show only the metric columns whose name contains any of them (e.g. `latency brate`), and use the row
   filter like in plots. Click a row to see its log line. `export CSV` downloads all rows of the visible
   window with the shown columns, values in the canonical unit.
+- `CSV` on a plot downloads the samples of its series in the visible window, at full resolution, one row per sample
+  with its time and split value, in the canonical unit (e.g. bps).
 - 💾 on a time plot opens it in a dialog to save as a PNG or SVG image, or copy it to the clipboard: on white with
   the light theme colors, at the size typed or dragged from its corner, with its title, legend and event markers. Its
   series are fetched again for a wider image. The SVG has vector lines and text, laid out like the plot.

@@ -366,6 +366,31 @@ class Store:
             })
         return {"unit": ds["units"].get(field), "downsampled": downsampled, "total_splits": total_splits, "series": series}
 
+    def series_rows(
+        self,
+        dataset: str,
+        field: str,
+        t0: float | None = None,
+        t1: float | None = None,
+        split_by: str | None = None,
+        split_values: list[str] | None = None,
+        filter_expr: str | None = None,
+        instance: str | None = None,
+        max_splits: int = MAX_DEFAULT_SPLITS,
+    ) -> Iterator[tuple[Any, ...]]:
+        """Yields the samples of the series of series() at full resolution, as (time, record, split value, value), in
+        time order. The split value is None without split_by.
+        """
+        ds = self._dataset(dataset)
+        split_col = _quote(split_by) if split_by else "NULL"
+        with self._connect() as conn:
+            where_sql, params, _ = self._window(conn, ds, field, t0, t1, split_by, split_values, filter_expr, instance, max_splits)
+            yield from conn.execute(
+                f"SELECT {_TS}, {_REC}, {split_col}, {_quote(field)} FROM {_quote('ds_' + dataset)} WHERE {where_sql} "
+                f"ORDER BY {_TS}, {_REC}",
+                params,
+            )
+
     def stats(
         self,
         dataset: str,
