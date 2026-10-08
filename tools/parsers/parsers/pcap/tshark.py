@@ -61,6 +61,8 @@ class Tshark:
         self.cache = cache
         # Whether tshark reads each pcap in place, by resolved path.
         self._readable: dict[Path, bool] = {}
+        # Known fields of each list of fields checked, which depend on the tshark build only.
+        self._valid: dict[tuple[str, ...], list[str]] = {}
 
     def run(self, args: Sequence[str], *, check: bool = True) -> list[str]:
         """Runs tshark with args, returning its non-empty stdout lines. Raises TsharkError if it fails and check."""
@@ -114,7 +116,13 @@ class Tshark:
         return self._readable[src]
 
     def valid_fields(self, pcap: str | os.PathLike[str], fields: Iterable[str]) -> list[str]:
-        """The fields that this tshark build knows, in order."""
+        """The fields that this tshark build knows, in order, checked by reading one frame of pcap once per list."""
+        key = tuple(fields)
+        if key not in self._valid:
+            self._valid[key] = self._check_fields(pcap, list(key))
+        return list(self._valid[key])
+
+    def _check_fields(self, pcap: str | os.PathLike[str], fields: list[str]) -> list[str]:
         staged = self.stage(pcap)
         remaining = list(fields)
         # tshark rejects a query with any unknown field, naming the unknown ones, and names vary across versions.

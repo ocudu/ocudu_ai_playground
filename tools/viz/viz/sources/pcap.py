@@ -7,19 +7,18 @@ from __future__ import annotations
 
 import os
 import shutil
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from parsers.pcap import f1ap, frames, messages, run
-from parsers.ran.rnti import normalize as normalize_rnti
+from parsers.pcap import capture, frames, messages
 from parsers.pcap.tshark import Tshark
+from parsers.ran.rnti import normalize as normalize_rnti
 
 from .base import DatasetWriter, EventWriter, ProgressFn, RunIdentity
 from .log_metrics import _parsers_version
 
-# Protocol of a pcap by the dissector of its first frame.
-_PROTOCOLS = {"ngap": "ngap", "f1ap": "f1ap", "e1ap": "e1ap", "mac-nr": "mac", "rlc-nr": "rlc"}
 # Procedure code that releases the UE context of each protocol, whose response ends the lane of its UE.
 _RELEASE_CODES = {"ngap": "41", "f1ap": "6", "e1ap": "11"}
 # Labels of the UE identifiers shown in the trace, by identifier label.
@@ -39,19 +38,25 @@ class PcapSource:
     """
 
     name = "pcap"
-    version = f"2+parsers-{_parsers_version()}"
+    version = f"3+parsers-{_parsers_version()}"
 
     def __init__(self, work_dir: str | os.PathLike[str] | None = None):
         """work_dir holds the pcaps staged for tshark, see parsers.pcap.tshark."""
         # The parse cache of viz keeps the results, so tshark extractions are not cached.
         self._tshark = Tshark(work_dir, cache=False)
+        # Pcaps read by parse() for parse_events(), which follows it, by path. Sources parse in their own threads.
+        self._captures: dict[Path, capture.Capture] = {}
+        self._lock = threading.Lock()
 
     def accepts(self, path: Path) -> bool:
         return frames.is_pcap(path) and shutil.which("tshark") is not None
 
     def parse(self, path: Path, writer: DatasetWriter, progress: ProgressFn | None = None) -> None:
-        proto = self._protocol(path)
-        summaries = frames.summaries(self._tshark, path)
+        cap = self._read(path)
+        # Kept also for pcaps without events, so that parse_events() does not read them again to know.
+        with self._lock:
+            self._captures[path] = cap
+        proto, summaries = cap.proto, cap.frames
         for s in summaries:
             writer.add_record_text(s["frame"], f"{_iso(s['epoch'])} [{s['protocol']:<8}] {s['info']}")
         if summaries:
@@ -59,19 +64,17 @@ class PcapSource:
         lengths = {s["frame"]: s["len"] for s in summaries}
 
         if proto in ("mac", "rlc"):
-            for pdu in frames.pdus(self._tshark, path, proto):
+            for pdu in cap.pdus:
                 values = {k: v for k, v in pdu.items() if k not in ("frame", "epoch")}
                 writer.add_row("pdus", pdu["frame"], pdu["epoch"], values)
             context = [label for label, _ in frames.PDU_FIELDS[proto]]
             writer.set_dataset_info("pdus", {"len": "bytes"}, context, label=f"{proto.upper()} PDUs")
         else:
-            rrc = {m["frame"]: m for m in f1ap.messages(self._tshark, path)} if proto == "f1ap" else {}
-            for msg in messages.messages(self._tshark, path, proto):
-                values = {k: v for k, v in msg.items() if k not in ("frame", "epoch", "code")}
+            for msg in cap.messages:
+                values = {k: v for k, v in msg.items() if k not in ("frame", "epoch", "code", "crnti")}
                 values["len"] = lengths.get(msg["frame"])
                 if proto == "f1ap":
-                    detail = rrc.get(msg["frame"], {})
-                    values.update(rrc=detail.get("rrc"), nas=detail.get("nas"), c_rnti=normalize_rnti(detail.get("crnti")))
+                    values["c_rnti"] = normalize_rnti(msg["crnti"])
                 writer.add_row("messages", msg["frame"], msg["epoch"], values)
             context = ["procedure", "outcome", *(label for label, _ in messages.UE_ID_FIELDS[proto])]
             writer.set_dataset_info("messages", {"len": "bytes"}, context, label=f"{proto.upper()} messages")
@@ -80,21 +83,19 @@ class PcapSource:
             progress(size, size)
 
     def parse_events(self, path: Path, writer: EventWriter) -> None:
-        proto = self._protocol(path)
+        with self._lock:
+            cap = self._captures.pop(path, None)
+        # A pcap whose datasets were cached is not parsed again before its events.
+        if cap is None:
+            cap = self._read(path)
+        proto = cap.proto
         if proto not in _RELEASE_CODES:
             return
-        crntis = {}
-        rrc = {}
-        if proto == "f1ap":
-            for m in f1ap.messages(self._tshark, path):
-                rrc[m["frame"]] = m["rrc"]
-                if m["crnti"]:
-                    crntis[m["frame"]] = normalize_rnti(m["crnti"])
         id_labels = [label for label, _ in messages.UE_ID_FIELDS[proto]]
         # Lane of each UE identifier in use, by label and value, and the identifiers and RNTI of each lane.
         lane_of: dict[tuple[str, str], int] = {}
         lanes: list[dict[str, Any]] = []
-        for msg in messages.messages(self._tshark, path, proto):
+        for msg in cap.messages:
             ids = {label: msg[label] for label in id_labels if msg[label]}
             lane = next((lane_of[(k, v)] for k, v in ids.items() if (k, v) in lane_of), None)
             if lane is None and ids:
@@ -104,9 +105,9 @@ class PcapSource:
                 for k, v in ids.items():
                     lane_of[(k, v)] = lane
                     lanes[lane]["ids"].setdefault(k, v)
-                if msg["frame"] in crntis:
-                    lanes[lane]["rnti"] = lanes[lane]["rnti"] or crntis[msg["frame"]]
-            rrc_type = rrc.get(msg["frame"])
+                if msg.get("crnti"):
+                    lanes[lane]["rnti"] = lanes[lane]["rnti"] or normalize_rnti(msg["crnti"])
+            rrc_type = msg.get("rrc")
             if msg["outcome"] == "unsuccessful":
                 category = "failure"
             elif rrc_type:
@@ -139,12 +140,11 @@ class PcapSource:
     def record_detail(self, path: Path, record: int) -> str:
         return frames.decode(self._tshark, path, record)
 
-    def _protocol(self, path: Path) -> str:
-        check = run.check_pcap(self._tshark, path)
-        proto = _PROTOCOLS.get(check.get("dissector", ""))
-        if not check["ok"] or proto is None:
-            raise ValueError(check.get("reason") or f"unsupported pcap, frame.protocols={check.get('frame_protocols')}")
-        return proto
+    def _read(self, path: Path) -> capture.Capture:
+        cap = capture.read(self._tshark, path)
+        if cap.proto is None:
+            raise ValueError(f"unsupported pcap, frame.protocols={cap.frame_protocols or 'none'}")
+        return cap
 
 
 def _iso(epoch: float) -> str:

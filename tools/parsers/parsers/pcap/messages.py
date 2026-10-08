@@ -28,8 +28,14 @@ def messages(tshark: Tshark, pcap: str | os.PathLike[str], proto: str) -> list[d
     "unsuccessful"), "info" (the tshark summary, naming the message), the UE identifiers of UE_ID_FIELDS by label, None
     when absent, and "cause".
     """
-    ue_fields = UE_ID_FIELDS[proto]
-    fields = [
+    names = fields(proto)
+    rows = (dict(zip(names, values)) for values in tshark.iter_fields(pcap, names, tag=f"{proto}-messages-v2"))
+    return [m for row in rows if (m := message(proto, row)) is not None]
+
+
+def fields(proto: str) -> list[str]:
+    """The tshark fields of the messages of proto, read by message()."""
+    return [
         "frame.number",
         "frame.time_epoch",
         f"{proto}.procedureCode",
@@ -37,22 +43,30 @@ def messages(tshark: Tshark, pcap: str | os.PathLike[str], proto: str) -> list[d
         f"{proto}.unsuccessfulOutcome_element",
         "_ws.col.Info",
         CAUSE_FIELDS[proto],
-        *(f for _, f in ue_fields),
+        *(f for _, f in UE_ID_FIELDS[proto]),
     ]
-    out = []
-    for frame, epoch, code, successful, unsuccessful, info, cause, *ids in tshark.iter_fields(
-        pcap, fields, tag=f"{proto}-messages-v2"
-    ):
-        if not frame or not epoch:
-            continue
-        out.append({
-            "frame": int(frame),
-            "epoch": float(epoch),
-            "code": code,
-            "procedure": proc_name(proto, code, with_code=False),
-            "outcome": "unsuccessful" if unsuccessful else "successful" if successful else "initiating",
-            "info": info,
-            **{label: value or None for (label, _), value in zip(ue_fields, ids)},
-            "cause": cause or None,
-        })
-    return out
+
+
+def message(proto: str, row: dict[str, str]) -> dict[str, Any] | None:
+    """The message of proto in a frame, given its tshark field values by name, see messages(), or None without a frame
+    number or time.
+    """
+    frame, epoch, code = row["frame.number"], row["frame.time_epoch"], row[f"{proto}.procedureCode"]
+    if not frame or not epoch:
+        return None
+    if row[f"{proto}.unsuccessfulOutcome_element"]:
+        outcome = "unsuccessful"
+    elif row[f"{proto}.successfulOutcome_element"]:
+        outcome = "successful"
+    else:
+        outcome = "initiating"
+    return {
+        "frame": int(frame),
+        "epoch": float(epoch),
+        "code": code,
+        "procedure": proc_name(proto, code, with_code=False),
+        "outcome": outcome,
+        "info": row["_ws.col.Info"],
+        **{label: row[f] or None for label, f in UE_ID_FIELDS[proto]},
+        "cause": row[CAUSE_FIELDS[proto]] or None,
+    }

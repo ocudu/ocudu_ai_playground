@@ -72,11 +72,22 @@ def time_span(path: str | os.PathLike[str]) -> tuple[float, float] | None:
 
 def summaries(tshark: Tshark, pcap: str | os.PathLike[str]) -> list[dict[str, Any]]:
     """One-line summary of each frame: "frame", "epoch", "len", "protocol" and "info", as tshark shows them."""
-    out = []
-    for frame, epoch, length, protocol, info in tshark.iter_fields(pcap, SUMMARY_FIELDS, tag="frames-v1"):
-        if frame and epoch:
-            out.append({"frame": int(frame), "epoch": float(epoch), "len": int(length or 0), "protocol": protocol, "info": info})
-    return out
+    rows = (dict(zip(SUMMARY_FIELDS, values)) for values in tshark.iter_fields(pcap, SUMMARY_FIELDS, tag="frames-v1"))
+    return [s for row in rows if (s := summary(row)) is not None]
+
+
+def summary(row: dict[str, str]) -> dict[str, Any] | None:
+    """Summary of a frame, see summaries(), given its tshark field values by name, or None without a number or time."""
+    frame, epoch = row["frame.number"], row["frame.time_epoch"]
+    if not frame or not epoch:
+        return None
+    return {
+        "frame": int(frame),
+        "epoch": float(epoch),
+        "len": int(row["frame.len"] or 0),
+        "protocol": row["_ws.col.Protocol"],
+        "info": row["_ws.col.Info"],
+    }
 
 
 def pdus(tshark: Tshark, pcap: str | os.PathLike[str], proto: str) -> list[dict[str, Any]]:
@@ -84,16 +95,27 @@ def pdus(tshark: Tshark, pcap: str | os.PathLike[str], proto: str) -> list[dict[
 
     Directions are "UL" or "DL", and absent values None.
     """
-    labels = PDU_FIELDS[proto]
-    fields = ["frame.number", "frame.time_epoch", "frame.len", *(f for _, f in labels)]
-    out = []
-    for frame, epoch, length, *values in tshark.iter_fields(pcap, fields, tag=f"{proto}-pdus-v1"):
-        if not frame or not epoch:
-            continue
-        row: dict[str, Any] = {"frame": int(frame), "epoch": float(epoch), "len": int(length or 0)}
-        for (label, _), value in zip(labels, values):
-            row[label] = (_DIRECTIONS.get(value, value) if label == "direction" else value) or None
-        out.append(row)
+    names = pdu_fields(proto)
+    rows = (dict(zip(names, values)) for values in tshark.iter_fields(pcap, names, tag=f"{proto}-pdus-v1"))
+    return [p for row in rows if (p := pdu(proto, row)) is not None]
+
+
+def pdu_fields(proto: str) -> list[str]:
+    """The tshark fields of the PDUs of proto, read by pdu()."""
+    return ["frame.number", "frame.time_epoch", "frame.len", *(f for _, f in PDU_FIELDS[proto])]
+
+
+def pdu(proto: str, row: dict[str, str]) -> dict[str, Any] | None:
+    """The PDU of proto in a frame, see pdus(), given its tshark field values by name, or None without a number or
+    time.
+    """
+    frame, epoch = row["frame.number"], row["frame.time_epoch"]
+    if not frame or not epoch:
+        return None
+    out: dict[str, Any] = {"frame": int(frame), "epoch": float(epoch), "len": int(row["frame.len"] or 0)}
+    for label, f in PDU_FIELDS[proto]:
+        value = row[f]
+        out[label] = (_DIRECTIONS.get(value, value) if label == "direction" else value) or None
     return out
 
 

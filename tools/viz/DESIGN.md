@@ -301,7 +301,9 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 ### D17. Pcap sources
 
 - `PcapSource` reads NGAP, F1AP, E1AP, MAC-NR and RLC-NR pcaps through `parsers.pcap`, which runs `tshark`. The
-  protocol comes from the dissector of the first frame, not the file name. Without `tshark` on the `PATH`, pcaps are
+  protocol comes from the dissector of the first frame, not the file name. A pcap is read in one pass over its frames
+  with the fields of its protocol only (`capture.read()`), since dissection takes the time and each field adds to it,
+  and the events are built from the same pass. Without `tshark` on the `PATH`, pcaps are
   not supported files.
 - Records are frames, identified by frame number, with their tshark summary (time, protocols, info) as text, stored in
   the cache. The record pane shows the decoded frame beside the frames (`/api/records/detail`), decoded on demand,

@@ -153,7 +153,8 @@ only lets it read under `/tmp`, and dissects the MAC and RLC PDUs of `mac.pcap` 
 `run.check_pcap()` checks that a pcap has a frame that one of the known dissectors binds. `messages.messages()` lists
 the NGAP, F1AP or E1AP messages of a pcap with their procedure, outcome, UE identifiers and cause, `frames.summaries()`
 the one-line tshark summary of each frame and `frames.decode()` decodes one frame. `frames.time_span()` reads the time
-span of a pcap from its packet headers, without `tshark`.
+span of a pcap from its packet headers, without `tshark`. `capture.read()` gives the protocol, the frame summaries and
+the messages or PDUs of a pcap in one pass over its frames, after reading its first frame for the protocol.
 
 ## Tests
 

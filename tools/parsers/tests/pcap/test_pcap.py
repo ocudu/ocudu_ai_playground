@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from parsers.pcap import e1ap, f1ap, frames, messages, ngap, overview, run, timeline, values
+from parsers.pcap import capture, e1ap, f1ap, frames, messages, ngap, overview, run, timeline, values
 from parsers.pcap.tshark import Tshark, _filter_stderr, split_fields
 
 # A single-UE F1AP capture: F1Setup, RRC and NAS attach, and UEContextRelease.
@@ -185,6 +185,18 @@ class F1apPcapTest(unittest.TestCase):
         release = [m for m in msgs if m["procedure"] == "UEContextRelease"]
         self.assertEqual([m["outcome"] for m in release], ["initiating", "successful"])
         self.assertEqual((release[0]["du_ue_f1ap_id"], release[0]["cu_ue_f1ap_id"]), ("0", "0"))
+
+    def test_capture_matches_the_separate_reads(self):
+        cap = capture.read(self.tshark, F1AP_PCAP)
+        self.assertEqual((cap.proto, cap.frame_protocols.split(":")[1]), ("f1ap", "f1ap"))
+        self.assertEqual(cap.frames, frames.summaries(self.tshark, F1AP_PCAP))
+        detail = {m["frame"]: m for m in f1ap.messages(self.tshark, F1AP_PCAP)}
+        expected = [
+            {**m, "rrc": detail[m["frame"]]["rrc"], "nas": detail[m["frame"]]["nas"], "crnti": detail[m["frame"]]["crnti"]}
+            for m in messages.messages(self.tshark, F1AP_PCAP, "f1ap")
+        ]
+        self.assertEqual(cap.messages, expected)
+        self.assertEqual(cap.pdus, [])
 
     def test_without_cache(self):
         tshark = Tshark(self.tmp.name, cache=False)

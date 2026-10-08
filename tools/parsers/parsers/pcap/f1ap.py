@@ -75,27 +75,20 @@ def ue_ids(tshark: Tshark, pcap: str | os.PathLike[str], *, force: bool = False)
 def messages(tshark: Tshark, pcap: str | os.PathLike[str], *, force: bool = False) -> list[dict[str, Any]]:
     """The messages of an F1AP pcap in time order, with the RRC message and the NAS message they carry, if any."""
     rrc_types = valid_rrc_types(tshark, pcap)
-    fields = MESSAGE_FIELDS + [_rrc_field(m) for m in rrc_types]
-    n_scalar = len(MESSAGE_FIELDS)
+    fields = rrc_fields(rrc_types)
     rows = []
-    for r in tshark.iter_fields(pcap, fields, tag=f"f1ap-messages-v1-{len(fields)}", force=force):
-        frame, epoch, code, du_id, cu_id, crnti, srbid, container, nas_mm, nas_sm = r[:n_scalar]
-        if not epoch:
+    for values in tshark.iter_fields(pcap, fields, tag=f"f1ap-messages-v1-{len(fields)}", force=force):
+        v = dict(zip(fields, values))
+        if not v["frame.time_epoch"]:
             continue
-        row = {
-            "frame": int(frame) if frame else None,
-            "epoch": float(epoch),
-            "code": code,
-            "du_ue_id": du_id or None,
-            "cu_ue_id": cu_id or None,
-            "crnti": crnti or None,
-            "srbid": srbid or None,
-            "rrc_container": container or None,
-            "rrc_elements": dict(zip(rrc_types, r[n_scalar:])),
-        }
-        row["rrc"] = resolve_rrc(row)
-        row["nas"] = nas_name(nas_mm, nas_sm)
-        rows.append(row)
+        rows.append({
+            "frame": int(v["frame.number"]) if v["frame.number"] else None,
+            "epoch": float(v["frame.time_epoch"]),
+            "code": v["f1ap.procedureCode"],
+            "du_ue_id": v["f1ap.GNB_DU_UE_F1AP_ID"] or None,
+            "cu_ue_id": v["f1ap.GNB_CU_UE_F1AP_ID"] or None,
+            **carried(v, rrc_types),
+        })
     rows.sort(key=lambda x: x["epoch"])
     return [
         {
@@ -110,6 +103,28 @@ def messages(tshark: Tshark, pcap: str | os.PathLike[str], *, force: bool = Fals
         }
         for x in rows
     ]
+
+
+def rrc_fields(rrc_types: list[str]) -> list[str]:
+    """The tshark fields of the F1AP messages and of the RRC message types of rrc_types, read by carried()."""
+    return MESSAGE_FIELDS + [_rrc_field(m) for m in rrc_types]
+
+
+def carried(row: dict[str, str], rrc_types: list[str]) -> dict[str, str | None]:
+    """The "rrc" message type, "nas" message type and "crnti" of an F1AP message, given its tshark field values by name,
+    see rrc_fields().
+    """
+    detail = {
+        "code": row["f1ap.procedureCode"],
+        "srbid": row["f1ap.SRBID"] or None,
+        "rrc_container": row["f1ap.RRCContainer"] or None,
+        "rrc_elements": {m: row[_rrc_field(m)] for m in rrc_types},
+    }
+    return {
+        "rrc": resolve_rrc(detail),
+        "nas": nas_name(row["nas_5gs.mm.message_type"], row["nas_5gs.sm.message_type"]),
+        "crnti": row["f1ap.C_RNTI"] or None,
+    }
 
 
 def valid_rrc_types(tshark: Tshark, pcap: str | os.PathLike[str]) -> list[str]:
