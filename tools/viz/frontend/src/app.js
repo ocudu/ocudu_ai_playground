@@ -27,6 +27,8 @@ const EVENT_CATEGORIES = [
   ["warning", "warnings"],
   ["error", "errors"],
 ];
+// Categories whose chip shows for tabs with a log even without events, disabled.
+const ALWAYS_SHOWN_CATEGORIES = ["warning", "error"];
 // Events fetched for the visible window of a tab, per source.
 const MAX_EVENTS = 5000;
 // Delay before fetching events after the view changes, to coalesce zoom and pan events.
@@ -152,7 +154,10 @@ const App = {
           if (!this.hiddenCategories[s.id].includes(c)) counts[c] = (counts[c] ?? 0) + n;
         }
       }
-      return EVENT_CATEGORIES.filter(([c]) => counts[c]).map(([c, label]) => ({ category: c, label, count: counts[c] }));
+      // Warnings and errors show even without any once the events of a log are parsed, so that a clean log reads as one.
+      const logParsed = this.readySources.some((s) => s.type !== "pcap" && s.events_status === "ready");
+      const shown = (c) => counts[c] || (logParsed && ALWAYS_SHOWN_CATEGORIES.includes(c));
+      return EVENT_CATEGORIES.filter(([c]) => shown(c)).map(([c, label]) => ({ category: c, label, count: counts[c] ?? 0 }));
     },
     /** Notes about the sources of the active run, e.g. why some events are missing. */
     activeNotes() {
@@ -325,11 +330,6 @@ const App = {
       const sources = run ? this.runSourcesOf([run]) : [];
       if (!sources.some((s) => s.status === "parsing")) return null;
       return sources.reduce((sum, s) => sum + (s.status === "parsing" ? s.progress : 1), 0) / sources.length;
-    },
-
-    /** Name of a run in its tab: its own name when it holds one file, else its directory and file count. */
-    runLabel(run) {
-      return run.kind === "dir" ? `${run.name} (${run.sources.length})` : run.name;
     },
 
     /**
@@ -558,7 +558,7 @@ const App = {
         <div v-for="r in runs" :key="r.id" role="tab" :aria-selected="r.id === activeId"
              :class="['tab', { active: r.id === activeId }]" :title="r.path"
              @click="activeId = r.id">
-          <span>{{ runLabel(r) }}</span>
+          <span>{{ r.name }}</span>
           <span v-if="progress(r) != null" class="muted">{{ Math.floor(progress(r) * 100) }}%</span>
           <button class="icon tab-close" title="Close the tab" @click.stop="closeTab(r.id)">✕</button>
         </div>
@@ -614,9 +614,10 @@ const App = {
             <span class="muted">events</span>
             <span v-if="eventsState === 'parsing'" class="muted">parsing…</span>
             <span v-else-if="eventsState === 'error'" class="error">could not be parsed</span>
-            <button v-for="c in eventCategoryChips" :key="c.category"
-                    :class="['event-chip', 'ev-' + c.category, { off: !(activeTab.eventCategories || []).includes(c.category) }]"
-                    :title="'Show or hide the ' + c.label + ' events'" @click="toggleEventCategory(c.category)">
+            <button v-for="c in eventCategoryChips" :key="c.category" :disabled="!c.count"
+                    :class="['event-chip', 'ev-' + c.category, { off: !c.count || !(activeTab.eventCategories || []).includes(c.category) }]"
+                    :title="c.count ? 'Show or hide the ' + c.label + ' events' : 'The files of this tab have no ' + c.label"
+                    @click="toggleEventCategory(c.category)">
               <span class="event-dot"></span>{{ c.label }} <span class="muted">{{ c.count }}</span>
             </button>
             <span v-if="eventsTruncated" class="muted">only the first events of the window are shown, zoom in for all</span>
