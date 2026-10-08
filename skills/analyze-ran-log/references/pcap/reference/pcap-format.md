@@ -62,7 +62,7 @@ tshark -r rlc.pcap --enable-heuristic rlc_nr_udp -Y 'rlc-nr'          # RLC-NR P
 ```
 
 The helper scripts inject both flags automatically for any `-r` read
-(`utils.run_tshark`), so script-driven analysis already works; only **hand-run**
+(`Tshark.run` of `parsers.pcap`), so script-driven analysis already works; only **hand-run**
 tshark on `mac.pcap`/`rlc.pcap` needs the flags added explicitly.
 
 For the full per-protocol code tables, see the protocol files under
@@ -99,7 +99,7 @@ though Unix permissions allow it. `cat` on the same file works — that's the
 giveaway.
 
 The helper scripts in `scripts/` handle this transparently:
-`utils.stage_for_tshark()` hard-links (or copies on a different filesystem)
+`Tshark.stage()` of `parsers.pcap` hard-links (or copies on a different filesystem)
 the source pcap into the per-session cache dir's `pcap-stage/` subfolder
 (`${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}/pcap-stage/<sha>-<basename>.pcap`)
 and points tshark at that path. Staged files live under `/tmp` and so satisfy

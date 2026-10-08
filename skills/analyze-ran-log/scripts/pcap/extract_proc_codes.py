@@ -17,10 +17,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import Counter
 from pathlib import Path
 
 import utils
+from parsers.pcap import overview
+from parsers.pcap.names import proc_name
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -37,42 +38,25 @@ def main(argv: list[str] | None = None) -> int:
     if not pcap.is_file():
         print(f"error: not a file: {pcap}", file=sys.stderr)
         return 1
-
-    proto = args.proto
-    fields = ["frame.time_epoch", f"{proto}.procedureCode"]
-    filters: list[str] = []
-    if args.initiating_only:
-        filters.append(f"{proto}.initiatingMessage_element")
+    time_range = None
     if args.time_range:
         try:
             a, b = (float(x) for x in args.time_range.split(","))
         except ValueError:
             print(f"error: bad --time-range: {args.time_range}", file=sys.stderr)
             return 1
-        filters.append(f"frame.time_epoch >= {a} && frame.time_epoch < {b}")
-    display_filter = " && ".join(f"({f})" for f in filters) if filters else None
-
+        time_range = (a, b)
     try:
-        rows = list(
-            utils.iter_fields_cached(
-                pcap,
-                fields,
-                display_filter=display_filter,
-                tag=f"proc-codes-{proto}-{int(args.initiating_only)}-{args.time_range or ''}",
-            )
+        counts = overview.proc_code_counts(
+            utils.TSHARK, pcap, args.proto, initiating_only=args.initiating_only, time_range=time_range
         )
     except utils.TsharkError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
-    counts: Counter[str] = Counter()
-    for _, code in rows:
-        if code:
-            counts[code] += 1
-
+    proto = args.proto
     if args.json:
-        print(json.dumps({"proto": proto, "total": sum(counts.values()),
-                          "counts": counts.most_common()}, indent=2))
+        print(json.dumps({"proto": proto, "total": sum(counts.values()), "counts": counts.most_common()}, indent=2))
         return 0
 
     print(f"== {proto} procedure codes  (total={sum(counts.values())})")
@@ -80,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         print("  (no matching rows)")
         return 0
     for code, count in counts.most_common():
-        print(f"  {utils.proc_name(proto, code):<32} {count}")
+        print(f"  {proc_name(proto, code):<32} {count}")
     return 0
 
 

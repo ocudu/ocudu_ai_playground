@@ -47,8 +47,8 @@ hand.
 
 - **Never** run `tshark -V` without `-c 1` or a single-frame filter
   (`-Y 'frame.number == N'`). Full verbose dumps blow up context.
-- **Caching is automatic** for the helper scripts: `iter_fields_cached` keys on
-  the pcap path plus the column set, so re-running the same query is nearly free
+- **Caching is automatic** for the helper scripts: `Tshark.iter_fields` of
+  `parsers.pcap` keys on the pcap path plus the column set, so re-running the same query is nearly free
   and needs no manual cache bookkeeping. The scripts print `cache: <path> (hit|
   miss)` on stderr — quote that path rather than reconstructing the hash. For a
   *hand-crafted* tshark chain there is no cache; spill it yourself.

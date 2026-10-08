@@ -21,11 +21,14 @@ import argparse
 import sys
 from pathlib import Path
 
-import utils
-import pcap_overview
+# Puts the parsers package on the import path.
+import utils  # noqa: F401
+
+import e1ap_ue_ids
 import f1ap_ue_ids
 import ngap_ue_ids
-import e1ap_ue_ids
+import pcap_overview
+from parsers.pcap.run import PCAP_NAMES, find_pcaps, is_run_dir
 
 
 def _section(title: str) -> None:
@@ -42,27 +45,26 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     run_dir = Path(args.run_dir)
-    if not utils.is_run_dir(run_dir):
-        print(f"error: not a run directory (need ≥2 of {utils.PCAP_NAMES}): {run_dir}",
-              file=sys.stderr)
+    if not is_run_dir(run_dir):
+        print(f"error: not a run directory (need ≥2 of {PCAP_NAMES}): {run_dir}", file=sys.stderr)
         return 1
 
-    sibs = utils.walk_run_dir(run_dir)
+    pcaps = find_pcaps(run_dir)
 
     _section("pcap overview")
     rc = pcap_overview.main([str(run_dir), "--top", str(args.top)])
     if rc != 0:
         return rc
 
-    for proto, mod, helper in (
-        ("F1AP", f1ap_ue_ids, sibs["f1ap"]),
-        ("NGAP", ngap_ue_ids, sibs["ngap"]),
-        ("E1AP", e1ap_ue_ids, sibs["e1ap"]),
+    for proto, mod, pcap in (
+        ("F1AP", f1ap_ue_ids, pcaps["f1ap"]),
+        ("NGAP", ngap_ue_ids, pcaps["ngap"]),
+        ("E1AP", e1ap_ue_ids, pcaps["e1ap"]),
     ):
-        if helper is None:
+        if pcap is None:
             continue
         _section(f"{proto} UEs")
-        mod.main([str(helper), "--limit", str(args.ue_limit)])
+        mod.main([str(pcap), "--limit", str(args.ue_limit)])
 
     return 0
 

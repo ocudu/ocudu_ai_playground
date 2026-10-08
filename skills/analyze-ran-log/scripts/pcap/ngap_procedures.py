@@ -17,20 +17,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections import defaultdict
 from pathlib import Path
 
 import utils
-
-FIELDS = [
-    "frame.number",
-    "frame.time_epoch",
-    "ngap.procedureCode",
-    "ngap.RAN_UE_NGAP_ID",
-    "ngap.AMF_UE_NGAP_ID",
-    "ngap.unsuccessfulOutcome_element",
-    "ngap.cause",
-]
+from parsers.pcap import ngap
+from parsers.pcap.names import proc_name
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,45 +36,11 @@ def main(argv: list[str] | None = None) -> int:
     if not pcap.is_file():
         print(f"error: not a file: {pcap}", file=sys.stderr)
         return 1
-
-    display_filter = None
-    if args.ue:
-        display_filter = f"ngap.RAN_UE_NGAP_ID == {args.ue}"
-    if args.failures_only:
-        # A real failure is an unsuccessfulOutcome. `ngap.cause` also rides on
-        # normal messages (e.g. PDUSessionResourceRelease), so it is NOT a failure
-        # signal — it is surfaced separately in the `cause` field.
-        unsuccess = "ngap.unsuccessfulOutcome_element"
-        display_filter = f"({display_filter}) && ({unsuccess})" if display_filter else unsuccess
-
     try:
-        rows = list(
-            utils.iter_fields_cached(
-                pcap,
-                FIELDS,
-                display_filter=display_filter,
-                tag=f"ngap-proc-{args.ue or 'all'}-{int(args.failures_only)}",
-            )
-        )
+        by_ue = ngap.procedures(utils.TSHARK, pcap, ue=args.ue, failures_only=args.failures_only)
     except utils.TsharkError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
-
-    by_ue: dict[str, list[dict]] = defaultdict(list)
-    for r in rows:
-        frame, epoch, code, ran_id, amf_id, unsucc, cause = r
-        ran_key = ran_id or "(no-ran-ue-id)"
-        by_ue[ran_key].append(
-            {
-                "frame": int(frame) if frame else None,
-                "epoch": float(epoch) if epoch else None,
-                "iso": utils.epoch_to_iso(epoch) if epoch else None,
-                "procedureCode": code,
-                "amfUeId": amf_id or None,
-                "failure": bool(unsucc),
-                "cause": cause or None,
-            }
-        )
 
     if args.json:
         print(json.dumps(by_ue, indent=2))
@@ -92,7 +49,6 @@ def main(argv: list[str] | None = None) -> int:
     if not by_ue:
         print("(no matching NGAP rows)")
         return 0
-
     for ue, events in by_ue.items():
         print(f"== RAN-UE-NGAP-ID={ue}  ({len(events)} events)")
         for e in events:
@@ -100,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
             cause = f"  cause={e['cause']}" if e["cause"] else ""
             print(
                 f"  {marker} frame={e['frame']:>5} {e['iso']}  "
-                f"{utils.proc_name('ngap', e['procedureCode']):<32}"
+                f"{proc_name('ngap', e['procedureCode']):<32}"
                 f"  amfUeId={e['amfUeId'] or '-'}{cause}"
             )
     return 0

@@ -21,64 +21,8 @@ import sys
 from pathlib import Path
 
 import utils
-
-# Per-protocol field set used to build a one-line summary for each event.
-PROTO_SPEC: dict[str, dict[str, list[str]]] = {
-    "ngap": {
-        "fields": ["frame.number", "frame.time_epoch",
-                   "ngap.procedureCode", "ngap.RAN_UE_NGAP_ID", "ngap.AMF_UE_NGAP_ID"],
-    },
-    "f1ap": {
-        "fields": ["frame.number", "frame.time_epoch",
-                   "f1ap.procedureCode", "f1ap.GNB_DU_UE_F1AP_ID", "f1ap.GNB_CU_UE_F1AP_ID"],
-    },
-    "e1ap": {
-        "fields": ["frame.number", "frame.time_epoch",
-                   "e1ap.procedureCode", "e1ap.GNB_CU_CP_UE_E1AP_ID", "e1ap.GNB_CU_UP_UE_E1AP_ID"],
-    },
-    "mac": {
-        "fields": ["frame.number", "frame.time_epoch",
-                   "mac-nr.rnti", "mac-nr.direction"],
-    },
-    "rlc": {
-        "fields": ["frame.number", "frame.time_epoch",
-                   "rlc-nr.ueid", "rlc-nr.bearer-type", "rlc-nr.bearer-id"],
-    },
-}
-
-
-def collect(pcap: Path, proto: str) -> list[dict]:
-    spec = PROTO_SPEC[proto]
-    out: list[dict] = []
-    for row in utils.iter_fields_cached(pcap, spec["fields"], tag=f"correlate-{proto}"):
-        frame, epoch, *rest = row
-        if not epoch:
-            continue
-        try:
-            ts = float(epoch)
-        except ValueError:
-            continue
-        ue_ids = [v for v in rest[1:] if v] if proto in ("ngap", "f1ap", "e1ap") else \
-                 ([rest[0]] if proto == "mac" and rest[0] else
-                  [rest[0]] if proto == "rlc" and rest[0] else [])
-        if proto in ("ngap", "f1ap", "e1ap"):
-            summary = f"procCode={rest[0]}"
-        elif proto == "mac":
-            dir_label = {"0": "UL", "1": "DL"}.get(rest[1], rest[1] or "?")
-            summary = f"rnti={rest[0] or '-'} dir={dir_label}"
-        elif proto == "rlc":
-            summary = f"ueid={rest[0] or '-'} bearer={rest[1] or '?'}/{rest[2] or '?'}"
-        else:
-            summary = ""
-        out.append({
-            "epoch": ts,
-            "iso": utils.epoch_to_iso(ts),
-            "file": proto,
-            "frame": int(frame) if frame else None,
-            "ue_ids": ue_ids,
-            "summary": summary,
-        })
-    return out
+from parsers.pcap import timeline
+from parsers.pcap.run import PCAP_NAMES, is_run_dir
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -94,68 +38,14 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     run_dir = Path(args.run_dir)
-    if not utils.is_run_dir(run_dir):
-        print(f"error: not a run directory (need ≥2 of {utils.PCAP_NAMES}): {run_dir}",
-              file=sys.stderr)
+    if not is_run_dir(run_dir):
+        print(f"error: not a run directory (need ≥2 of {PCAP_NAMES}): {run_dir}", file=sys.stderr)
         return 1
 
-    requested = [p.strip() for p in args.protocols.split(",") if p.strip()]
-    sibs = utils.walk_run_dir(run_dir)
-
-    # Check sibling time-range overlap.
-    spans: list[tuple[str, float, float]] = []
-    events: list[dict] = []
-    for proto in requested:
-        pcap = sibs.get(proto)
-        if pcap is None:
-            utils.warn(f"missing {proto}.pcap in {run_dir}")
-            continue
-        try:
-            ev = collect(pcap, proto)
-        except utils.TsharkError as e:
-            utils.warn(f"tshark failed for {proto}: {e}")
-            continue
-        if ev:
-            epochs = [e["epoch"] for e in ev]
-            spans.append((proto, min(epochs), max(epochs)))
-        events.extend(ev)
-
-    if len(spans) > 1:
-        # Only warn when the captures are genuinely DISJOINT (no common interval),
-        # which would make cross-pcap correlation impossible. Staggered start/stop
-        # (a few seconds of non-overlap at the edges) is normal and not flagged.
-        inter_lo = max(s[1] for s in spans)
-        inter_hi = min(s[2] for s in spans)
-        if inter_lo > inter_hi:
-            ranges = ", ".join(
-                f"{p}={utils.epoch_to_iso(lo)}..{utils.epoch_to_iso(hi)}"
-                for p, lo, hi in spans
-            )
-            utils.warn(
-                "pcap time ranges do not all overlap — cross-pcap correlation may be "
-                f"unreliable: {ranges}"
-            )
-
-    if args.around is not None:
-        half = args.window_ms / 2000.0
-        lo, hi = args.around - half, args.around + half
-        events = [e for e in events if lo <= e["epoch"] <= hi]
-
-    if args.ue:
-        u = args.ue
-        # Exact-match against the per-event ue_ids list, plus exact rnti/ueid
-        # equality (not substring) for MAC/RLC events whose IDs aren't in ue_ids.
-        def _matches(e: dict) -> bool:
-            if u in e["ue_ids"]:
-                return True
-            for tag in ("rnti", "ueid"):
-                needle = f"{tag}={u} "
-                if needle in e["summary"] + " ":
-                    return True
-            return False
-        events = [e for e in events if _matches(e)]
-
-    events.sort(key=lambda e: e["epoch"])
+    protocols = [p.strip() for p in args.protocols.split(",") if p.strip()]
+    events = timeline.run_events(
+        utils.TSHARK, run_dir, protocols, around=args.around, window_ms=args.window_ms, ue=args.ue
+    )
 
     if args.json:
         print(json.dumps(events, indent=2))

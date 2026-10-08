@@ -24,54 +24,7 @@ import sys
 from pathlib import Path
 
 import utils
-
-FIELDS = [
-    "frame.number",
-    "frame.time_epoch",
-    "f1ap.procedureCode",
-    "f1ap.GNB_DU_UE_F1AP_ID",
-    "f1ap.GNB_CU_UE_F1AP_ID",
-    "f1ap.C_RNTI",
-]
-
-def build_clusters(rows: list[dict]) -> list[dict]:
-    clusters: list[dict] = []
-    by_cu: dict[str, dict] = {}
-    by_du: dict[str, dict] = {}
-
-    for row in rows:
-        if not (row["cu_ue_id"] or row["du_ue_id"] or row["crnti"]):
-            continue  # infrastructure (F1Setup, GNB-{CU,DU}-ConfigurationUpdate, ...)
-        c = None
-        if row["cu_ue_id"] and row["cu_ue_id"] in by_cu:
-            c = by_cu[row["cu_ue_id"]]
-        if c is None and row["du_ue_id"] and row["du_ue_id"] in by_du:
-            c = by_du[row["du_ue_id"]]
-        if c is None:
-            c = {
-                "frame": row["frame"],
-                "first_epoch": row["epoch"],
-                "first_code": row["code"],
-                "cu_ue_f1ap_id": None,
-                "du_ue_f1ap_ids": set(),
-                "crntis": set(),
-            }
-            clusters.append(c)
-        if row["epoch"] < c["first_epoch"]:
-            c["first_epoch"] = row["epoch"]
-            c["frame"] = row["frame"]
-            c["first_code"] = row["code"]
-        if row["cu_ue_id"]:
-            if c["cu_ue_f1ap_id"] is None:
-                c["cu_ue_f1ap_id"] = row["cu_ue_id"]
-            by_cu[row["cu_ue_id"]] = c
-        if row["du_ue_id"]:
-            c["du_ue_f1ap_ids"].add(row["du_ue_id"])
-            by_du[row["du_ue_id"]] = c
-        if row["crnti"]:
-            c["crntis"].add(row["crnti"])
-
-    return clusters
+from parsers.pcap import f1ap
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -89,49 +42,16 @@ def main(argv: list[str] | None = None) -> int:
     if not pcap.is_file():
         print(f"error: not a file: {pcap}", file=sys.stderr)
         return 1
-
-    rows: list[dict] = []
     try:
-        for r in utils.iter_fields_cached(pcap, FIELDS, tag="f1ap-ue-ids-v1",
-                                          force=args.no_cache):
-            frame, epoch, code, du_id, cu_id, crnti = r
-            if not epoch:
-                continue
-            rows.append({
-                "frame": int(frame) if frame else None,
-                "epoch": float(epoch),
-                "code": code,
-                "du_ue_id": du_id or None,
-                "cu_ue_id": cu_id or None,
-                "crnti": crnti or None,
-            })
+        out_list = f1ap.ue_ids(utils.TSHARK, pcap, force=args.no_cache)
     except utils.TsharkError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
-    clusters = sorted(build_clusters(rows), key=lambda c: c["first_epoch"])
-
-    out_list = [
-        {
-            "frame": c["frame"],
-            "first_iso": utils.epoch_to_iso(c["first_epoch"]),
-            "message": utils.proc_name("f1ap", c["first_code"], with_code=False),
-            "cu_ue_f1ap_id": c["cu_ue_f1ap_id"],
-            "du_ue_f1ap_ids": sorted(c["du_ue_f1ap_ids"]),
-            "crntis": sorted(c["crntis"]),
-            "first_epoch": c["first_epoch"],
-        }
-        for c in clusters
-    ]
-
     if args.ue:
         u = args.ue
-        out_list = [
-            r for r in out_list
-            if u == r["cu_ue_f1ap_id"]
-            or u in r["du_ue_f1ap_ids"]
-            or u in r["crntis"]
-        ]
+        out_list = [r for r in out_list
+                    if u == r["cu_ue_f1ap_id"] or u in r["du_ue_f1ap_ids"] or u in r["crntis"]]
 
     if args.json:
         print(json.dumps(out_list, indent=2))
@@ -140,8 +60,7 @@ def main(argv: list[str] | None = None) -> int:
     if not out_list:
         print("(no F1AP UEs matched)")
         return 0
-    header = ("frame", "first_iso", "message", "cu_ue_f1ap_id",
-              "du_ue_f1ap_ids", "crntis")
+    header = ("frame", "first_iso", "message", "cu_ue_f1ap_id", "du_ue_f1ap_ids", "crntis")
     print(", ".join(header))
     rendered = out_list if args.limit <= 0 else out_list[: args.limit]
     for r in rendered:

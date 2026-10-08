@@ -8,8 +8,8 @@ Match the surrounding format; no dates/timestamps.
 - new/changed tshark filter or field → `reference/protocols/<proto>.md` § Key
   tshark filters (or `reference/tshark-recipes.md` if cross-cutting). A changed
   procedure **code/name** is artifact-agnostic → `../common/protocols/<proto>.md`
-  § Procedures and codes; also mirror it in `scripts/pcap/utils.py`
-  `PROC_CODE_NAMES`, which the overview/proc-code scripts use to print names.
+  § Procedures and codes; also mirror it in `PROC_CODE_NAMES` of
+  `scripts/_lib/parsers/pcap/names.py` (the `parsers.pcap` package of this repo), which the overview/proc-code scripts use to print names.
 - protocol/procedure **semantics** (message meaning, identifier model, failure
   signature shared across artifacts) → `../common/` (not here); keep only the
   tshark observation in `reference/protocols/<proto>.md`.

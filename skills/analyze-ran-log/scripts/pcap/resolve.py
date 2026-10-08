@@ -32,92 +32,17 @@ import sys
 from pathlib import Path
 
 import utils
+from parsers.pcap import run
 
-# The Upper-PDU dispatcher should bind one of these on the first frame. mac-nr /
-# rlc-nr only appear because run_tshark() enables the mac_nr_udp / rlc_nr_udp
-# heuristics for every `-r` read (OCUDU wraps those PDUs in a UDP-framed
-# Upper-PDU); without them frame.protocols ends in ":data".
-KNOWN_DISSECTORS = ("ngap", "f1ap", "e1ap", "mac-nr", "rlc-nr")
-
-
-def resolve(path: Path) -> dict:
-    """Classify the input. Returns a dict with either a `bail` reason or targets.
-
-    Keys: kind, targets (list[Path]), present (list[str]), missing/siblings
-    (list[str]), bail (str|None).
-    """
-    if not path.exists():
-        return {"bail": f"not found: {path}"}
-
-    if path.is_dir():
-        walk = utils.walk_run_dir(path)  # {stem: Path|None}
-        present = [stem for stem, p in walk.items() if p]
-        if len(present) < 2:
-            found = ", ".join(present) if present else "none"
-            return {
-                "bail": f"not a run directory (need ≥2 of "
-                f"{', '.join(utils.PCAP_NAMES)}); found: {found}"
-            }
-        missing = [stem for stem, p in walk.items() if not p]
-        return {
-            "kind": "run directory",
-            "targets": [walk[s] for s in present],
-            "present": present,
-            "missing": missing,
-        }
-
-    # A single file.
-    sib_walk = utils.walk_run_dir(path.parent)
-    siblings = [stem for stem, p in sib_walk.items() if p and p.resolve() != path.resolve()]
-    return {
-        "kind": "single pcap",
-        "targets": [path],
-        "siblings": siblings,
-    }
-
-
-def tshark_version() -> str:
-    """First line of `tshark -v`. Raises utils.TsharkError if tshark is absent."""
-    lines = utils.run_tshark(["-v"])
-    return lines[0] if lines else "unknown"
+# Where to record a dissector binding that tshark does not apply on its own.
+_DISSECTOR_HINT = "; try `-d user_dlt 252,...` and note it in references/pcap/reference/pcap-format.md"
 
 
 def check_pcap(pcap: Path) -> dict:
-    """Validate one pcap. Returns {file, path, ok, ...}."""
-    out: dict = {"file": pcap.name, "path": str(pcap)}
-    try:
-        if pcap.stat().st_size == 0:
-            return {**out, "ok": False, "reason": "empty (0 bytes)"}
-    except OSError as e:
-        return {**out, "ok": False, "reason": f"cannot stat: {e}"}
-
-    try:
-        staged = utils.stage_for_tshark(pcap)
-        rows = utils.run_tshark(
-            ["-r", str(staged), "-c", "1", "-T", "fields", "-e", "frame.protocols"]
-        )
-    except utils.TsharkError as e:
-        return {**out, "ok": False, "reason": f"tshark read failed: {e}"}
-
-    protos = rows[0] if rows else ""
-    if not protos:
-        return {**out, "ok": False, "reason": "empty (0 frames)"}
-
-    # frame.protocols is the colon-separated dissector chain, e.g.
-    # "exported_pdu:ngap" or "exported_pdu:udp:mac-nr:nr-rrc". The 3GPP dissector
-    # we care about can sit mid-chain (a MAC PDU carrying RRC continues into
-    # nr-rrc), so scan all tokens rather than taking the last one.
-    tokens = protos.split(":")
-    found = [d for d in KNOWN_DISSECTORS if d in tokens]
-    out.update(frame_protocols=protos, dissector=found[0] if found else tokens[-1])
-    if "exported_pdu" not in tokens:
-        return {**out, "ok": False,
-                "reason": f"not Upper-PDU (frame.protocols={protos})"}
-    if not found:
-        return {**out, "ok": False,
-                "reason": f"no 3GPP dissector bound (frame.protocols={protos}); "
-                f"try `-d user_dlt 252,...` and note it in references/pcap/reference/pcap-format.md"}
-    return {**out, "ok": True}
+    out = run.check_pcap(utils.TSHARK, pcap)
+    if not out["ok"] and out["reason"].startswith("no 3GPP dissector bound"):
+        out["reason"] += _DISSECTOR_HINT
+    return out
 
 
 def render_text(report: dict) -> str:
@@ -146,6 +71,13 @@ def render_text(report: dict) -> str:
     return "\n".join(lines)
 
 
+def _print(report: dict, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps({**report, "verdict": "OK" if report.get("ok") else "BAIL"}, indent=2))
+    else:
+        print(render_text(report))
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -157,27 +89,26 @@ def main(argv: list[str] | None = None) -> int:
     given = Path(args.path)
     report: dict = {"input": str(given if not given.exists() else given.resolve())}
 
-    res = resolve(given)
+    res = run.resolve(given)
     if res.get("bail"):
         report.update(bail=res["bail"], ok=False)
-        print(json.dumps({**report, "verdict": "OK" if report.get("ok") else "BAIL"}, indent=2) if args.json else render_text(report))
+        _print(report, args.json)
         return 1
     report.update(res)
 
     try:
-        report["tshark"] = tshark_version()
+        report["tshark"] = utils.TSHARK.version()
     except utils.TsharkError as e:
         report.update(ok=False, bail=str(e), files=[])
-        print(json.dumps({**report, "verdict": "OK" if report.get("ok") else "BAIL"}, indent=2) if args.json else render_text(report))
+        _print(report, args.json)
         return 1
 
     files = [check_pcap(t) for t in res["targets"]]
-    # `targets` are Paths; drop them from the JSON payload in favour of `files`.
+    # Paths are not JSON serializable, and "files" describes the same pcaps.
     report.pop("targets", None)
     report["files"] = files
     report["ok"] = all(f["ok"] for f in files)
-
-    print(json.dumps({**report, "verdict": "OK" if report.get("ok") else "BAIL"}, indent=2) if args.json else render_text(report))
+    _print(report, args.json)
     return 0 if report["ok"] else 1
 
 

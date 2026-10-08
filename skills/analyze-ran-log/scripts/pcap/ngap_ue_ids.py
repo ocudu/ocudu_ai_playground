@@ -24,46 +24,7 @@ import sys
 from pathlib import Path
 
 import utils
-
-FIELDS = [
-    "frame.number",
-    "frame.time_epoch",
-    "ngap.procedureCode",
-    "ngap.RAN_UE_NGAP_ID",
-    "ngap.AMF_UE_NGAP_ID",
-]
-
-def build_clusters(rows: list[dict]) -> list[dict]:
-    clusters: list[dict] = []
-    by_ran: dict[str, dict] = {}
-
-    for row in rows:
-        if not (row["ran_ue_id"] or row["amf_ue_id"]):
-            continue  # infrastructure (NGSetup, AMFConfigurationUpdate, ...)
-        c = None
-        if row["ran_ue_id"] and row["ran_ue_id"] in by_ran:
-            c = by_ran[row["ran_ue_id"]]
-        if c is None:
-            c = {
-                "frame": row["frame"],
-                "first_epoch": row["epoch"],
-                "first_code": row["code"],
-                "ran_ue_ngap_id": None,
-                "amf_ue_ngap_id": None,
-            }
-            clusters.append(c)
-        if row["epoch"] < c["first_epoch"]:
-            c["first_epoch"] = row["epoch"]
-            c["frame"] = row["frame"]
-            c["first_code"] = row["code"]
-        if row["ran_ue_id"]:
-            if c["ran_ue_ngap_id"] is None:
-                c["ran_ue_ngap_id"] = row["ran_ue_id"]
-            by_ran[row["ran_ue_id"]] = c
-        if row["amf_ue_id"] and c["amf_ue_ngap_id"] is None:
-            c["amf_ue_ngap_id"] = row["amf_ue_id"]
-
-    return clusters
+from parsers.pcap import ngap
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -81,43 +42,14 @@ def main(argv: list[str] | None = None) -> int:
     if not pcap.is_file():
         print(f"error: not a file: {pcap}", file=sys.stderr)
         return 1
-
-    rows: list[dict] = []
     try:
-        for r in utils.iter_fields_cached(pcap, FIELDS, tag="ngap-ue-ids-v1",
-                                          force=args.no_cache):
-            frame, epoch, code, ran_id, amf_id = r
-            if not epoch:
-                continue
-            rows.append({
-                "frame": int(frame) if frame else None,
-                "epoch": float(epoch),
-                "code": code,
-                "ran_ue_id": ran_id or None,
-                "amf_ue_id": amf_id or None,
-            })
+        out_list = ngap.ue_ids(utils.TSHARK, pcap, force=args.no_cache)
     except utils.TsharkError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
-    clusters = sorted(build_clusters(rows), key=lambda c: c["first_epoch"])
-
-    out_list = [
-        {
-            "frame": c["frame"],
-            "first_iso": utils.epoch_to_iso(c["first_epoch"]),
-            "message": utils.proc_name("ngap", c["first_code"], with_code=False),
-            "ran_ue_ngap_id": c["ran_ue_ngap_id"],
-            "amf_ue_ngap_id": c["amf_ue_ngap_id"],
-            "first_epoch": c["first_epoch"],
-        }
-        for c in clusters
-    ]
-
     if args.ue:
-        u = args.ue
-        out_list = [r for r in out_list
-                    if u == r["ran_ue_ngap_id"] or u == r["amf_ue_ngap_id"]]
+        out_list = [r for r in out_list if args.ue in (r["ran_ue_ngap_id"], r["amf_ue_ngap_id"])]
 
     if args.json:
         print(json.dumps(out_list, indent=2))

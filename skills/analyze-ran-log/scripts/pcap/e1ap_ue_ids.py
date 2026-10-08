@@ -23,46 +23,7 @@ import sys
 from pathlib import Path
 
 import utils
-
-FIELDS = [
-    "frame.number",
-    "frame.time_epoch",
-    "e1ap.procedureCode",
-    "e1ap.GNB_CU_CP_UE_E1AP_ID",
-    "e1ap.GNB_CU_UP_UE_E1AP_ID",
-]
-
-def build_clusters(rows: list[dict]) -> list[dict]:
-    clusters: list[dict] = []
-    by_cp: dict[str, dict] = {}
-
-    for row in rows:
-        if not (row["e1_cp_ue_id"] or row["e1_up_ue_id"]):
-            continue  # infrastructure (E1Setup, GNB-CU-UP-StatusIndication, ...)
-        c = None
-        if row["e1_cp_ue_id"] and row["e1_cp_ue_id"] in by_cp:
-            c = by_cp[row["e1_cp_ue_id"]]
-        if c is None:
-            c = {
-                "frame": row["frame"],
-                "first_epoch": row["epoch"],
-                "first_code": row["code"],
-                "e1_cp_ue_id": None,
-                "e1_up_ue_id": None,
-            }
-            clusters.append(c)
-        if row["epoch"] < c["first_epoch"]:
-            c["first_epoch"] = row["epoch"]
-            c["frame"] = row["frame"]
-            c["first_code"] = row["code"]
-        if row["e1_cp_ue_id"]:
-            if c["e1_cp_ue_id"] is None:
-                c["e1_cp_ue_id"] = row["e1_cp_ue_id"]
-            by_cp[row["e1_cp_ue_id"]] = c
-        if row["e1_up_ue_id"] and c["e1_up_ue_id"] is None:
-            c["e1_up_ue_id"] = row["e1_up_ue_id"]
-
-    return clusters
+from parsers.pcap import e1ap
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -80,43 +41,14 @@ def main(argv: list[str] | None = None) -> int:
     if not pcap.is_file():
         print(f"error: not a file: {pcap}", file=sys.stderr)
         return 1
-
-    rows: list[dict] = []
     try:
-        for r in utils.iter_fields_cached(pcap, FIELDS, tag="e1ap-ue-ids-v1",
-                                          force=args.no_cache):
-            frame, epoch, code, cpid, upid = r
-            if not epoch:
-                continue
-            rows.append({
-                "frame": int(frame) if frame else None,
-                "epoch": float(epoch),
-                "code": code,
-                "e1_cp_ue_id": cpid or None,
-                "e1_up_ue_id": upid or None,
-            })
+        out_list = e1ap.ue_ids(utils.TSHARK, pcap, force=args.no_cache)
     except utils.TsharkError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
 
-    clusters = sorted(build_clusters(rows), key=lambda c: c["first_epoch"])
-
-    out_list = [
-        {
-            "frame": c["frame"],
-            "first_iso": utils.epoch_to_iso(c["first_epoch"]),
-            "message": utils.proc_name("e1ap", c["first_code"], with_code=False),
-            "e1_cp_ue_id": c["e1_cp_ue_id"],
-            "e1_up_ue_id": c["e1_up_ue_id"],
-            "first_epoch": c["first_epoch"],
-        }
-        for c in clusters
-    ]
-
     if args.ue:
-        u = args.ue
-        out_list = [r for r in out_list
-                    if u == r["e1_cp_ue_id"] or u == r["e1_up_ue_id"]]
+        out_list = [r for r in out_list if args.ue in (r["e1_cp_ue_id"], r["e1_up_ue_id"])]
 
     if args.json:
         print(json.dumps(out_list, indent=2))
