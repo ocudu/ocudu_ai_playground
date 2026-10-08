@@ -132,6 +132,53 @@ def _parse_metrics_chunk(path: str, start: int, end: int, first_line: int) -> di
     return result
 
 
+def _parse_events_chunk(path: str, start: int, end: int, first_line: int) -> list[tuple]:
+    """Parses the events of the byte range [start, end) of a log, which starts at line first_line and at a log entry.
+
+    Returns them as rows of time, line number, type, category, layer, level, ue, rnti, cause and text, in file order,
+    with the BINDING records of events.parse().
+    """
+    rows: list[tuple] = []
+    if end <= start:
+        return rows
+    # Header line number, line, preamble match and continuation lines of the entry whose events are pending.
+    pending: tuple[int, str, re.Match, list[str]] | None = None
+
+    def add(line_no: int, line: str, m: re.Match, body: list[str]) -> None:
+        for ev in events.parse(line, body, m):
+            t = ev["timestamp"].replace(tzinfo=timezone.utc).timestamp()
+            rows.append((t, line_no, ev["type"], ev["category"], ev["layer"], ev["level"], ev["ue"], ev["rnti"], ev["cause"], ev["text"]))
+
+    for line_no, raw in enumerate(chunks.read_lines(path, start, end), start=first_line):
+        if pending is not None:
+            if not _ENTRY_START_RE.match(raw):
+                pending[3].append(raw.decode("utf-8", "replace"))
+                continue
+            add(*pending)
+            pending = None
+        # Cheap check before decoding, most lines are not events.
+        if not _EVENT_CANDIDATE_RE.search(raw):
+            continue
+        line = raw.decode("utf-8", "replace")
+        if m := preamble.match_preamble(line):
+            if events.has_body(m):
+                pending = (line_no, line, m, [])
+            else:
+                add(line_no, line, m, [])
+    if pending is not None:
+        add(*pending)
+    return rows
+
+
+def _chunk_ranges(path: Path) -> list[tuple[int, int]]:
+    """Byte ranges of a log, starting at log entries, to parse in the pool: one when it has a single worker or the log
+    is small.
+    """
+    workers = parallel.nof_workers()
+    nof_chunks = 1 if workers == 1 else max(1, min(workers * _CHUNKS_PER_WORKER, path.stat().st_size // _MIN_CHUNK_SIZE))
+    return chunks.chunk_ranges(path, nof_chunks)
+
+
 def _parsers_version() -> str:
     try:
         return metadata.version("ocudu-parsers")
@@ -160,9 +207,7 @@ class LogMetricsSource:
     def parse(self, path: Path, writer: DatasetWriter, progress: ProgressFn | None = None) -> None:
         writer.set_notes(_event_notes(path))
         total = path.stat().st_size
-        workers = parallel.nof_workers()
-        nof_chunks = 1 if workers == 1 else max(1, min(workers * _CHUNKS_PER_WORKER, total // _MIN_CHUNK_SIZE))
-        ranges = chunks.chunk_ranges(path, nof_chunks)
+        ranges = _chunk_ranges(path)
         # Counted in the pool, since counting the lines of a large file takes about a second.
         counts = parallel.map_chunks(chunks.count_lines, [(str(path), start, end) for start, end in ranges[:-1]])
         first_lines = [1 + n for n in itertools.accumulate(counts, initial=0)]
@@ -205,36 +250,20 @@ class LogMetricsSource:
         return RunIdentity((r.mode, r.commit, r.branch), r.start, r.end) if r else None
 
     def parse_events(self, path: Path, writer: EventWriter) -> None:
-        # Header line number, line, preamble match and continuation lines of the entry whose events are pending.
-        pending: tuple[int, str, re.Match, list[str]] | None = None
+        # Chunks are parsed in the pool and their events assigned to UE contexts here, in file order, since the
+        # contexts of a chunk depend on the events before it.
+        ranges = _chunk_ranges(path)
+        counts = parallel.map_chunks(chunks.count_lines, [(str(path), start, end) for start, end in ranges[:-1]])
+        first_lines = [1 + n for n in itertools.accumulate(counts, initial=0)]
+        args = [(str(path), start, end, first_line) for (start, end), first_line in zip(ranges, first_lines)]
         tracker = events.UeTracker()
-
-        def add_events(line_no: int, line: str, m: re.Match, body: list[str]) -> None:
-            for ev in events.parse(line, body, m):
-                ev["lane"] = tracker.assign(ev)
-                if ev["category"] == events.BINDING:
-                    continue
-                ev_t = ev.pop("timestamp").replace(tzinfo=timezone.utc).timestamp()
-                writer.add_event(line_no, ev_t, ev)
-
-        with path.open("rb") as f:
-            for line_no, raw in enumerate(f, start=1):
-                if pending is not None:
-                    if not _ENTRY_START_RE.match(raw):
-                        pending[3].append(raw.decode("utf-8", "replace"))
-                        continue
-                    add_events(*pending)
-                    pending = None
-                # Cheap check before decoding, most lines are not events.
-                if not _EVENT_CANDIDATE_RE.search(raw):
-                    continue
-                line = raw.decode("utf-8", "replace")
-                if m := preamble.match_preamble(line):
-                    if events.has_body(m):
-                        pending = (line_no, line, m, [])
-                    else:
-                        add_events(line_no, line, m, [])
-        if pending is not None:
-            add_events(*pending)
+        for rows in parallel.map_chunks(_parse_events_chunk, args):
+            out = []
+            for row in rows:
+                t, _, type_, category, layer, _, ue, rnti, _, _ = row
+                lane = tracker.assign_ids(t, type_, category, layer, ue, rnti)
+                if category != events.BINDING:
+                    out.append((*row, lane))
+            writer.add_event_rows(out)
         for lane in tracker.lanes:
             writer.add_lane(lane.id, lane.du_ue, lane.rnti)

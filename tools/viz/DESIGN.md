@@ -259,6 +259,11 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 
 - Most of the parse time of a metrics-heavy log goes to parsing the METRICS lines in Python, not to finding them, so
   the metrics of large logs are parsed in chunks by a pool of worker processes.
+- The events of large logs too: the same chunks, which start at log entries, are parsed in the pool, and their events
+  are assigned to UE contexts by `UeTracker` in the server process, in file order, since a UE context spans chunks.
+  Most of the time of an event-heavy log goes to parsing each event rather than to finding the candidate lines, so a
+  faster scan (e.g. RE2) gains little: on a 485 MB log of 3.2M events (mostly repeated warnings), 23 s in one process,
+  8 s with 12 workers; on a 121 MB log of 250k events, 2.5 s and 0.9 s.
 - The pool is shared by all sources for as long as the server runs, and started in the background when the server
   starts, so that the first large log does not wait for it. `-j K` sets its workers, 1 for no pool; by default there
   is one per CPU the process may use, up to 12: on a 16-core machine, a metrics-heavy log parses no faster with more. Workers start from a fork server, since forking the multithreaded server could deadlock. A pool whose

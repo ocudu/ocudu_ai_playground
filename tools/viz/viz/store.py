@@ -226,6 +226,11 @@ class EventStoreWriter:
         if len(self._events) >= _BATCH_SIZE:
             self._flush()
 
+    def add_event_rows(self, rows: list[tuple]) -> None:
+        self._events.extend(rows)
+        if len(self._events) >= _BATCH_SIZE:
+            self._flush()
+
     def add_lane(self, lane: int, ue: int | None, rnti: str | None, label: str | None = None) -> None:
         self._conn.execute("INSERT OR REPLACE INTO lane_info VALUES (?, ?, ?, ?)", (lane, ue, rnti, label))
 

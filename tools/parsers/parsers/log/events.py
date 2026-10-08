@@ -87,10 +87,13 @@ ENTRY_START_PATTERN = r"\d{4}-\d\d-\d\dT"
 _CANDIDATE_RE = re.compile(CANDIDATE_PATTERN)
 _ENTRY_START_RE = re.compile(ENTRY_START_PATTERN)
 _LEVEL_EVENTS = {"W": "warning", "E": "error"}
-# UE identifiers of the warning and error lines that no pattern recognizes.
-_GENERIC_UE_RE = re.compile(r"\bue=(?P<ue>\d+)\b")
-_GENERIC_RNTI_RE = re.compile(r"\b(?:c-|tc-)?rnti=(?P<rnti>0x[0-9a-fA-F]+)\b")
+# UE identifiers of the warning and error lines that no pattern recognizes, in one pass over the message.
+_GENERIC_IDS_RE = re.compile(r"\bue=(?P<ue>\d+)\b|\b(?:c-|tc-)?rnti=(?P<rnti>0x[0-9a-fA-F]+)\b")
 _BODY_KEYS = {(p.layer, p.level) for p in EVENT_PATTERNS if p.in_body}
+# Patterns of each logger, in EVENT_PATTERNS order.
+_PATTERNS_BY_LAYER: dict[str, list[EventPattern]] = {}
+for _pattern in EVENT_PATTERNS:
+    _PATTERNS_BY_LAYER.setdefault(_pattern.layer, []).append(_pattern)
 
 
 def is_candidate(line: str) -> bool:
@@ -123,8 +126,8 @@ def parse(line: str, body: Sequence[str] = (), preamble_match: re.Match | None =
     text = line[preamble_match.end():].strip()
 
     found: list[tuple[str, str, dict[str, Any], str]] = []
-    for ev in EVENT_PATTERNS:
-        if ev.layer != layer or (ev.level is not None and ev.level != level):
+    for ev in _PATTERNS_BY_LAYER.get(layer, ()):
+        if ev.level is not None and ev.level != level:
             continue
         m = ev.pattern.search(text)
         if not m:
@@ -140,8 +143,13 @@ def parse(line: str, body: Sequence[str] = (), preamble_match: re.Match | None =
                 found.append((ev.type, ev.category, {**m.groupdict(), **im.groupdict()}, im.group(0)))
         break
     if not found and (level_type := _LEVEL_EVENTS.get(level or "")):
-        ue_m, rnti_m = _GENERIC_UE_RE.search(text), _GENERIC_RNTI_RE.search(text)
-        groups = {"ue": ue_m and ue_m.group("ue"), "rnti": rnti_m and rnti_m.group("rnti")}
+        groups: dict[str, str | None] = {"ue": None, "rnti": None}
+        for m in _GENERIC_IDS_RE.finditer(text):
+            name = m.lastgroup
+            if groups[name] is None:
+                groups[name] = m.group(name)
+                if groups["ue"] is not None and groups["rnti"] is not None:
+                    break
         found.append((level_type, level_type, groups, text))
 
     timestamp = datetime.fromisoformat(preamble_match.group("timestamp"))
@@ -197,8 +205,8 @@ class UeLane:
     id: int
     du_ue: int | None
     rnti: str | None
-    t_start: datetime
-    t_end: datetime | None = None
+    t_start: datetime | float
+    t_end: datetime | float | None = None
     created: bool = False
     deleted: bool = False
 
@@ -220,29 +228,32 @@ class UeTracker:
 
     def assign(self, event: dict[str, Any]) -> int | None:
         """Returns the id of the UE context of an event, or None for events of no UE."""
-        lane = self._lane(event)
-        if lane is not None and event["timestamp"] > (lane.t_end or lane.t_start):
-            lane.t_end = event["timestamp"]
+        return self.assign_ids(event["timestamp"], event["type"], event.get("category"), event["layer"], event["ue"], event["rnti"])
+
+    def assign_ids(self, t: Any, type_: str, category: str | None, layer: str, ue: int | None, rnti: str | None) -> int | None:
+        """Like assign(), given the fields of the event. Timestamps only need to compare, e.g. epoch seconds."""
+        lane = self._lane(t, type_, category, layer, ue, rnti)
+        if lane is not None and t > (lane.t_end or lane.t_start):
+            lane.t_end = t
         return lane.id if lane is not None else None
 
-    def _lane(self, event: dict[str, Any]) -> UeLane | None:
-        t, ue, rnti = event["timestamp"], event["ue"], event["rnti"]
-        du = event["layer"] in _DU_LOGGERS
-        if event["type"] == "ue_create":
+    def _lane(self, t: Any, type_: str, category: str | None, layer: str, ue: int | None, rnti: str | None) -> UeLane | None:
+        du = layer in _DU_LOGGERS
+        if type_ == "ue_create":
             lane = self._by_rnti.get(rnti) if rnti else None
             if lane is None or lane.du_ue is not None:
                 lane = self._new_lane(t, rnti)
             lane.du_ue, lane.created = ue, True
             self._by_du_ue[ue] = lane
             return lane
-        if event.get("category") == BINDING:
+        if category == BINDING:
             # Only within the lifetime of the context, since DU UE indexes are soon reused.
             lane = self._by_du_ue.get(ue) if ue is not None else None
             if lane is not None and lane.rnti is None and rnti:
                 lane.rnti = rnti
                 self._by_rnti[rnti] = lane
             return lane
-        if event["type"] == "ue_delete":
+        if type_ == "ue_delete":
             lane = self._by_du_ue.pop(ue, None)
             if lane is not None:
                 lane.deleted = True
@@ -269,7 +280,7 @@ class UeTracker:
         cu_rnti = self._cu_ue_rnti.get(ue)
         return self._by_rnti.get(cu_rnti) if cu_rnti else None
 
-    def _new_lane(self, t: datetime, rnti: str | None) -> UeLane:
+    def _new_lane(self, t: datetime | float, rnti: str | None) -> UeLane:
         lane = UeLane(len(self.lanes), None, rnti, t)
         self.lanes.append(lane)
         if rnti:
