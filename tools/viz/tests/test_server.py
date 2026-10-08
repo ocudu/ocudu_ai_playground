@@ -198,6 +198,8 @@ class ServerTest(unittest.TestCase):
         self.assertEqual([lane["rnti"] for lane in filtered["lanes"]], ["0x4601"])
         self.assertTrue(filtered["events"])
         self.assertEqual(self.client.get("/api/trace", params={"source": 0, "filter": "nope == 1"}).status_code, 400)
+        grouped = self.client.get("/api/trace", params={"source": 0, "group_by": "ue"}).json()
+        self.assertEqual([lane["label"] for lane in grouped["lanes"]], ["ue=0", "ue=1"])
 
     def test_sources_status(self):
         src = self.client.get("/api/sources").json()[0]

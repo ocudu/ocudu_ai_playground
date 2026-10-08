@@ -24,6 +24,8 @@ const EVENT_HIT_PX = 5;
 const FETCH_DELAY_MS = 120;
 // Glyph of each event category, also shown in the legend.
 const GLYPHS = { ra: "▲", lifecycle: "■", rrc: "●", f1ap: "●", ngap: "●", e1ap: "●", mobility: "◆", failure: "✖", warning: "●", error: "●" };
+// Identifiers of the UE contexts of pcaps, by the event category of their protocol, that rows can be grouped by.
+const PROTOCOL_IDS = { f1ap: ["du_f1ap", "cu_f1ap"], ngap: ["ran_ngap", "amf_ngap"], e1ap: ["cu_cp_e1ap", "cu_up_e1ap"] };
 // Categories of the legend, in order, shown when the source has events of them.
 const LEGEND = [
   ["ra", "random access"],
@@ -72,22 +74,29 @@ function drawGlyph(ctx, category, x, y, r) {
 }
 
 /**
- * DU UE index, RNTI and the protocol identifiers of a lane, e.g. "ue=0 rnti=0x4601 du_f1ap=0 cu_f1ap=0".
- * @param {{ue: number | null, rnti: string | null, label: string | null}} lane
+ * All the UE identifiers of a row, shown when hovering it: the one it is grouped by first, then the others, with the
+ * values of all its UE contexts, e.g. "rnti=0x4602 ue=1 du_f1ap=1 cu_f1ap=1".
+ * @param {{ids?: Record<string, string[]>, ue: number | null, rnti: string | null, label: string | null}} lane
+ * @param {string} by
  */
-function laneLabel(lane) {
+function laneLabel(lane, by) {
+  if (lane.ids && Object.keys(lane.ids).length) {
+    const rank = (name) => (name === by ? 0 : name === "rnti" ? 1 : name === "ue" ? 2 : 3);
+    const names = Object.keys(lane.ids).sort((a, b) => rank(a) - rank(b));
+    return names.map((name) => `${name}=${lane.ids[name].join(",")}`).join(" ");
+  }
   const ids = [lane.ue != null ? `ue=${lane.ue}` : null, lane.rnti ? `rnti=${lane.rnti}` : null, lane.label];
   return ids.filter(Boolean).join(" ") || "UE";
 }
 
 /**
- * Label of a lane on the row axis, which is as narrow as the value axis of the plots: its DU UE index and RNTI, or
- * else its first protocol identifier, e.g. "ran_ngap=0".
- * @param {{ue: number | null, rnti: string | null, label: string | null}} lane
+ * Label of a row on the row axis: the identifier the rows are grouped by and its value, e.g. "rnti=0x4601", as the
+ * server labels the rows of a value, or "–" for a row of a UE context without it.
+ * @param {{label: string | null}} lane
+ * @param {string} by
  */
-function axisLabel(lane) {
-  const ids = [lane.ue != null ? `ue=${lane.ue}` : null, lane.rnti].filter(Boolean).join(" ");
-  return ids || lane.label?.split(" ")[0] || "UE";
+function axisLabel(lane, by) {
+  return lane.label?.startsWith(`${by}=`) ? lane.label : "–";
 }
 
 export default {
@@ -138,6 +147,17 @@ export default {
     filterDirty() {
       return this.filterDraft.trim() !== (this.panel.filter ?? "");
     },
+    /** Identifier the rows are grouped by: the chosen one when the source has it, else the RNTI. */
+    groupBy() {
+      return this.groupOptions.includes(this.panel.groupBy) ? this.panel.groupBy : "rnti";
+    },
+    /** Identifiers that rows can be grouped by: the RNTI, the default, the DU UE index of logs, and the UE identifiers of a pcap. */
+    groupOptions() {
+      const counts = this.source?.event_counts ?? {};
+      const isPcap = this.source?.type === "pcap";
+      const protocolIds = isPcap ? Object.keys(PROTOCOL_IDS).filter((p) => counts[p]).flatMap((p) => PROTOCOL_IDS[p]) : [];
+      return ["rnti", ...(!isPcap || this.joined ? ["ue"] : []), ...protocolIds];
+    },
     /** F1AP pcap of the tab, whose UE contexts identify the UEs of its logs. */
     f1apSource() {
       if (this.runId == null) return null;
@@ -150,7 +170,7 @@ export default {
     },
     /** Whether a trace of the F1AP pcap also shows the UE events of the logs of the tab. */
     joined() {
-      return this.source === this.f1apSource && this.joinableLogs.length > 0 && this.panel.joined !== false;
+      return this.source === this.f1apSource && this.joinableLogs.length > 0 && this.panel.joined === true;
     },
     /** Whether a trace of a log shows its UE events on the UE contexts of the F1AP pcap, rather than its own. */
     logOnF1ap() {
@@ -179,6 +199,9 @@ export default {
       this.scheduleFetch();
     },
     "panel.filter"() {
+      this.scheduleFetch();
+    },
+    "panel.groupBy"() {
       this.scheduleFetch();
     },
     joined() {
@@ -235,7 +258,13 @@ export default {
       this.abort = new AbortController();
       this.loading = true;
       try {
-        const range = { t0: this.view.min - this.shift, t1: this.view.max - this.shift, max_lanes: MAX_LANES, filter: this.panel.filter || null };
+        const range = {
+          t0: this.view.min - this.shift,
+          t1: this.view.max - this.shift,
+          max_lanes: MAX_LANES,
+          filter: this.panel.filter || null,
+          group_by: this.groupBy,
+        };
         let res;
         if (this.joined) {
           res = await getJSON(`/api/runs/${this.runId}/trace`, range, this.abort.signal);
@@ -264,7 +293,7 @@ export default {
         rowOfLane.set(lane.lane, row);
         const t0 = lane.t_start + shift;
         const t1 = lane.open ? Math.max(end, lane.t_end + shift) : lane.t_end + shift;
-        return { ...lane, t0, t1, row, label: laneLabel(lane), axisLabel: axisLabel(lane) };
+        return { ...lane, t0, t1, row, label: laneLabel(lane, this.groupBy), axisLabel: axisLabel(lane, this.groupBy) };
       });
       this.hasCellRow = res.events.some((e) => e.lane == null);
       this.events = res.events.map((e) => ({ ...e, t: e.t + shift, row: e.lane == null ? -1 : rowOfLane.get(e.lane) ?? -2 }));
@@ -317,6 +346,8 @@ export default {
       if (this.chart.height !== this.chartHeight) this.chart.setSize({ width: this.chartWidth(), height: this.chartHeight });
       this.chart.setData([[this.view.min, this.view.max], [null, null]], false);
       this.chart.setScale("x", { min: this.view.min, max: this.view.max });
+      // Rows can change with the same view and count, e.g. another "rows by", which uPlot does not see.
+      this.chart.redraw(false, true);
     },
 
     rebuild() {
@@ -465,14 +496,19 @@ export default {
         <select v-if="choices && choices.length > 1" v-model.number="panel.source" :title="source ? source.path : 'Source'">
           <option v-for="s in choices" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">{{ s.file ?? s.name }}</option>
         </select>
-        <label v-if="source === f1apSource && joinableLogs.length" class="inline muted" title="Join the UE events of the logs of the tab, e.g. random access, to the UE contexts of the F1AP pcap, matched by C-RNTI and time">
-          <input type="checkbox" :checked="joined" @change="panel.joined = $event.target.checked" /> + log events
+        <label class="inline" title="One row per value of an identifier, merging the UE contexts that share it">rows by
+          <select :value="groupBy" @change="panel.groupBy = $event.target.value">
+            <option v-for="key in groupOptions" :key="key" :value="key">{{ key }}</option>
+          </select>
         </label>
         <form class="filter" @submit.prevent="applyFilter">
           <input v-model="filterDraft" :class="{ dirty: filterDirty }" placeholder="rnti == 0x4602 or type == rlf"
                  title="Keeps the events matching comparisons (== != < <= > >=, is null) joined by and/or/not, over type, category, layer, level, ue, rnti, cause and text, and the UEs with such events. Events without ue or rnti take the ones of their UE."
                  @blur="applyFilter" />
         </form>
+        <label v-if="source === f1apSource && joinableLogs.length" class="inline muted" title="Join the UE events of the logs of the tab, e.g. random access, to the UE contexts of the F1AP pcap, matched by C-RNTI and time">
+          <input type="checkbox" :checked="joined" @change="panel.joined = $event.target.checked" /> log events
+        </label>
         <span class="trace-legend">
           <span v-for="g in legend" :key="g.category" :class="'ev-' + g.category"><span class="trace-glyph">{{ g.glyph }}</span>{{ g.label }}</span>
         </span>

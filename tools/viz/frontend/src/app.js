@@ -55,6 +55,7 @@ function newPlot(init) {
     filter: "",
     mode: "time",
     instance: null,
+    groupBy: null,
     ...init,
     dataset: init.dataset ?? null,
     id: nextPlotId++,

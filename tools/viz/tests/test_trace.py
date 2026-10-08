@@ -4,7 +4,7 @@
 import unittest
 
 from viz.filters import FilterError
-from viz.trace import RunTrace, filter_trace, join_lanes
+from viz.trace import RunTrace, filter_trace, group_trace, join_lanes, lane_keys
 
 
 def lane(lane_id, t_start, t_end, ue=None, rnti=None, label=None, open_=False):
@@ -105,6 +105,37 @@ class JoinTest(unittest.TestCase):
         limited = filter_trace(full, "category == ra", 1, 1)
         self.assertEqual((len(limited["lanes"]), limited["total_lanes"]), (1, 3))
         self.assertEqual((len(limited["events"]), limited["truncated"]), (1, False))
+
+    def test_lane_keys(self):
+        self.assertEqual(lane_keys(lane(0, 0, 1, ue=1, rnti="0x4602", label="du_f1ap=1 cu_f1ap=1")),
+                         {"du_f1ap": "1", "cu_f1ap": "1", "ue": "1", "rnti": "0x4602"})
+        self.assertEqual(lane_keys(lane(0, 0, 1)), {})
+
+    def test_group_by_ue(self):
+        # The joined lanes carry the DU UE index of the logs: 0 for the first UE, 1 for the handover target.
+        trace = RunTrace((7, F1AP), [(3, LOG)])
+        by_ue = trace.trace(None, None, 300, 100, group_by="ue")
+        self.assertEqual([(lane["lane"], lane["label"]) for lane in by_ue["lanes"]], [("ue=0", "ue=0"), ("ue=1", "ue=1"), ("ue=5", "ue=5")])
+        self.assertEqual({e["type"]: e["lane"] for e in by_ue["events"]}["UEContextSetup"], "ue=1")
+
+    def test_group_merges_lanes_of_the_same_value(self):
+        trace = {
+            "lanes": [lane(0, 10.0, 12.0, ue=0, label="du_f1ap=0"), lane(1, 20.0, 22.0, ue=0, label="du_f1ap=1"), lane(2, 30.0, 31.0)],
+            "events": [event(10.5, 0), event(20.5, 1), event(30.5, 2), event(40.0, None, "warning")],
+        }
+        by_ue = group_trace(trace, "ue", 300, 100)
+        self.assertEqual([(lane["lane"], lane["t_start"], lane["t_end"]) for lane in by_ue["lanes"]], [("ue=0", 10.0, 22.0), (2, 30.0, 31.0)])
+        self.assertEqual([e["lane"] for e in by_ue["events"]], ["ue=0", "ue=0", 2, None])
+        # A row has the identifiers of all the contexts it merges.
+        self.assertEqual(by_ue["lanes"][0]["ids"], {"du_f1ap": ["0", "1"], "ue": ["0"]})
+        self.assertEqual(len(group_trace(trace, "du_f1ap", 300, 100)["lanes"]), 3)
+        limited = group_trace(trace, "ue", 1, 100)
+        self.assertEqual((len(limited["lanes"]), limited["total_lanes"], [e["lane"] for e in limited["events"]]), (1, 2, ["ue=0", "ue=0", None]))
+
+    def test_group_with_filter(self):
+        trace = RunTrace((7, F1AP), [(3, LOG)]).trace(None, None, 300, 100, filter_expr="category == ra", group_by="ue")
+        self.assertEqual([lane["lane"] for lane in trace["lanes"]], ["ue=0", "ue=1", "ue=5"])
+        self.assertTrue(all(e["category"] == "ra" for e in trace["events"]))
 
     def test_trace_window_and_limits(self):
         trace = RunTrace((7, F1AP), [(3, LOG)]).trace(19.0, 25.0, 1, 100)

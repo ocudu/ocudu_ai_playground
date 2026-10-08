@@ -24,7 +24,7 @@ from .files import PathNotAllowed, list_dir
 from .registry import OpenError, RunEntry, SourceEntry, SourceRegistry
 from .filters import FilterError
 from .store import QueryError, Store
-from .trace import RunTrace, filter_trace
+from .trace import RunTrace, filter_trace, group_trace
 
 # Built frontend, produced by "npm run build" in the frontend directory.
 STATIC_DIR = Path(__file__).parent / "static"
@@ -451,6 +451,7 @@ def create_app(
         limit: int = Query(5000, ge=1, le=50_000),
         sources: list[int] | None = Query(None),
         filter_expr: str | None = Query(None, alias="filter"),
+        group_by: str | None = None,
     ) -> dict[str, Any]:
         """Returns the trace of a run: the UE contexts of its F1AP pcap with the UE events of its logs joined to them,
         like /api/trace. Each event has its source. With sources, only their events and the lanes they have events in.
@@ -466,7 +467,7 @@ def create_app(
         if cached is None or cached[0] != key:
             cached = run_traces[run_id] = (key, RunTrace((anchor.id, anchor.store), [(e.id, e.store) for e in logs]))
         try:
-            return cached[1].trace(t0, t1, max_lanes, limit, set(sources) if sources else None, filter_expr)
+            return cached[1].trace(t0, t1, max_lanes, limit, set(sources) if sources else None, filter_expr, group_by)
         except FilterError as e:
             raise HTTPException(400, str(e)) from None
 
@@ -478,13 +479,21 @@ def create_app(
         max_lanes: int = Query(300, ge=1, le=5000),
         limit: int = Query(5000, ge=1, le=50_000),
         filter_expr: str | None = Query(None, alias="filter"),
+        group_by: str | None = None,
     ) -> dict[str, Any]:
-        """Returns the UE lanes and events of a time window, of the events matching filter if given, see filter_trace()."""
+        """Returns the UE lanes and events of a time window, of the events matching filter if given, see filter_trace(),
+        with the lanes of the same group_by identifier merged if given, see group_trace().
+        """
         store = get_store(source)
-        if not filter_expr:
+        if not filter_expr and not group_by:
             return store.trace(t0, t1, max_lanes, limit)
         try:
-            return filter_trace(store.trace(t0, t1, 10**9, 10**9), filter_expr, max_lanes, limit)
+            trace = store.trace(t0, t1, 10**9, 10**9)
+            if not group_by:
+                return filter_trace(trace, filter_expr, max_lanes, limit)
+            if filter_expr:
+                trace = filter_trace(trace, filter_expr, 10**9, 10**9)
+            return group_trace(trace, group_by, max_lanes, limit)
         except FilterError as e:
             raise HTTPException(400, str(e)) from None
 

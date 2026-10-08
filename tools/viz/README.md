@@ -59,7 +59,7 @@ In the page:
 - The `events` chips above the plots mark log events on the time plots: `RACH` (PRACH detections), `RLF`,
   `warnings` and `errors`, with their count in the logs of the tab, greyed out when there are none. All start hidden.
   Hover a marker to see its event, click it to see its log line. The trace shows all the events.
-- `+ trace` adds a timeline of the UEs, of the F1AP pcap of the tab by default. With `+ log events`, the UE events of
+- `+ trace` adds a timeline of the UEs, of the F1AP pcap of the tab by default. With `log events` ticked (off by default), the UE events of
   the logs of the tab, e.g. random access, join the F1AP UE contexts, matched by C-RNTI and time, since pcaps
   identify UEs more reliably than logs. A trace of a log of a tab with an F1AP pcap also identifies its UEs by the F1AP
   UE contexts. A trace shows a bar per UE context, e.g. from its random access or creation
@@ -69,7 +69,10 @@ In the page:
   a glyph to see its log line or frame. The trace filter keeps the events matching an expression like the plot
   filter, over `type`, `category`, `layer`, `level`, `ue`, `rnti`, `cause` and `text`, and the UEs with such events,
   e.g. `rnti == 0x4602` for one UE or `type == prach or type == rlf`. Events without a UE index or RNTI take the
-  ones of their UE.
+  ones of their UE. `rows by` shows a row per value of an identifier, labelled with both, e.g. `rnti=0x4601`,
+  merging the UE contexts that share it: `rnti` by default, `ue` (the DU UE index of logs, reused by later UEs, for a pcap only with `log events`), or the
+  identifiers of a pcap, e.g. `du_f1ap` and `cu_f1ap`. Rows of UE contexts without the identifier are labelled `–`.
+  Hovering a row shows all the UE identifiers of the contexts it merges.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,
   double-click it to reset the height.
 - The top-right corner of a plot shows the time and value under the mouse. The legend below shows the

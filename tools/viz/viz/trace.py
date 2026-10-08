@@ -24,6 +24,58 @@ _ALL = 10**9
 FILTER_FIELDS = ("type", "category", "layer", "level", "ue", "rnti", "cause", "text")
 
 
+def lane_keys(lane: dict[str, Any]) -> dict[str, str]:
+    """The identifiers of a lane rows can be grouped by: "ue", "rnti" and the protocol identifiers of its label, e.g.
+    "du_f1ap".
+    """
+    keys = dict(token.split("=", 1) for token in (lane.get("label") or "").split() if "=" in token)
+    if lane.get("ue") is not None:
+        keys["ue"] = str(lane["ue"])
+    if lane.get("rnti"):
+        keys["rnti"] = lane["rnti"]
+    return keys
+
+
+def group_trace(trace: dict[str, Any], by: str, max_lanes: int, limit: int) -> dict[str, Any]:
+    """A trace, as Store.trace() returns it with all its lanes and events, with the lanes of the same identifier by,
+    see lane_keys(), merged into one, labelled with it, then reduced to max_lanes lanes and limit events. Lanes
+    without the identifier keep their own. Each lane gets "ids", the values of each identifier of the lanes it merges.
+    """
+    merged: dict[Any, dict[str, Any]] = {}
+    lane_of: dict[Any, Any] = {}
+    for lane in trace["lanes"]:
+        keys = lane_keys(lane)
+        value = keys.get(by)
+        key = f"{by}={value}" if value is not None else lane["lane"]
+        lane_of[lane["lane"]] = key
+        if key not in merged:
+            merged[key] = {**lane, "lane": key, "ids": {}}
+            if value is not None:
+                merged[key].update(label=key, ue=None, rnti=None)
+        m = merged[key]
+        for name, v in keys.items():
+            values = m["ids"].setdefault(name, [])
+            if v not in values:
+                values.append(v)
+        m["t_start"] = min(m["t_start"], lane["t_start"])
+        m["t_end"] = max(m["t_end"], lane["t_end"])
+        m["open"] = m["open"] or lane["open"]
+    lanes = sorted(merged.values(), key=lambda lane: lane["t_start"])
+    shown = {lane["lane"] for lane in lanes[:max_lanes]}
+    events = []
+    for ev in trace["events"]:
+        key = lane_of.get(ev["lane"]) if ev["lane"] is not None else None
+        if key is None or key in shown:
+            events.append({**ev, "lane": key})
+    return {
+        "lanes": lanes[:max_lanes],
+        "total_lanes": len(lanes),
+        "events": events[:limit],
+        "total_events": len(events),
+        "truncated": len(events) > limit,
+    }
+
+
 def filter_trace(trace: dict[str, Any], expr: str, max_lanes: int, limit: int) -> dict[str, Any]:
     """A trace, as Store.trace() returns it with all its lanes and events, reduced to the events matching a filter
     expression over FILTER_FIELDS and the lanes they are in, then to max_lanes lanes and limit events.
@@ -79,13 +131,16 @@ class RunTrace:
         limit: int,
         sources: set[int] | None = None,
         filter_expr: str | None = None,
+        group_by: str | None = None,
     ) -> dict[str, Any]:
         """Like Store.trace(), over the joined lanes, with the source of each event. Lane ids are strings.
 
         With sources, only their events and the lanes they have events in, e.g. the events of a log on the UE contexts
         of the F1AP pcap. With the F1AP pcap, the RRC events of the logs are left out, since its packets carry them.
-        With filter_expr, see filter_trace().
+        With filter_expr, see filter_trace(), and with group_by, see group_trace().
         """
+        if group_by:
+            return group_trace(self.trace(t0, t1, _ALL, _ALL, sources, filter_expr), group_by, max_lanes, limit)
         if filter_expr:
             return filter_trace(self.trace(t0, t1, _ALL, _ALL, sources), filter_expr, max_lanes, limit)
         lo = -float("inf") if t0 is None else t0
