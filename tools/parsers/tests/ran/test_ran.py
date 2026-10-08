@@ -3,7 +3,7 @@
 
 import unittest
 
-from parsers.ran import nas, procedures, rrc
+from parsers.ran import nas, procedures, rnti, rrc
 
 
 class ProceduresTest(unittest.TestCase):
@@ -30,6 +30,19 @@ class RrcTest(unittest.TestCase):
         self.assertEqual(rrc.decode_ccch_type("40", "ul"), "rrcReestablishmentRequest")
         self.assertIsNone(rrc.decode_ccch_type("80", "ul"))
         self.assertIsNone(rrc.decode_ccch_type("zz", "ul"))
+
+
+
+class RntiTest(unittest.TestCase):
+    def test_normalize(self):
+        self.assertEqual(rnti.normalize("17921"), "0x4601")
+        self.assertEqual(rnti.normalize("0x4601"), "0x4601")
+        self.assertEqual(rnti.normalize("0X4601"), "0x4601")
+        self.assertEqual(rnti.normalize("4601", bare_hex=True), "0x4601")
+        self.assertEqual(rnti.normalize(267), "0x010b")
+        self.assertIsNone(rnti.normalize(""))
+        self.assertIsNone(rnti.normalize("n/a"))
+        self.assertIsNone(rnti.normalize("70000"))
 
 
 if __name__ == "__main__":
