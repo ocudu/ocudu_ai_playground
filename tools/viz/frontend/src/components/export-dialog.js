@@ -14,6 +14,8 @@ const MIN_HEIGHT = 200;
 const REFETCH_DELAY_MS = 300;
 // Delay before releasing the image of a saved file.
 const REVOKE_DELAY_MS = 60_000;
+// Time the Copy button says the image was copied.
+const COPIED_MS = 1500;
 
 /**
  * File name of an exported plot, without unsafe characters.
@@ -40,7 +42,15 @@ export default {
   },
   emits: ["close"],
   data() {
-    return { width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT, labels: [], error: "", loading: false, ready: false };
+    return {
+      width: DEFAULT_WIDTH,
+      height: DEFAULT_HEIGHT,
+      labels: [],
+      error: "",
+      loading: false,
+      ready: false,
+      copied: false,
+    };
   },
   watch: {
     width() {
@@ -164,8 +174,35 @@ export default {
       }
     },
 
-    /** Saves the frame as a PNG: its title, chart and legend, drawn where the frame shows them, on white. */
-    savePng() {
+    /** Saves the image as a PNG file. */
+    async savePng() {
+      const blob = await this.renderPng();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName(this.nameParts);
+      a.click();
+      // Released later, since revoking it at once can cancel the download.
+      setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
+    },
+
+    /** Puts the image on the clipboard, as a PNG. */
+    async copyPng() {
+      try {
+        // The image is given as a promise, so that the copy keeps the user gesture while the image is drawn.
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": this.renderPng() })]);
+        this.error = "";
+        this.copied = true;
+        setTimeout(() => {
+          this.copied = false;
+        }, COPIED_MS);
+      } catch (e) {
+        this.error = `Could not copy the image: ${e.message}`;
+      }
+    },
+
+    /** Draws the frame as a PNG: its title, chart and legend, where the frame shows them, on white. */
+    renderPng() {
       const frame = this.$refs.frame;
       const box = frame.getBoundingClientRect();
       const dpr = devicePixelRatio;
@@ -204,15 +241,9 @@ export default {
         drawText(label, label.textContent);
       }
 
-      canvas.toBlob((blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = fileName(this.nameParts);
-        a.click();
-        // Released later, since revoking it at once can cancel the download.
-        setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS);
-      }, "image/png");
+      return new Promise((resolve, reject) => {
+        canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("the image could not be drawn"))), "image/png");
+      });
     },
 
     seriesColor(i) {
@@ -230,6 +261,7 @@ export default {
           <span v-if="loading" class="muted">loading</span>
           <span v-if="error" class="error">{{ error }}</span>
           <span class="status"></span>
+          <button :disabled="!ready || loading" title="Copy the image to the clipboard, e.g. to paste it in a chat or slide" @click="copyPng">{{ copied ? "Copied" : "Copy" }}</button>
           <button class="primary" :disabled="!ready || loading" title="Save the image as a PNG file" @click="savePng">Save PNG</button>
           <button class="icon" title="Close" @click="$emit('close')">✕</button>
         </header>
