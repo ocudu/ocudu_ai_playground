@@ -24,7 +24,7 @@ import unittest
 from pathlib import Path
 
 TEST_DIR = Path(__file__).resolve().parent
-PCAP = TEST_DIR / "f1ap_pcap_test.pcap"
+PCAP = TEST_DIR.parents[1] / "tools" / "parsers" / "tests" / "pcap" / "f1ap_pcap_test.pcap"
 SCRIPTS_DIR = TEST_DIR.parents[1] / "skills" / "analyze-ran-log" / "scripts" / "pcap"
 
 

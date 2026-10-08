@@ -9,6 +9,7 @@ Standard-library only, so it can be imported by visualization or analysis tools 
 | Subpackage    | Artifact                                                      |
 |---------------|---------------------------------------------------------------|
 | `parsers.log` | OCUDU text logs: line preamble, `METRICS` lines, events and the configuration echo. |
+| `parsers.pcap` | The pcaps of a run (`mac`, `rlc`, `f1ap`, `e1ap`, `ngap`), through `tshark`: UE identifiers, F1AP messages with their RRC and NAS messages, NGAP procedures, overviews and a merged timeline. |
 
 ## Installation
 
@@ -126,6 +127,29 @@ if cfg and not cfg.logs_at("SCHED", "info"):
 `config.from_log()` reads the configuration that OCUDU echoes at the top of its logs (`config_level` info or debug), and
 `config.parse_config()` a YAML configuration file. `AppConfig` has the explicit log levels, the effective level of each
 option or logger (`level()`, `logger_level()`, `logs_at()`), and the node planes and type.
+
+### Pcaps
+
+`parsers.pcap` needs `tshark` on the `PATH`.
+
+```python
+from parsers.pcap import f1ap, ngap, overview, run, timeline
+from parsers.pcap.tshark import Tshark
+
+tshark = Tshark()  # stages pcaps and caches extractions in a work directory, by default under the temp dir
+pcaps = run.find_pcaps("run_dir")  # {"mac": Path | None, "rlc": ..., "f1ap": ..., "e1ap": ..., "ngap": ...}
+for ue in f1ap.ue_ids(tshark, pcaps["f1ap"]):
+    print(ue["first_iso"], ue["cu_ue_f1ap_id"], ue["crntis"])
+for msg in f1ap.messages(tshark, pcaps["f1ap"]):
+    print(msg["first_iso"], msg["message"], msg["rrc"], msg["nas"])
+print(overview.summarise(tshark, pcaps["ngap"]))
+events = timeline.run_events(tshark, "run_dir", ["ngap", "f1ap"], ue="0")
+```
+
+`tshark` reads pcaps through a link or copy in the work directory, since the AppArmor profile of `tshark` on Ubuntu
+only lets it read under `/tmp`, and dissects the MAC and RLC PDUs of `mac.pcap` and `rlc.pcap` through the
+`mac_nr_udp` and `rlc_nr_udp` heuristics. Field extractions are cached in the work directory by pcap and fields.
+`run.check_pcap()` checks that a pcap has a frame that one of the known dissectors binds.
 
 ## Tests
 
