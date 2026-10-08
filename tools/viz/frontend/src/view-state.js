@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
 // Bumped when the encoded state changes incompatibly.
-const VERSION = 2;
+const VERSION = 3;
 const PREFIX = "#v=";
-// Plot properties saved in the view state. A plot's source is the source of its tab.
+// Plot properties saved in the view state, besides the file of its source.
 const PLOT_KEYS = ["kind", "dataset", "instance", "field", "splitBy", "splitValues", "filter", "mode", "columnFilter"];
 
 /** @param {string} text */
@@ -23,33 +23,38 @@ function fromBase64Url(encoded) {
 
 /**
  * Encodes the view as a URL fragment: the open tabs with their plots and zoom, and the selected tab.
- * Sources are identified by name, not path.
- * @param {{openSources: Array<{id: number, name: string}>, sources: Array<{name: string}>, tabs: Record<number, any>, activeId: number | null, timeMode: string}} app
+ * Runs are identified by name and sources by file name, not path.
+ * @param {{runs: Array<{id: number, name: string}>, sources: Array<{file: string}>, tabs: Record<number, any>, activeId: number | null, timeMode: string}} app
  */
 export function encodeView(app) {
   const state = {
     v: VERSION,
     timeMode: app.timeMode,
-    active: app.activeId == null ? null : app.sources[app.activeId]?.name ?? null,
-    tabs: app.openSources
-      .filter((s) => app.tabs[s.id])
-      .map((s) => ({
-        source: s.name,
-        range: app.tabs[s.id].userRange,
-        events: app.tabs[s.id].eventCategories,
-        plots: app.tabs[s.id].plots.map((p) => Object.fromEntries(PLOT_KEYS.map((k) => [k, p[k]]))),
+    active: app.runs.find((r) => r.id === app.activeId)?.name ?? null,
+    tabs: app.runs
+      .filter((r) => app.tabs[r.id])
+      .map((r) => ({
+        run: r.name,
+        range: app.tabs[r.id].userRange,
+        events: app.tabs[r.id].eventCategories,
+        alone: app.tabs[r.id].relatedAnswered || undefined,
+        plots: app.tabs[r.id].plots.map((p) => ({
+          source: app.sources[p.source]?.file ?? null,
+          ...Object.fromEntries(PLOT_KEYS.map((k) => [k, p[k]])),
+        })),
       })),
   };
   return PREFIX + toBase64Url(JSON.stringify(state));
 }
 
 /**
- * Decodes a URL fragment against the open sources, matching tabs to sources by name.
+ * Decodes a URL fragment against the open runs, matching tabs to runs by name and plots to sources by file name.
  * Returns null without a view state, or the restored view and warnings about what could not be restored.
  * @param {string} hash
- * @param {Array<{id: number, name: string, datasets: Array<{name: string}>}>} sources Open sources.
+ * @param {Array<{id: number, name: string, sources: number[]}>} runs Open runs.
+ * @param {Array<{id: number, file: string, datasets: Array<{name: string}>}>} sources Sources by id.
  */
-export function decodeView(hash, sources) {
+export function decodeView(hash, runs, sources) {
   if (!hash.startsWith(PREFIX)) return null;
   let state;
   try {
@@ -60,25 +65,38 @@ export function decodeView(hash, sources) {
   if (state.v !== VERSION) return { view: null, warnings: ["The view in the URL is from another version and was ignored."] };
 
   const warnings = [];
-  const byName = new Map(sources.map((s) => [s.name, s]));
+  const byName = new Map(runs.map((r) => [r.name, r]));
   const tabs = [];
   for (const t of state.tabs ?? []) {
-    const source = byName.get(t.source);
-    if (!source) {
-      warnings.push(`${t.source} of the URL view is not open, its tab was skipped. Open it with the + tab.`);
+    const run = byName.get(t.run);
+    if (!run) {
+      warnings.push(`${t.run} of the URL view is not open, its tab was skipped. Open it with the + tab.`);
       continue;
     }
+    const byFile = new Map(run.sources.map((id) => [sources[id]?.file, sources[id]]));
     const plots = [];
     for (const p of t.plots ?? []) {
+      const source = byFile.get(p.source);
+      if (!source) {
+        warnings.push(`${p.source} is not in ${t.run}, its plot was skipped.`);
+        continue;
+      }
       // Datasets are only known for parsed sources, so plots of sources still parsing are kept as they are. Plots
       // without a dataset, e.g. of a tab never shown, get one when shown.
       if (p.dataset != null && source.datasets.length && !source.datasets.some((d) => d.name === p.dataset)) {
-        warnings.push(`Dataset ${p.dataset} is not in ${t.source}, its plot was skipped.`);
+        warnings.push(`Dataset ${p.dataset} is not in ${p.source}, its plot was skipped.`);
         continue;
       }
-      plots.push({ ...p, kind: p.kind ?? "plot", splitValues: p.splitValues ?? [], filter: p.filter ?? "", columnFilter: p.columnFilter ?? "" });
+      plots.push({
+        ...p,
+        source: source.id,
+        kind: p.kind ?? "plot",
+        splitValues: p.splitValues ?? [],
+        filter: p.filter ?? "",
+        columnFilter: p.columnFilter ?? "",
+      });
     }
-    tabs.push({ source: source.id, range: t.range ?? null, plots, eventCategories: t.events ?? null });
+    tabs.push({ run: run.id, range: t.range ?? null, plots, eventCategories: t.events ?? null, relatedAnswered: Boolean(t.alone) });
   }
   const active = byName.get(state.active)?.id ?? null;
   return { view: { timeMode: state.timeMode, active, tabs }, warnings };

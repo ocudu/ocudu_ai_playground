@@ -199,19 +199,66 @@ class ServerTest(unittest.TestCase):
         listing = client.get("/api/fs", params={"path": str(tmp / "logs")}).json()
         self.assertEqual([e["name"] for e in listing["entries"]], ["du.log"])
         self.assertEqual(client.get("/api/fs", params={"path": "/etc"}).status_code, 400)
-        res = client.post("/api/sources", json={"path": str(log)})
+        res = client.post("/api/runs", json={"path": str(log)})
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.json()["id"], 0)
+        self.assertEqual((res.json()["id"], res.json()["kind"], res.json()["sources"]), (0, "file", [0]))
         wait_ready(registry, 0)
         self.assertEqual(client.get("/api/sources").json()[0]["status"], "ready")
         self.assertEqual(client.get("/api/series", params={"source": 0, "dataset": "mac", "field": "nof_slots"}).status_code, 200)
-        self.assertEqual(client.post("/api/sources", json={"path": "/etc/hostname"}).status_code, 400)
-        self.assertEqual(client.delete("/api/sources/0").json()["status"], "closed")
+        self.assertEqual(client.post("/api/runs", json={"path": "/etc/hostname"}).status_code, 400)
+        self.assertEqual(client.delete("/api/runs/0").json(), {"id": 0})
+        self.assertEqual(client.get("/api/runs").json(), [])
         self.assertEqual(client.get("/api/series", params={"source": 0, "dataset": "mac", "field": "nof_slots"}).status_code, 409)
-        self.assertEqual(client.delete("/api/sources/9").status_code, 404)
+        self.assertEqual(client.delete("/api/runs/9").status_code, 404)
+
+    def test_runs_from_page(self):
+        from fastapi.testclient import TestClient
+
+        from viz.registry import SourceRegistry
+        from viz.server import create_app
+        from viz.sources.log_metrics import LogMetricsSource
+        from viz.store import StoreCache
+
+        from .test_registry import wait_ready
+
+        tmp = Path(self.tmp.name).resolve()
+        run_dir = tmp / "run"
+        run_dir.mkdir()
+        write_log(run_dir / "du.log")
+        write_log(run_dir / "cu.log")
+        (run_dir / "notes.txt").write_text("not a log")
+        registry = SourceRegistry(StoreCache(tmp / "cache2"), [LogMetricsSource()], [tmp])
+        client = TestClient(create_app(registry, tmp / "missing"))
+        run = client.post("/api/runs", json={"path": str(run_dir)}).json()
+        self.assertEqual((run["name"], run["kind"], run["sources"]), ("run/", "dir", [0, 1]))
+        self.assertEqual([s["file"] for s in client.get("/api/sources").json()], ["cu.log", "du.log"])
+        for source_id in run["sources"]:
+            wait_ready(registry, source_id)
+
+        res = client.delete(f"/api/runs/{run['id']}/sources/0").json()
+        self.assertEqual(res["sources"], [1])
+        files = client.get(f"/api/runs/{run['id']}/files").json()
+        self.assertEqual([(f["name"], f["in_run"]) for f in files], [("cu.log", False), ("du.log", True)])
+        res = client.post(f"/api/runs/{run['id']}/sources", json={"path": str(run_dir / "cu.log")})
+        self.assertEqual(res.json()["sources"], [1, 2])
+        wait_ready(registry, 2)
+        other = write_log(tmp / "other.log")
+        self.assertEqual(client.post(f"/api/runs/{run['id']}/sources", json={"path": str(other)}).status_code, 400)
+
+        single = client.post("/api/runs", json={"path": str(run_dir / "du.log")}).json()
+        self.assertEqual(single["kind"], "file")
+        related = client.get(f"/api/runs/{single['id']}/related").json()
+        self.assertEqual([f["name"] for f in related], ["cu.log"])
+        # The directory is open already, so the file run closes in favour of it.
+        promoted = client.post(f"/api/runs/{single['id']}/promote").json()
+        self.assertEqual(promoted["id"], run["id"])
+        self.assertEqual([r["id"] for r in client.get("/api/runs").json()], [run["id"]])
+        self.assertEqual(client.get("/api/runs/9/related").status_code, 404)
+        self.assertEqual(client.post("/api/runs", json={"path": str(tmp / "cache2")}).status_code, 400)
 
     def test_open_without_registry(self):
-        res = self.client.post("/api/sources", json={"path": "/tmp"})
+        self.assertEqual([(r["name"], r["kind"], r["sources"]) for r in self.client.get("/api/runs").json()], [("gnb.log", "file", [0])])
+        res = self.client.post("/api/runs", json={"path": "/tmp"})
         self.assertEqual(res.status_code, 400)
         self.assertEqual(self.client.get("/api/roots").json()["can_open"], False)
 

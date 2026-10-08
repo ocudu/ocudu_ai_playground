@@ -265,8 +265,13 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - A tab shows a run: one or more sources on one time axis. A run is either a single file, opened on its own, or the
   gNB artifacts of one directory: the gNB, DU or CU logs and the `mac`, `rlc`, `f1ap`, `e1ap` and `ngap` pcaps, and
   later `metrics.json`. Files of other nodes (5GC, UE simulator) and of other directories are not part of a run.
-- Opening a directory opens a run with the supported files in it. Opening a file opens a run with that file only,
-  since files in e.g. `~/Downloads` or `/tmp` are often unrelated to each other. A run can add or remove files of
+- Opening a directory, from the command line, opens a run with the supported files in it. Opening a file opens a run
+  of that file, since files in e.g. `~/Downloads` or `/tmp` are often unrelated to each other. When other files of its
+  directory were written by the same run, its tab asks whether to open them too, which makes it the run of the
+  directory. The question is a dialog, shown as soon as the file is opened, and its answer is kept in the URL view
+  state. Files are of the same run by content, not name, since names get edited: logs whose first line names the
+  same build (`Built in <mode> mode using commit <hash> on branch <branch>`) and whose time spans overlap
+  (`parsers.log.run`), and later pcaps whose time spans overlap such a log. A run can add or remove files of
   its directory from its tab.
 - Each source keeps its own parse, cache database, status and id. A run lists its sources, and the page polls them as
   today.

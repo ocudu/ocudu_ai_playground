@@ -28,6 +28,8 @@ export default {
     shifts: { type: Array, required: true },
     // Whether the panel shows a source selector, which is not needed when the source is fixed, e.g. by a tab.
     showSource: { type: Boolean, default: true },
+    // Sources the panel may show, e.g. the sources of its tab, or all sources when null.
+    choices: { type: Array, default: null },
   },
   emits: ["remove", "select-record"],
   data() {
@@ -189,7 +191,7 @@ export default {
     <section class="panel">
       <header class="panel-bar">
         <select v-if="showSource" v-model.number="panel.source" :title="source ? source.path : 'Source'">
-          <option v-for="s in sources" :key="s.id" :value="s.id">{{ s.name }}</option>
+          <option v-for="s in choices ?? sources" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">{{ s.file ?? s.name }}</option>
         </select>
         <select v-model="panel.dataset" title="Dataset">
           <option v-for="d in datasets" :key="d.name" :value="d.name">{{ d.label }}</option>

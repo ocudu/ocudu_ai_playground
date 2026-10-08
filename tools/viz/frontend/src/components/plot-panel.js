@@ -46,7 +46,9 @@ export default {
     themeVersion: { type: Number, default: 0 },
     // Whether the panel shows a source selector, which is not needed when the source is fixed, e.g. by a tab.
     showSource: { type: Boolean, default: true },
-    // Events drawn as markers on time series, in display time, each with t, record, category, type and text.
+    // Sources the panel may show, e.g. the sources of its tab, or all sources when null.
+    choices: { type: Array, default: null },
+    // Events drawn as markers on time series, in display time, each with t, source, record, category, type and text.
     events: { type: Array, default: () => [] },
   },
   emits: ["zoom", "remove", "select-record"],
@@ -467,7 +469,7 @@ export default {
       // An event marker under the cursor takes precedence over the data points.
       const ev = chart.cursor.left >= 0 ? this.eventAt(chart, chart.cursor.left) : null;
       if (ev) {
-        this.$emit("select-record", { source: this.plot.source, record: ev.record });
+        this.$emit("select-record", { source: ev.source ?? this.plot.source, record: ev.record });
         return;
       }
       const idx = chart.cursor.idx;
@@ -482,8 +484,8 @@ export default {
     <section class="panel">
       <header class="panel-bar">
         <select v-if="showSource" v-model.number="plot.source" :title="source ? source.path : 'Source'">
-          <option v-for="s in sources" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">
-            {{ s.name }}{{ s.status === "parsing" ? " (parsing)" : s.status === "error" ? " (error)" : "" }}
+          <option v-for="s in choices ?? sources" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">
+            {{ s.file ?? s.name }}{{ s.status === "parsing" ? " (parsing)" : s.status === "error" ? " (error)" : "" }}
           </option>
         </select>
         <select v-model="plot.dataset" title="Dataset">

@@ -18,10 +18,11 @@ readonly script_dir
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") [options] [FILE...]
+Usage: $(basename "$0") [options] [FILE|DIR...]
 
-Opens OCUDU artifacts (e.g. gnb.log, du.log) in ocudu-viz, running in a container. Files can also be
-opened from the page, within the mounted directories.
+Opens OCUDU artifacts in ocudu-viz, running in a container, each in its own tab: files (e.g. gnb.log,
+du.log), or directories of gNB artifacts. More can be opened from the page, within the mounted
+directories.
 
 Options:
   --port N          Host port to serve on, or the next free one (default: 8765).
@@ -93,7 +94,7 @@ fi
 # Files are passed to the container by their absolute host paths, which the mounts below keep valid.
 abs_files=()
 for f in "${files[@]}"; do
-  [[ -f "$f" ]] || die "$f: not a file"
+  [[ -f "$f" || -d "$f" ]] || die "$f: not a file or directory"
   abs_files+=("$(readlink -f "$f")")
 done
 # The image is built on every run: unchanged sources hit the build cache and take a second or two.
@@ -104,7 +105,7 @@ echo "Building the ocudu-viz image..." >&2
 # A rebuild leaves the previous image untagged, remove it.
 "$DOCKER" image prune -f --filter "label=$IMAGE_LABEL" >/dev/null
 
-# Mounts: the roots, plus the directory of any file outside them, all read-only at the same path.
+# Mounts: the roots, plus any directory, or directory of a file, outside them, all read-only at the same path.
 mounts=()
 for r in "${roots[@]}"; do
   mounts+=(-v "$r:$r:ro")
@@ -112,10 +113,11 @@ done
 for f in "${abs_files[@]}"; do
   covered=0
   for r in "${roots[@]}"; do
-    [[ "$f" == "$r"/* ]] && covered=1 && break
+    [[ "$f" == "$r"/* || "$f" == "$r" ]] && covered=1 && break
   done
   if [[ $covered -eq 0 ]]; then
-    d="$(dirname "$f")"
+    d="$f"
+    [[ -d "$f" ]] || d="$(dirname "$f")"
     roots+=("$d")
     mounts+=(-v "$d:$d:ro")
   fi

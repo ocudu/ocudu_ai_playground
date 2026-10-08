@@ -24,7 +24,7 @@ const EVENT_CATEGORIES = [
   ["warning", "warnings"],
   ["error", "errors"],
 ];
-// Events fetched for the visible window of a tab.
+// Events fetched for the visible window of a tab, per source.
 const MAX_EVENTS = 5000;
 // Delay before fetching events after the view changes, to coalesce zoom and pan events.
 const EVENTS_FETCH_DELAY_MS = 150;
@@ -60,17 +60,23 @@ function newPlot(init) {
   };
 }
 
-/** State of the tab of one source: its plots, zoom range and shown event categories (null until known). */
+/**
+ * State of the tab of one run: its plots, zoom range and shown event categories, and for a run of one file, the
+ * other files of its run once checked (related), and whether the question to open them was answered.
+ */
 function newTab() {
-  return { plots: [], userRange: null, defaultPlotAdded: false, eventCategories: [] };
+  return { plots: [], userRange: null, defaultPlotAdded: false, eventCategories: [], related: null, relatedAnswered: false };
 }
 
 const App = {
   components: { FileBrowser, PlotPanel, RecordView, TablePanel, TracePanel },
   data() {
     return {
+      // Open runs, each with the ids of its sources.
+      runs: [],
+      // Sources by id, including closed ones.
       sources: [],
-      // Tab state by source id.
+      // Tab state by run id.
       tabs: {},
       activeId: null,
       timeMode: "absolute",
@@ -81,66 +87,94 @@ const App = {
       themeVersion: 0,
       roots: [],
       canOpen: false,
-      // Events of the visible window of the active tab, in display time.
+      // Events of the visible window of the active tab, in display time, each with its source.
       events: [],
       eventsTruncated: false,
       browserOpen: false,
+      // Supported files of the directory of the active run, while its file list is shown.
+      runFiles: null,
     };
   },
   computed: {
-    /** Sources shown as tabs, in opening order. */
-    openSources() {
-      return this.sources.filter((s) => s.status !== "closed");
-    },
-    activeSource() {
-      return this.activeId == null ? null : this.sources[this.activeId];
+    activeRun() {
+      return this.runs.find((r) => r.id === this.activeId) ?? null;
     },
     activeTab() {
       return this.activeId == null ? null : this.tabs[this.activeId] ?? null;
     },
-    /** Shift from source time to display time, per source id. */
+    /** Sources of the active run. */
+    runSources() {
+      return (this.activeRun?.sources ?? []).map((id) => this.sources[id]).filter(Boolean);
+    },
+    readySources() {
+      return this.runSources.filter((s) => s.status === "ready");
+    },
+    /** Shift from source time to display time, per source id: in relative time, from the start of its run. */
     shifts() {
-      return this.sources.map((s) => (this.timeMode === "relative" ? -(s.t_min ?? 0) : 0));
+      const shifts = this.sources.map(() => 0);
+      if (this.timeMode !== "relative") return shifts;
+      // The active run comes last, so that the shift of a source in several runs is the one of the shown run.
+      const runs = [...this.runs.filter((r) => r.id !== this.activeId), ...(this.activeRun ? [this.activeRun] : [])];
+      for (const run of runs) {
+        const span = this.runSpan(run);
+        if (!span) continue;
+        for (const id of run.sources) shifts[id] = -span.min;
+      }
+      return shifts;
     },
     fullRange() {
-      const s = this.activeSource;
-      if (!s || s.t_min == null) return null;
-      const shift = this.shifts[s.id];
-      return { min: s.t_min + shift, max: (s.t_max > s.t_min ? s.t_max : s.t_min + 1) + shift };
+      const span = this.activeRun && this.runSpan(this.activeRun);
+      if (!span) return null;
+      const shift = this.shifts[this.activeRun.sources[0]];
+      return { min: span.min + shift, max: (span.max > span.min ? span.max : span.min + 1) + shift };
     },
     /** Inputs of the events request of the active tab. */
     eventsQuery() {
-      const s = this.activeSource;
-      return [this.activeId, s?.status, s?.events_status, this.view, this.activeTab?.eventCategories, this.timeMode];
+      const states = this.runSources.map((s) => [s.id, s.status, s.events_status]);
+      return [this.activeId, states, this.view, this.activeTab?.eventCategories, this.timeMode];
     },
-    /** Event categories of the active source that have events, with their labels and counts. */
+    /** Event categories of the active run that have events, with their labels and counts. */
     eventCategoryChips() {
-      const counts = this.activeSource?.event_counts ?? {};
+      const counts = {};
+      for (const s of this.runSources) {
+        for (const [c, n] of Object.entries(s.event_counts ?? {})) counts[c] = (counts[c] ?? 0) + n;
+      }
       return EVENT_CATEGORIES.filter(([c]) => counts[c]).map(([c, label]) => ({ category: c, label, count: counts[c] }));
     },
-    /** Notes about the active source, e.g. why some events are missing. */
+    /** Notes about the sources of the active run, e.g. why some events are missing. */
     activeNotes() {
-      return this.activeSource?.notes ?? [];
+      const several = this.runSources.length > 1;
+      return this.runSources.flatMap((s) => (s.notes ?? []).map((n) => (several ? `${s.file}: ${n}` : n)));
     },
-    /** State of the events of the active source while they are not ready: "parsing" or "error". */
+    /** State of the events of the active run while some are not ready: "parsing" or "error". */
     eventsState() {
-      const s = this.activeSource;
-      if (s?.status !== "ready" || s.events_status === "ready") return null;
-      return s.events_status === "error" ? "error" : "parsing";
+      const states = this.readySources.map((s) => s.events_status);
+      if (states.some((st) => st === "pending" || st === "parsing")) return "parsing";
+      return states.includes("error") ? "error" : null;
+    },
+    /** Parsing progress of the active run, while some of its sources are parsing. */
+    runProgress() {
+      return this.progress(this.activeRun);
     },
     view() {
       return this.activeTab?.userRange ?? this.fullRange;
     },
+    /** Whether to ask to open the other files of the run of the active single-file tab. */
+    relatedQuestion() {
+      return Boolean(this.activeRun?.kind === "file" && this.activeTab?.related?.length && !this.activeTab.relatedAnswered);
+    },
     /** Span of the datasets in the plots of the active tab, or of all its datasets without plots. */
     metricsRange() {
-      const s = this.activeSource;
-      if (!s || s.status !== "ready") return null;
-      const names = this.activeTab?.plots.length ? new Set(this.activeTab.plots.map((p) => p.dataset)) : null;
-      const spans = s.datasets.filter((d) => d.t_min != null && (!names || names.has(d.name))).map((d) => [d.t_min, d.t_max]);
+      if (!this.readySources.length) return null;
+      const plotted = this.activeTab?.plots.length ? new Set(this.activeTab.plots.map((p) => `${p.source}/${p.dataset}`)) : null;
+      const spans = this.readySources.flatMap((s) =>
+        s.datasets
+          .filter((d) => d.t_min != null && (!plotted || plotted.has(`${s.id}/${d.name}`)))
+          .map((d) => [d.t_min + this.shifts[s.id], d.t_max + this.shifts[s.id]]),
+      );
       if (!spans.length) return null;
-      const shift = this.shifts[s.id];
-      const min = Math.min(...spans.map((x) => x[0])) + shift;
-      const max = Math.max(...spans.map((x) => x[1])) + shift;
+      const min = Math.min(...spans.map((x) => x[0]));
+      const max = Math.max(...spans.map((x) => x[1]));
       return { min, max: max > min ? max : min + 1 };
     },
   },
@@ -157,6 +191,13 @@ const App = {
     },
     activeId() {
       this.selection = null;
+      this.runFiles = null;
+    },
+    async relatedQuestion(shown) {
+      // Enter opens the run, Escape keeps the single file.
+      if (!shown) return;
+      await this.$nextTick();
+      this.$refs.openRunButton?.focus();
     },
     eventsQuery: {
       handler() {
@@ -187,7 +228,8 @@ const App = {
   },
   async mounted() {
     try {
-      const [sources, roots] = await Promise.all([getJSON("/api/sources"), getJSON("/api/roots")]);
+      const [runs, sources, roots] = await Promise.all([getJSON("/api/runs"), getJSON("/api/sources"), getJSON("/api/roots")]);
+      this.runs = runs;
       this.sources = sources;
       this.roots = roots.roots;
       this.canOpen = roots.can_open;
@@ -197,7 +239,7 @@ const App = {
     }
     await this.restoreView();
     this.syncTabs();
-    if (this.openSources.some(isParsing)) this.pollSources();
+    if (this.runSourcesOf(this.runs).some(isParsing)) this.pollSources();
 
     this.$watch(
       () => [this.tabs, this.activeId, this.timeMode],
@@ -211,7 +253,7 @@ const App = {
   },
   methods: {
     async restoreView() {
-      const restored = decodeView(location.hash, this.openSources);
+      const restored = decodeView(location.hash, this.runs, this.sources);
       if (!restored) return;
       this.warnings = restored.warnings;
       const view = restored.view;
@@ -223,10 +265,11 @@ const App = {
       for (const t of view.tabs) {
         const tab = newTab();
         tab.userRange = t.range && t.range.max > t.range.min ? t.range : null;
-        tab.plots = t.plots.map((p) => newPlot({ ...p, source: t.source }));
+        tab.plots = t.plots.map((p) => newPlot(p));
         tab.eventCategories = t.eventCategories ?? [];
+        tab.relatedAnswered = t.relatedAnswered;
         tab.defaultPlotAdded = true;
-        this.tabs[t.source] = tab;
+        this.tabs[t.run] = tab;
       }
       if (view.active != null) this.activeId = view.active;
       this.restoring = false;
@@ -240,23 +283,83 @@ const App = {
       }, URL_UPDATE_DELAY_MS);
     },
 
-    /** Creates the tabs of new sources, drops the ones of closed sources, and keeps a tab selected. */
+    /** Sources of the given runs. */
+    runSourcesOf(runs) {
+      return runs.flatMap((r) => r.sources.map((id) => this.sources[id]).filter(Boolean));
+    },
+
+    /** Time span of the parsed sources of a run, in source time, or null before any is parsed. */
+    runSpan(run) {
+      const ready = this.runSourcesOf([run]).filter((s) => s.status === "ready" && s.t_min != null);
+      if (!ready.length) return null;
+      return { min: Math.min(...ready.map((s) => s.t_min)), max: Math.max(...ready.map((s) => s.t_max ?? s.t_min)) };
+    },
+
+    /** Mean parsing progress of the sources of a run, or null when none is parsing. */
+    progress(run) {
+      const sources = run ? this.runSourcesOf([run]) : [];
+      if (!sources.some((s) => s.status === "parsing")) return null;
+      return sources.reduce((sum, s) => sum + (s.status === "parsing" ? s.progress : 1), 0) / sources.length;
+    },
+
+    /** Name of a run in its tab: its own name when it holds one file, else its directory and file count. */
+    runLabel(run) {
+      return run.kind === "dir" ? `${run.name} (${run.sources.length})` : run.name;
+    },
+
+    /** First parsed source of a run with a dataset to plot, or with events for a trace. */
+    defaultSource(run, kind = "plot") {
+      const ready = this.runSourcesOf([run]).filter((s) => s.status === "ready");
+      const fits = (s) => (kind === "trace" ? Object.keys(s.event_counts ?? {}).length : s.datasets.length);
+      return ready.find(fits) ?? ready[0] ?? null;
+    },
+
+    /** Creates the tabs of new runs, drops the ones of closed runs, and keeps a tab selected. */
     syncTabs() {
-      const open = new Set(this.openSources.map((s) => s.id));
+      const open = new Set(this.runs.map((r) => r.id));
       for (const id of Object.keys(this.tabs)) {
         if (!open.has(Number(id))) delete this.tabs[id];
       }
-      for (const s of this.openSources) {
-        if (!this.tabs[s.id]) this.tabs[s.id] = newTab();
-        const tab = this.tabs[s.id];
-        // A parsed source starts with one plot, once, so that removing all plots is not undone.
-        if (s.status === "ready" && !tab.defaultPlotAdded) {
+      for (const run of this.runs) {
+        if (!this.tabs[run.id]) this.tabs[run.id] = newTab();
+        const tab = this.tabs[run.id];
+        if (run.kind === "file" && tab.related == null) this.checkRelated(run.id);
+        // A run starts with one plot once a source is parsed, once, so that removing all plots is not undone.
+        const source = this.defaultSource(run);
+        if (source && !tab.defaultPlotAdded) {
           tab.defaultPlotAdded = true;
-          addRecent(s.path);
-          if (!tab.plots.length) tab.plots.push(newPlot({ source: s.id }));
+          addRecent(run.path, run.kind === "dir");
+          if (!tab.plots.length) tab.plots.push(newPlot({ source: source.id }));
         }
       }
-      if (this.activeId == null || !open.has(this.activeId)) this.activeId = this.openSources[0]?.id ?? null;
+      if (this.activeId == null || !open.has(this.activeId)) this.activeId = this.runs[0]?.id ?? null;
+    },
+
+    /** Looks for the other files of the run of a single-file tab, once. */
+    async checkRelated(runId) {
+      const tab = this.tabs[runId];
+      tab.related = [];
+      try {
+        tab.related = await getJSON(`/api/runs/${runId}/related`);
+      } catch (e) {
+        this.warnings = [...this.warnings, e.message];
+      }
+    },
+
+    /** Opens the other files of the run of the active tab in it, or switches to the tab of its directory. */
+    async promoteRun() {
+      const tab = this.activeTab;
+      tab.relatedAnswered = true;
+      let run;
+      try {
+        run = await postJSON(`/api/runs/${this.activeId}/promote`, {});
+      } catch (e) {
+        this.warnings = [...this.warnings, e.message];
+        return;
+      }
+      if (run.id !== this.activeId) delete this.tabs[this.activeId];
+      await this.pollSources();
+      this.activeId = run.id;
     },
 
     /** @param {string} category */
@@ -268,26 +371,30 @@ const App = {
       tab.eventCategories = EVENT_CATEGORIES.map(([c]) => c).filter((c) => shown.has(c));
     },
 
-    /** Fetches the events of the visible window of the active tab, in the shown categories. */
+    /** Fetches the events of the visible window of the active tab, from all its sources, in the shown categories. */
     async fetchEvents() {
       this.eventsAbort?.abort();
-      const s = this.activeSource;
       const categories = this.activeTab?.eventCategories;
-      if (!s || s.status !== "ready" || !categories?.length || !this.view) {
+      const sources = this.readySources.filter((s) => s.events_status === "ready");
+      if (!sources.length || !categories?.length || !this.view) {
         this.events = [];
         this.eventsTruncated = false;
         return;
       }
       this.eventsAbort = new AbortController();
-      const shift = this.shifts[s.id];
+      const signal = this.eventsAbort.signal;
       try {
-        const res = await getJSON(
-          "/api/events",
-          { source: s.id, t0: this.view.min - shift, t1: this.view.max - shift, categories, limit: MAX_EVENTS },
-          this.eventsAbort.signal,
+        const results = await Promise.all(
+          sources.map((s) => {
+            const shift = this.shifts[s.id];
+            const params = { source: s.id, t0: this.view.min - shift, t1: this.view.max - shift, categories, limit: MAX_EVENTS };
+            return getJSON("/api/events", params, signal).then((res) => ({ res, s, shift }));
+          }),
         );
-        this.events = res.events.map((e) => ({ ...e, t: e.t + shift }));
-        this.eventsTruncated = res.truncated;
+        this.events = results
+          .flatMap(({ res, s, shift }) => res.events.map((e) => ({ ...e, t: e.t + shift, source: s.id })))
+          .sort((a, b) => a.t - b.t);
+        this.eventsTruncated = results.some(({ res }) => res.truncated);
       } catch (e) {
         if (e.name !== "AbortError") this.warnings = [...this.warnings, e.message];
       }
@@ -298,7 +405,11 @@ const App = {
       const tab = this.activeTab;
       if (!tab) return;
       const last = tab.plots.findLast((p) => p.dataset);
-      tab.plots.push(newPlot({ source: this.activeId, dataset: kind === "trace" ? null : last?.dataset, kind }));
+      const sameSource = last && this.runSources.some((s) => s.id === last.source);
+      const source = kind !== "trace" && sameSource ? last.source : this.defaultSource(this.activeRun, kind)?.id;
+      if (source == null) return;
+      const dataset = kind !== "trace" && sameSource ? last.dataset : null;
+      tab.plots.push(newPlot({ source, dataset, kind }));
       await this.$nextTick();
       [...document.querySelectorAll("main > .panel")].at(-1)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     },
@@ -312,53 +423,92 @@ const App = {
     },
 
     /**
-     * Opens a file in its own tab and selects it. A file that is already open just gets its tab selected.
+     * Opens a file or a directory in its own tab and selects it. A run that is already open just gets its tab selected.
      * @param {string} path
      * @param {boolean} [fromRecent] Whether the path comes from the recent files, which drop it if it fails.
      */
-    async openFile(path, fromRecent = false) {
+    async openPath(path, fromRecent = false) {
       this.browserOpen = false;
-      let source;
+      let run;
       try {
-        source = await postJSON("/api/sources", { path });
+        run = await postJSON("/api/runs", { path });
       } catch (e) {
         if (fromRecent) removeRecent(path);
         this.warnings = [...this.warnings, fromRecent ? `${e.message} It was removed from the recent files.` : e.message];
         return;
       }
       await this.pollSources();
-      this.activeId = source.id;
+      this.activeId = run.id;
     },
 
     async closeTab(id) {
       try {
-        await fetch(`/api/sources/${id}`, { method: "DELETE" });
+        await fetch(`/api/runs/${id}`, { method: "DELETE" });
       } catch (e) {
         this.warnings = [...this.warnings, e.message];
       }
-      const order = this.openSources.map((s) => s.id);
+      const order = this.runs.map((r) => r.id);
       const next = order[order.indexOf(id) + 1] ?? order[order.indexOf(id) - 1] ?? null;
       if (this.activeId === id) this.activeId = next;
       await this.pollSources();
     },
 
-    /** Refreshes the sources, and again shortly after while some sources or their events are being parsed. */
+    /** Shows or hides the supported files of the directory of the active run. */
+    async toggleRunFiles() {
+      if (this.runFiles) {
+        this.runFiles = null;
+        return;
+      }
+      try {
+        this.runFiles = await getJSON(`/api/runs/${this.activeId}/files`);
+      } catch (e) {
+        this.warnings = [...this.warnings, e.message];
+      }
+    },
+
+    /** @param {string} path */
+    async addToRun(path) {
+      this.runFiles = null;
+      try {
+        await postJSON(`/api/runs/${this.activeId}/sources`, { path });
+      } catch (e) {
+        this.warnings = [...this.warnings, e.message];
+      }
+      await this.pollSources();
+    },
+
+    /** Removes a source from the active run, with its plots. */
+    async removeFromRun(sourceId) {
+      this.runFiles = null;
+      try {
+        await fetch(`/api/runs/${this.activeId}/sources/${sourceId}`, { method: "DELETE" });
+      } catch (e) {
+        this.warnings = [...this.warnings, e.message];
+      }
+      this.activeTab.plots = this.activeTab.plots.filter((p) => p.source !== sourceId);
+      if (this.selection?.source === sourceId) this.selection = null;
+      await this.pollSources();
+    },
+
+    /** Refreshes the runs and sources, and again shortly after while some sources or their events are being parsed. */
     async pollSources() {
       clearTimeout(this.pollTimer);
       try {
-        this.sources = await getJSON("/api/sources");
+        const [runs, sources] = await Promise.all([getJSON("/api/runs"), getJSON("/api/sources")]);
+        this.runs = runs;
+        this.sources = sources;
       } catch (e) {
         this.error = e.message;
         return;
       }
-      for (const s of this.sources) {
+      for (const s of this.runSourcesOf(this.runs)) {
         if (s.status === "error" && !this.reportedErrors.has(s.id)) {
           this.reportedErrors.add(s.id);
           this.warnings = [...this.warnings, s.error];
         }
       }
       this.syncTabs();
-      if (this.openSources.some(isParsing)) {
+      if (this.runSourcesOf(this.runs).some(isParsing)) {
         this.pollTimer = setTimeout(() => this.pollSources(), SOURCES_POLL_MS);
       }
     },
@@ -367,14 +517,14 @@ const App = {
     <header class="app-bar">
       <img src="img/ocudu_color.png" alt="OCUDU" class="logo" />
       <nav class="tabs" role="tablist">
-        <div v-for="s in openSources" :key="s.id" role="tab" :aria-selected="s.id === activeId"
-             :class="['tab', s.status, { active: s.id === activeId }]" :title="s.status === 'error' ? s.error : s.path"
-             @click="activeId = s.id">
-          <span>{{ s.name }}</span>
-          <span v-if="s.status === 'parsing'" class="muted">{{ Math.floor(s.progress * 100) }}%</span>
-          <button class="icon tab-close" title="Close the file" @click.stop="closeTab(s.id)">✕</button>
+        <div v-for="r in runs" :key="r.id" role="tab" :aria-selected="r.id === activeId"
+             :class="['tab', { active: r.id === activeId }]" :title="r.path"
+             @click="activeId = r.id">
+          <span>{{ runLabel(r) }}</span>
+          <span v-if="progress(r) != null" class="muted">{{ Math.floor(progress(r) * 100) }}%</span>
+          <button class="icon tab-close" title="Close the tab" @click.stop="closeTab(r.id)">✕</button>
         </div>
-        <button class="tab tab-new" :disabled="!canOpen" title="Open a log file in a new tab" @click="browserOpen = true">+</button>
+        <button class="tab tab-new" :disabled="!canOpen" title="Open a file or a directory in a new tab" @click="browserOpen = true">+</button>
       </nav>
       <div class="spacer"></div>
       <label class="inline">time
@@ -390,55 +540,86 @@ const App = {
           <option value="dark">dark</option>
         </select>
       </label>
-      <button @click="zoom(null)" :disabled="!activeTab || !activeTab.userRange" title="Show the whole time range of the log">reset zoom</button>
+      <button @click="zoom(null)" :disabled="!activeTab || !activeTab.userRange" title="Show the whole time range of the files">reset zoom</button>
       <button @click="zoom(metricsRange)" :disabled="!metricsRange" title="Fit the time range of the plotted metrics">fit metrics</button>
     </header>
     <main>
       <p v-if="error" class="error">{{ error }}</p>
       <p v-for="w in warnings" :key="w" class="error">{{ w }}</p>
-      <div v-if="!openSources.length && !error" class="empty-state">
-        <p>No log files are open yet.</p>
-        <button @click="browserOpen = true" :disabled="!canOpen">Open a log file</button>
+      <div v-if="!runs.length && !error" class="empty-state">
+        <p>Nothing is open yet.</p>
+        <button @click="browserOpen = true" :disabled="!canOpen">Open a file or a directory</button>
       </div>
-      <div v-else-if="activeSource && activeSource.status === 'parsing'" class="empty-state">
-        <p>Parsing {{ activeSource.name }}: {{ Math.floor(activeSource.progress * 100) }}%</p>
-        <p class="muted">{{ activeSource.path }}</p>
-      </div>
-      <div v-else-if="activeSource && activeSource.status === 'error'" class="empty-state">
-        <p class="error">{{ activeSource.error }}</p>
-      </div>
-      <template v-else-if="activeTab">
-        <p class="hint muted">Drag to zoom, Shift+drag to pan, double-click to reset, click a point or an event marker to see its log line.</p>
-        <div v-if="eventCategoryChips.length || eventsState || activeNotes.length" class="event-bar">
-          <span class="muted">events</span>
-          <span v-if="eventsState === 'parsing'" class="muted">parsing…</span>
-          <span v-else-if="eventsState === 'error'" class="error">could not be parsed</span>
-          <button v-for="c in eventCategoryChips" :key="c.category"
-                  :class="['event-chip', 'ev-' + c.category, { off: !(activeTab.eventCategories || []).includes(c.category) }]"
-                  :title="'Show or hide the ' + c.label + ' events'" @click="toggleEventCategory(c.category)">
-            <span class="event-dot"></span>{{ c.label }} <span class="muted">{{ c.count }}</span>
-          </button>
-          <span v-if="eventsTruncated" class="muted">only the first {{ events.length }} events of the window are shown, zoom in for all</span>
-          <span v-for="n in activeNotes" :key="n" class="muted event-note">{{ n }}</span>
+      <template v-else-if="activeRun">
+        <div class="source-bar">
+          <span class="muted">files</span>
+          <span v-for="s in runSources" :key="s.id" :class="['source-chip', s.status]" :title="s.status === 'error' ? s.error : s.path">
+            {{ s.file }}
+            <span v-if="s.status === 'parsing'" class="muted">{{ Math.floor(s.progress * 100) }}%</span>
+            <span v-else-if="s.status === 'error'">failed</span>
+            <button v-if="runSources.length > 1" class="icon" title="Remove the file from this tab" @click="removeFromRun(s.id)">✕</button>
+          </span>
+          <button v-if="canOpen" title="Add a file of the same directory to this tab" @click="toggleRunFiles">+ file</button>
+          <span v-if="runFiles" class="run-files">
+            <span v-if="!runFiles.some((f) => !f.in_run)" class="muted">no other supported files in {{ activeRun.kind === "dir" ? activeRun.path : "the directory" }}</span>
+            <button v-for="f in runFiles.filter((f) => !f.in_run)" :key="f.path" :title="f.path" @click="addToRun(f.path)">{{ f.name }}</button>
+          </span>
         </div>
-        <template v-for="p in activeTab.plots" :key="p.id">
-          <trace-panel v-if="p.kind === 'trace'" :panel="p" :sources="sources" :view="view" :shifts="shifts" :time-mode="timeMode"
-                       :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" />
-          <table-panel v-else-if="p.kind === 'table'" :panel="p" :sources="sources" :view="view" :shifts="shifts" :show-source="false"
-                       @remove="removePlot(p.id)" @select-record="selection = $event" />
-          <plot-panel v-else :plot="p" :sources="sources" :view="view" :shifts="shifts" :time-mode="timeMode"
-                      :theme-version="themeVersion" :show-source="false" :events="events"
-                      @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" />
+        <div v-if="!readySources.length" class="empty-state">
+          <p v-if="runProgress != null">Parsing: {{ Math.floor(runProgress * 100) }}%</p>
+          <p v-else class="error">None of the files could be parsed.</p>
+          <p class="muted">{{ activeRun.path }}</p>
+        </div>
+        <template v-else-if="activeTab">
+          <p class="hint muted">Drag to zoom, Shift+drag to pan, double-click to reset, click a point or an event marker to see its log line.</p>
+          <div v-if="eventCategoryChips.length || eventsState || activeNotes.length" class="event-bar">
+            <span class="muted">events</span>
+            <span v-if="eventsState === 'parsing'" class="muted">parsing…</span>
+            <span v-else-if="eventsState === 'error'" class="error">could not be parsed</span>
+            <button v-for="c in eventCategoryChips" :key="c.category"
+                    :class="['event-chip', 'ev-' + c.category, { off: !(activeTab.eventCategories || []).includes(c.category) }]"
+                    :title="'Show or hide the ' + c.label + ' events'" @click="toggleEventCategory(c.category)">
+              <span class="event-dot"></span>{{ c.label }} <span class="muted">{{ c.count }}</span>
+            </button>
+            <span v-if="eventsTruncated" class="muted">only the first events of the window are shown, zoom in for all</span>
+            <span v-for="n in activeNotes" :key="n" class="muted event-note">{{ n }}</span>
+          </div>
+          <template v-for="p in activeTab.plots" :key="p.id">
+            <trace-panel v-if="p.kind === 'trace'" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
+                         :time-mode="timeMode" :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)"
+                         @select-record="selection = $event" />
+            <table-panel v-else-if="p.kind === 'table'" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
+                         :show-source="runSources.length > 1" @remove="removePlot(p.id)" @select-record="selection = $event" />
+            <plot-panel v-else :plot="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts" :time-mode="timeMode"
+                        :theme-version="themeVersion" :show-source="runSources.length > 1" :events="events"
+                        @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" />
+          </template>
+          <div class="add-buttons">
+            <button class="add-plot" title="Plot of a metric over time, or its histogram" @click="addPlot('plot')">+ plot</button>
+            <button class="add-plot" title="Table of all the metrics of a layer" @click="addPlot('table')">+ table</button>
+            <button class="add-plot" title="Timeline of each UE, with its events" @click="addPlot('trace')">+ trace</button>
+          </div>
         </template>
-        <div class="add-buttons">
-          <button class="add-plot" title="Plot of a metric over time, or its histogram" @click="addPlot('plot')">+ plot</button>
-          <button class="add-plot" title="Table of all the metrics of a layer" @click="addPlot('table')">+ table</button>
-          <button class="add-plot" title="Timeline of each UE, with its events" @click="addPlot('trace')">+ trace</button>
-        </div>
       </template>
     </main>
     <record-view v-if="selection" :selection="selection" :sources="sources" @close="selection = null" />
-    <file-browser v-if="browserOpen" :roots="roots" @open="openFile" @close="browserOpen = false" />
+    <file-browser v-if="browserOpen" :roots="roots" @open="openPath" @close="browserOpen = false" />
+    <div v-if="relatedQuestion" class="modal-backdrop">
+      <section class="modal run-question" role="alertdialog" aria-labelledby="run-question-title" @keydown.esc="activeTab.relatedAnswered = true">
+        <header class="panel-bar"><strong id="run-question-title">Open the whole run?</strong></header>
+        <div class="run-question-body">
+          <p>The following OCUDU artifacts were produced by the same run of <strong>{{ runSources[0]?.file }}</strong>:</p>
+          <ul>
+            <li v-for="f in activeTab.related" :key="f.path"><strong>{{ f.name }}</strong></li>
+          </ul>
+          <p class="muted">{{ activeRun.path.slice(0, activeRun.path.lastIndexOf("/")) }}</p>
+          <div class="run-question-actions">
+            <button ref="openRunButton" class="primary" @click="promoteRun">open the run in this tab</button>
+            <button @click="activeTab.relatedAnswered = true">only this file</button>
+          </div>
+        </div>
+      </section>
+    </div>
   `,
 };
 

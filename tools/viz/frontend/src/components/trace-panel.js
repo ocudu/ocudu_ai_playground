@@ -78,6 +78,8 @@ export default {
     shifts: { type: Array, required: true },
     timeMode: { type: String, required: true },
     themeVersion: { type: Number, default: 0 },
+    // Sources the panel may show, e.g. the sources of its tab, or all sources when null.
+    choices: { type: Array, default: null },
   },
   emits: ["zoom", "remove", "select-record"],
   data() {
@@ -120,6 +122,9 @@ export default {
       this.scheduleFetch();
     },
     shift() {
+      this.scheduleFetch();
+    },
+    "panel.source"() {
       this.scheduleFetch();
     },
     timeMode() {
@@ -389,6 +394,9 @@ export default {
     <section class="panel trace">
       <header class="panel-bar">
         <strong>UE trace</strong>
+        <select v-if="choices && choices.length > 1" v-model.number="panel.source" :title="source ? source.path : 'Source'">
+          <option v-for="s in choices" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">{{ s.file ?? s.name }}</option>
+        </select>
         <span class="trace-legend">
           <span v-for="g in legend" :key="g.category" :class="'ev-' + g.category"><span class="trace-glyph">{{ g.glyph }}</span>{{ g.label }}</span>
           <span class="muted">last row: events of no UE</span>

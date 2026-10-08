@@ -53,7 +53,13 @@ def _default_roots() -> list[Path]:
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="ocudu-viz", description="Browser-based visualizer for OCUDU artifacts.")
-    p.add_argument("files", nargs="*", type=Path, help="Artifacts to open, e.g. gnb.log du.log. More can be opened from the page.")
+    p.add_argument(
+        "files",
+        nargs="*",
+        type=Path,
+        help="Artifacts to open, each in its own tab: files, e.g. gnb.log, or directories of gNB artifacts. More can be "
+        "opened from the page.",
+    )
     p.add_argument("--host", default="127.0.0.1", help="Address to serve on (default: %(default)s).")
     p.add_argument("--port", type=int, default=8765, help="Port to serve on, or a free one if busy (default: %(default)s).")
     p.add_argument("--no-browser", action="store_true", help="Do not open the browser.")
@@ -97,14 +103,26 @@ def main(argv: list[str] | None = None) -> int:
     registry = SourceRegistry(cache, SOURCE_TYPES, roots)
 
     for path in args.files:
-        if not path.is_file():
-            print(f"ocudu-viz: {path}: not a file.", file=sys.stderr)
+        is_dir = path.is_dir()
+        if is_dir:
+            files = registry.supported_files(path)
+            if not files:
+                print(f"ocudu-viz: {path}: no supported files in the directory.", file=sys.stderr)
+                return 2
+        elif path.is_file():
+            files = [path]
+        else:
+            print(f"ocudu-viz: {path}: not a file or directory.", file=sys.stderr)
             return 2
-        source_type = next((st for st in SOURCE_TYPES if st.accepts(path)), None)
-        if source_type is None:
-            print(f"ocudu-viz: {path}: unsupported file type.", file=sys.stderr)
-            return 2
-        registry.add_store(cache.open(path, source_type, _progress(path.name)), source_type)
+        source_ids = []
+        for f in files:
+            source_type = next((st for st in SOURCE_TYPES if st.accepts(f)), None)
+            if source_type is None:
+                print(f"ocudu-viz: {f}: unsupported file type.", file=sys.stderr)
+                return 2
+            store = cache.open(f.resolve(), source_type, _progress(f.name))
+            source_ids.append(registry.add_store(store, source_type).id)
+        registry.add_run(path.resolve(), is_dir, source_ids)
 
     # Imported late so that --help and argument errors do not pay for the web stack.
     import uvicorn
@@ -115,8 +133,8 @@ def main(argv: list[str] | None = None) -> int:
     # Listening on all interfaces, e.g. inside a container, still serves the loopback address.
     url_host = "127.0.0.1" if args.host in ("0.0.0.0", "::") else args.host
     url = f"http://{url_host}:{port}/"
-    nof_sources = len(registry.entries())
-    print(f"Serving {nof_sources} source(s) at {url}, more can be opened from the page (Ctrl+C to stop)", file=sys.stderr)
+    nof_runs = len(registry.runs())
+    print(f"Serving {nof_runs} run(s) at {url}, more can be opened from the page (Ctrl+C to stop)", file=sys.stderr)
     if not args.no_browser:
         threading.Timer(1.0, webbrowser.open, (url,)).start()
     # The pool is shut down with the server: on SIGTERM, uvicorn exits through the default handler, skipping atexit.

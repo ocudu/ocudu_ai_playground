@@ -11,17 +11,23 @@ Docker (or Podman, see below). Nothing else: the image contains Python, the pars
 Run the `ocudu-viz` script in this directory, or put it on your `PATH` (e.g. a symlink in `~/.local/bin`):
 
 ```bash
-tools/viz/ocudu-viz                          # no files, open them from the page
-tools/viz/ocudu-viz gnb.log                  # one source
-tools/viz/ocudu-viz du1/du.log du2/du.log    # several sources, one tab each
+tools/viz/ocudu-viz                          # nothing open, open from the page
+tools/viz/ocudu-viz gnb.log                  # one file
+tools/viz/ocudu-viz du1/du.log du2/du.log    # several files, one tab each
+tools/viz/ocudu-viz run_dir/                 # the gNB artifacts of a directory, in one tab
 ```
 
-The `+` tab in the page browses the mounted directories (your home, the temp dir and any `--root`) and
-opens the chosen file in a new tab. Its `Recent` view lists the last files opened in this browser, newest
-first, for one-click reopening. Each open file has its own tab, with its own plots and zoom; close a file
-with the `✕` of its tab.
-Large logs are parsed in the background, with the progress shown on the file, and the page stays usable
-meanwhile. Opened files stay open for as long as the server runs, also across page reloads.
+Each tab shows a run: a single file, or the supported files of one directory, e.g. the `gnb.log`, or `du.log`
+and `cu.log`, of a test run. Opening a file opens it alone; when other files of its directory were written by the
+same run, i.e. their first lines name the same build and their times overlap, a dialog offers to open the whole run
+in the tab. The files of a tab share its time axis, its events and its zoom, and each plot picks
+its file. The `files` bar of a tab lists them: `✕` removes one, `+ file` adds another file of the same directory.
+
+The `+` tab in the page browses the mounted directories (your home, the temp dir and any `--root`) and opens the
+chosen file in a new tab. Its `Recent` view lists the last
+files and directories opened in this browser, newest first, for one-click reopening. Close a tab with its `✕`.
+Large logs are parsed in the background, with the progress shown on the tab and the file, and the page stays
+usable meanwhile. Opened files stay open for as long as the server runs, also across page reloads.
 
 The script builds the `ocudu-viz:latest` image when needed (cached after the first build), then runs it:
 
@@ -74,11 +80,12 @@ In the page:
   window with the shown columns, values in the canonical unit.
 - Below each plot, a table shows count, min, mean, p50, p95, p99 and max of each series in the visible
   window, with the plot filter applied. Percentiles are sampled for windows over 2M points.
-- Time mode `relative` shows the time since the start of the log.
+- Time mode `relative` shows the time since the start of the files of the tab.
 
 The current view (plots, splits, filters, zoom and time mode) is kept in the page URL, so a reload
 restores it and a bookmark or shared link reopens it, as long as `ocudu-viz` runs with the same files.
-Sources are matched by name; plots of sources that are not open are skipped with a warning.
+Tabs are matched by name and plots by file name; tabs that are not open and plots of files not in their tab are
+skipped with a warning.
 
 The `theme` selector in the header switches between light and dark, or follows the
 operating system with `auto`. The choice is remembered by the browser.

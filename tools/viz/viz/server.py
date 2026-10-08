@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from starlette.types import Scope
 
 from .files import PathNotAllowed, list_dir
-from .registry import OpenError, SourceEntry, SourceRegistry
+from .registry import OpenError, RunEntry, SourceEntry, SourceRegistry
 from .store import QueryError, Store
 
 # Built frontend, produced by "npm run build" in the frontend directory.
@@ -78,6 +78,7 @@ def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
         "id": entry.id,
         "path": str(entry.path),
         "name": name,
+        "file": entry.path.name,
         "status": entry.status,
         "progress": entry.progress,
         "error": entry.error,
@@ -110,6 +111,16 @@ def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
     return info
 
 
+def _run_info(run: RunEntry, name: str) -> dict[str, Any]:
+    return {
+        "id": run.id,
+        "path": str(run.path),
+        "name": name,
+        "kind": "dir" if run.is_dir else "file",
+        "sources": run.source_ids,
+    }
+
+
 class _OpenRequest(BaseModel):
     path: str
 
@@ -119,14 +130,15 @@ def create_app(
 ) -> FastAPI:
     """Serves the sources of a registry, or a fixed list of stores, and the frontend in static_dir.
 
-    Source ids are the positions of the sources in opening order. on_shutdown runs when the server stops.
+    Each store of a list is a run of its own. Run and source ids are their positions in opening order. on_shutdown runs
+    when the server stops.
     """
     if isinstance(sources, SourceRegistry):
         registry = sources
     else:
         registry = SourceRegistry()
         for store in sources:
-            registry.add_store(store)
+            registry.add_run(store.path, False, [registry.add_store(store).id])
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -150,25 +162,94 @@ def create_app(
         names = display_names([e.path for e in entries])
         return [_source_info(e, names[i]) for i, e in enumerate(entries)]
 
+    def runs_info() -> list[dict[str, Any]]:
+        runs = [r for r in registry.runs() if r.status == "open"]
+        names = display_names([r.path for r in runs])
+        return [_run_info(r, names[i] + ("/" if r.is_dir else "")) for i, r in enumerate(runs)]
+
+    def run_info(run_id: int) -> dict[str, Any]:
+        info = next((r for r in runs_info() if r["id"] == run_id), None)
+        if info is None:
+            raise HTTPException(404, f"Unknown run {run_id}.")
+        return info
+
     @app.get("/api/sources")
     def list_sources() -> list[dict[str, Any]]:
         return sources_info()
 
-    @app.post("/api/sources")
-    def open_source(req: _OpenRequest) -> dict[str, Any]:
+    @app.get("/api/runs")
+    def list_runs() -> list[dict[str, Any]]:
+        """The open runs, each with the ids of its sources."""
+        return runs_info()
+
+    @app.post("/api/runs")
+    def open_run(req: _OpenRequest) -> dict[str, Any]:
+        """Opens a directory as a run of its supported files, or a file as a run of that file."""
         try:
-            entry = registry.open(req.path)
+            run = registry.open_run(req.path)
         except (OpenError, PathNotAllowed) as e:
             raise HTTPException(400, str(e)) from None
-        return sources_info()[entry.id]
+        return run_info(run.id)
 
-    @app.delete("/api/sources/{source_id}")
-    def close_source(source_id: int) -> dict[str, Any]:
+    @app.delete("/api/runs/{run_id}")
+    def close_run(run_id: int) -> dict[str, Any]:
         try:
-            registry.close(source_id)
+            registry.close_run(run_id)
         except KeyError:
-            raise HTTPException(404, f"Unknown source {source_id}.") from None
-        return sources_info()[source_id]
+            raise HTTPException(404, f"Unknown run {run_id}.") from None
+        return {"id": run_id}
+
+    @app.get("/api/runs/{run_id}/files")
+    def run_files(run_id: int) -> list[dict[str, Any]]:
+        """The supported files of the directory of a run, with whether the run has them."""
+        info = run_info(run_id)
+        run = registry.runs()[run_id]
+        open_paths = {e.path for e in registry.entries() if e.id in info["sources"]}
+        try:
+            files = registry.supported_files(run.directory)
+        except OpenError as e:
+            raise HTTPException(400, str(e)) from None
+        return [{"name": f.name, "path": str(f), "in_run": f.resolve() in open_paths} for f in files]
+
+    @app.get("/api/runs/{run_id}/related")
+    def related_files(run_id: int) -> list[dict[str, Any]]:
+        """The files of the directory of a run, not in it, written by the same run as its files."""
+        try:
+            files = registry.related_files(run_id)
+        except KeyError:
+            raise HTTPException(404, f"Unknown run {run_id}.") from None
+        except OpenError as e:
+            raise HTTPException(400, str(e)) from None
+        return [{"name": f.name, "path": str(f)} for f in files]
+
+    @app.post("/api/runs/{run_id}/promote")
+    def promote_run(run_id: int) -> dict[str, Any]:
+        """Adds the related files of a run, making it the run of its directory, or returns the open run of its directory."""
+        try:
+            run = registry.promote_run(run_id)
+        except KeyError:
+            raise HTTPException(404, f"Unknown run {run_id}.") from None
+        except (OpenError, PathNotAllowed) as e:
+            raise HTTPException(400, str(e)) from None
+        return run_info(run.id)
+
+    @app.post("/api/runs/{run_id}/sources")
+    def add_to_run(run_id: int, req: _OpenRequest) -> dict[str, Any]:
+        try:
+            registry.add_to_run(run_id, req.path)
+        except KeyError:
+            raise HTTPException(404, f"Unknown run {run_id}.") from None
+        except (OpenError, PathNotAllowed) as e:
+            raise HTTPException(400, str(e)) from None
+        return run_info(run_id)
+
+    @app.delete("/api/runs/{run_id}/sources/{source_id}")
+    def remove_from_run(run_id: int, source_id: int) -> dict[str, Any]:
+        try:
+            run = registry.remove_from_run(run_id, source_id)
+        except KeyError:
+            raise HTTPException(404, f"Unknown run {run_id}.") from None
+        return run_info(run_id) if run.status == "open" else {"id": run_id, "sources": []}
 
     @app.get("/api/roots")
     def roots() -> dict[str, Any]:

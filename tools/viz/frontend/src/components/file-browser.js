@@ -152,9 +152,9 @@ export default {
   },
   template: `
     <div class="modal-backdrop" @click.self="$emit('close')">
-      <section class="modal file-browser" role="dialog" aria-label="Open a file">
+      <section class="modal file-browser" role="dialog" aria-label="Open a file or directory">
         <header class="panel-bar">
-          <strong>Open a file</strong>
+          <strong>Open a file or directory</strong>
           <span class="status"></span>
           <button class="icon" title="Close" @click="$emit('close')">✕</button>
         </header>
@@ -164,12 +164,12 @@ export default {
             <button :class="{ selected: view === 'browse' }" @click="view = 'browse'">Browse</button>
           </div>
           <template v-if="view === 'recent'">
-            <p v-if="!recentEntries.length" class="muted">No recent files yet.</p>
+            <p v-if="!recentEntries.length" class="muted">Nothing opened yet.</p>
             <div v-else class="table-scroll file-list">
               <table>
                 <tbody>
                   <tr v-for="e in recentEntries" :key="e.path" class="clickable" :title="e.path" @click="$emit('open', e.path, true)">
-                    <td>📄 {{ e.name }}</td>
+                    <td>{{ e.dir ? "📁" : "📄" }} {{ e.name }}</td>
                     <td class="muted recent-dir">{{ e.dir }}</td>
                     <td class="muted">{{ formatAgo(e.openedAt) }}</td>
                   </tr>
