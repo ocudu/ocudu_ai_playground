@@ -59,10 +59,14 @@ In the page:
   lifecycle, RRC, F1AP, NGAP, E1AP, mobility, failures, warnings and errors), with their count in the files of the
   tab. All start hidden. Hover a marker to see its event, click it to see its log line or frame. With an F1AP pcap in
   the tab, RRC events come from its packets, not the logs.
-- `+ trace` adds a timeline of the UEs: a bar per UE from its random access or creation to its deletion, with a glyph
-  per event (random access, lifecycle, RRC, mobility, failures), and a last row, `common`, with the events of no UE
-  such as warnings and errors. Each UE has its own row, labelled with its UE index and RNTI;
-  scroll the trace for more UEs. Hover a bar or glyph for details, click a glyph to see its log line.
+- `+ trace` adds a timeline of the UEs, of the F1AP pcap of the tab by default. With `+ log events`, the UE events of
+  the logs of the tab, e.g. random access, join the F1AP UE contexts, matched by C-RNTI and time, since pcaps
+  identify UEs more reliably than logs. A trace of a log of a tab with an F1AP pcap also identifies its UEs by the F1AP
+  UE contexts (`UEs from f1ap.pcap`). A trace shows a bar per UE context, e.g. from its random access or creation
+  to its deletion, with a glyph per event (random access, lifecycle, RRC, F1AP, NGAP, E1AP, mobility, failures), and
+  a last row, `common`, with the events of no UE such as warnings and errors. Each UE has its own row, labelled with
+  its UE index, RNTI and protocol identifiers; scroll the trace for more UEs. Hover a bar or glyph for details, click
+  a glyph to see its log line or frame.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,
   double-click it to reset the height.
 - The top-right corner of a plot shows the time and value under the mouse. The legend below shows the

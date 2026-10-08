@@ -282,9 +282,16 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   log wording. Logs give what pcaps do not show, e.g. PRACH, contention resolution timeouts, RLF, warnings and errors.
   Logs and F1AP pcaps both show RRC messages, so the RRC events of logs are left out when a pcap of the run has RRC
   events. Linking a packet to the log line of the same message is open.
-- UE contexts are joined across the sources of a run: F1AP DU and CU UE IDs and C-RNTIs, log UE indexes and RNTIs,
-  NGAP RAN and AMF UE IDs and E1AP CU-CP and CU-UP UE IDs, with RNTIs normalized by `parsers.ran` and bounded by the
-  lifetime of their UE context. A trace row shows all the identifiers of its UE.
+- UE contexts are joined across the sources of a run, since pcaps identify UEs more reliably than logs: a log can
+  create a UE without its RNTI, e.g. the target of a handover, and log the RNTI of its later events only. The trace
+  of an F1AP pcap joins the UE lanes of the logs of its run (`/api/runs/{id}/trace`, `+ log events`): a log lane with
+  an RNTI joins the F1AP UE context with that C-RNTI whose lifetime, with 2 s of slack, overlaps it, and a log lane
+  without one joins the context starting nearest its creation, within 1 s, i.e. its InitialULRRCMessageTransfer or
+  UEContextSetup. Log lanes of no context keep their own row. A trace of a log of a run with an F1AP pcap also shows
+  its events on these UE contexts, the ones it has events in. RNTIs are compared as logs print them
+  (`parsers.ran.rnti`). The F1AP gNB-DU-UE-F1AP-ID is not the DU UE index of the logs, so they are not compared. A
+  trace row shows the DU UE index, RNTI and protocol identifiers of its UE. Joining NGAP and E1AP contexts, which
+  carry no RNTI, is open.
 - Drill-down follows the source of the clicked item: log lines for logs, and the frame and its one-line tshark summary
   for pcaps, with the decoded frame on demand (D17).
 - Sources of one run share the gNB clock, so they have no time offset.

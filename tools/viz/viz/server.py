@@ -22,6 +22,7 @@ from starlette.types import Scope
 from .files import PathNotAllowed, list_dir
 from .registry import OpenError, RunEntry, SourceEntry, SourceRegistry
 from .store import QueryError, Store
+from .trace import RunTrace
 
 # Built frontend, produced by "npm run build" in the frontend directory.
 STATIC_DIR = Path(__file__).parent / "static"
@@ -390,6 +391,33 @@ def create_app(
         limit: int = Query(5000, ge=1, le=50_000),
     ) -> dict[str, Any]:
         return get_store(source).events(t0, t1, categories, ue, limit)
+
+    # Joined trace of each run, with the source states it was built from.
+    run_traces: dict[int, tuple[tuple, RunTrace]] = {}
+
+    @app.get("/api/runs/{run_id}/trace")
+    def run_trace(
+        run_id: int,
+        t0: float | None = None,
+        t1: float | None = None,
+        max_lanes: int = Query(300, ge=1, le=5000),
+        limit: int = Query(5000, ge=1, le=50_000),
+        sources: list[int] | None = Query(None),
+    ) -> dict[str, Any]:
+        """Returns the trace of a run: the UE contexts of its F1AP pcap with the UE events of its logs joined to them,
+        like /api/trace. Each event has its source. With sources, only their events and the lanes they have events in.
+        """
+        info = run_info(run_id)
+        entries = [e for e in registry.entries() if e.id in info["sources"] and e.store is not None and e.store.events_ready]
+        anchor = next((e for e in entries if e.source_type and e.source_type.name == "pcap" and "f1ap" in e.store.event_counts), None)
+        if anchor is None:
+            raise HTTPException(400, f"Run {run_id} has no parsed F1AP pcap.")
+        logs = [e for e in entries if e.source_type and e.source_type.name != "pcap"]
+        key = (anchor.id, tuple(e.id for e in logs))
+        cached = run_traces.get(run_id)
+        if cached is None or cached[0] != key:
+            cached = run_traces[run_id] = (key, RunTrace((anchor.id, anchor.store), [(e.id, e.store) for e in logs]))
+        return cached[1].trace(t0, t1, max_lanes, limit, set(sources) if sources else None)
 
     @app.get("/api/trace")
     def trace(

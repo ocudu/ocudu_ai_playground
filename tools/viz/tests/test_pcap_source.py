@@ -71,7 +71,7 @@ class PcapSourceTest(unittest.TestCase):
     def test_events_and_lanes(self):
         self.assertEqual(self.store.event_counts, {"f1ap": 12, "rrc": 20})
         trace = self.store.trace()
-        self.assertEqual([lane["label"] for lane in trace["lanes"]], ["du_ue=0 cu_ue=0 0x4601"])
+        self.assertEqual([(lane["label"], lane["rnti"]) for lane in trace["lanes"]], [("du_f1ap=0 cu_f1ap=0", "0x4601")])
         first_rrc = next(e for e in trace["events"] if e["category"] == "rrc")
         self.assertEqual((first_rrc["type"], first_rrc["layer"], first_rrc["rnti"]), ("rrcSetupRequest", "F1AP", "0x4601"))
         # F1Setup belongs to no UE.
@@ -102,6 +102,32 @@ class PcapServerTest(unittest.TestCase):
             self.assertEqual((info["type"], info["has_detail"]), ("pcap", True))
             res = client.get("/api/records/detail", params={"source": 0, "record": 3}).json()
             self.assertIn("InitialULRRCMessageTransfer", res["text"])
+
+    def test_run_trace(self):
+        from fastapi.testclient import TestClient
+
+        from viz.registry import SourceRegistry
+        from viz.server import create_app
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            cache = StoreCache(tmp / "cache")
+            pcap_source, log_source = PcapSource(tmp / "work"), LogMetricsSource()
+            pcap = cache.open(F1AP_PCAP, pcap_source)
+            cache.open_events(pcap, pcap_source)
+            log = cache.open(write_log(tmp / "gnb.log", events=True), log_source)
+            cache.open_events(log, log_source)
+            registry = SourceRegistry()
+            ids = [registry.add_store(log, log_source).id, registry.add_store(pcap, pcap_source).id]
+            registry.add_run(tmp, True, ids)
+            registry.add_run(tmp / "gnb.log", False, [ids[0]])
+            client = TestClient(create_app(registry, tmp / "missing"))
+            trace = client.get("/api/runs/0/trace").json()
+            # The log is from another time than the pcap, so its UE lanes join no F1AP UE context.
+            self.assertIn("du_f1ap=0 cu_f1ap=0", [lane["label"] for lane in trace["lanes"]])
+            self.assertEqual({e["source"] for e in trace["events"]}, set(ids))
+            self.assertEqual(trace["total_lanes"], 1 + len(log.trace()["lanes"]))
+            self.assertEqual(client.get("/api/runs/1/trace").status_code, 400)
 
 
 if __name__ == "__main__":

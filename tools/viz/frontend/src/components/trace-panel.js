@@ -68,10 +68,12 @@ function drawGlyph(ctx, category, x, y, r) {
   ctx.fill();
 }
 
-/** @param {{ue: number | null, rnti: string | null, label: string | null}} lane */
+/**
+ * DU UE index, RNTI and the protocol identifiers of a lane, e.g. "ue=0 0x4601 du_f1ap=0 cu_f1ap=0".
+ * @param {{ue: number | null, rnti: string | null, label: string | null}} lane
+ */
 function laneLabel(lane) {
-  if (lane.label) return lane.label;
-  return [lane.ue != null ? `ue=${lane.ue}` : null, lane.rnti].filter(Boolean).join(" ") || "UE";
+  return [lane.ue != null ? `ue=${lane.ue}` : null, lane.rnti, lane.label].filter(Boolean).join(" ") || "UE";
 }
 
 export default {
@@ -85,6 +87,8 @@ export default {
     themeVersion: { type: Number, default: 0 },
     // Sources the panel may show, e.g. the sources of its tab, or all sources when null.
     choices: { type: Array, default: null },
+    // Run of the tab, whose logs can be joined to an F1AP pcap.
+    runId: { type: Number, default: null },
   },
   emits: ["zoom", "remove", "select-record"],
   data() {
@@ -116,8 +120,29 @@ export default {
     notes() {
       return this.source?.notes ?? [];
     },
+    /** F1AP pcap of the tab, whose UE contexts identify the UEs of its logs. */
+    f1apSource() {
+      if (this.runId == null) return null;
+      return (this.choices ?? []).find((s) => s.type === "pcap" && s.status === "ready" && s.event_counts?.f1ap) ?? null;
+    },
+    /** Logs of the tab with events, which join the UE contexts of the F1AP pcap. */
+    joinableLogs() {
+      if (!this.f1apSource) return [];
+      return (this.choices ?? []).filter((s) => s.type !== "pcap" && s.status === "ready" && Object.keys(s.event_counts ?? {}).length);
+    },
+    /** Whether a trace of the F1AP pcap also shows the UE events of the logs of the tab. */
+    joined() {
+      return this.source === this.f1apSource && this.joinableLogs.length > 0 && this.panel.joined !== false;
+    },
+    /** Whether a trace of a log shows its UE events on the UE contexts of the F1AP pcap, rather than its own. */
+    logOnF1ap() {
+      return this.joinableLogs.includes(this.source);
+    },
     legend() {
-      const counts = this.source?.event_counts ?? {};
+      const counts = { ...(this.source?.event_counts ?? {}) };
+      if (this.joined) {
+        for (const s of this.joinableLogs) Object.assign(counts, s.event_counts);
+      }
       return LEGEND.filter(([category]) => counts[category]).map(([category, label]) => ({ category, label, glyph: GLYPHS[category] }));
     },
     scrollable() {
@@ -133,6 +158,12 @@ export default {
       this.scheduleFetch();
     },
     "panel.source"() {
+      this.scheduleFetch();
+    },
+    joined() {
+      this.scheduleFetch();
+    },
+    logOnF1ap() {
       this.scheduleFetch();
     },
     timeMode() {
@@ -179,11 +210,15 @@ export default {
       this.abort = new AbortController();
       this.loading = true;
       try {
-        const res = await getJSON(
-          "/api/trace",
-          { source: this.panel.source, t0: this.view.min - this.shift, t1: this.view.max - this.shift, max_lanes: MAX_LANES },
-          this.abort.signal,
-        );
+        const range = { t0: this.view.min - this.shift, t1: this.view.max - this.shift, max_lanes: MAX_LANES };
+        let res;
+        if (this.joined) {
+          res = await getJSON(`/api/runs/${this.runId}/trace`, range, this.abort.signal);
+        } else if (this.logOnF1ap) {
+          res = await getJSON(`/api/runs/${this.runId}/trace`, { ...range, sources: [this.panel.source] }, this.abort.signal);
+        } else {
+          res = await getJSON("/api/trace", { source: this.panel.source, ...range }, this.abort.signal);
+        }
         this.error = "";
         this.layout(res);
         await this.$nextTick();
@@ -395,7 +430,7 @@ export default {
       const { left, top } = chart.cursor;
       if (left == null || left < 0 || top == null || top < 0) return;
       const { event } = this.itemAt(chart, left, top);
-      if (event) this.$emit("select-record", { source: this.panel.source, record: event.record });
+      if (event) this.$emit("select-record", { source: event.source ?? this.panel.source, record: event.record });
     },
   },
   template: `
@@ -405,6 +440,10 @@ export default {
         <select v-if="choices && choices.length > 1" v-model.number="panel.source" :title="source ? source.path : 'Source'">
           <option v-for="s in choices" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">{{ s.file ?? s.name }}</option>
         </select>
+        <span v-if="logOnF1ap" class="muted" :title="'The UEs of the log are identified by the UE contexts of ' + f1apSource.file + ', matched by C-RNTI and time'">UEs from {{ f1apSource.file }}</span>
+        <label v-if="source === f1apSource && joinableLogs.length" class="inline muted" title="Join the UE events of the logs of the tab, e.g. random access, to the UE contexts of the F1AP pcap, matched by C-RNTI and time">
+          <input type="checkbox" :checked="joined" @change="panel.joined = $event.target.checked" /> + log events
+        </label>
         <span class="trace-legend">
           <span v-for="g in legend" :key="g.category" :class="'ev-' + g.category"><span class="trace-glyph">{{ g.glyph }}</span>{{ g.label }}</span>
           <span class="muted">last row "common": events of no UE</span>

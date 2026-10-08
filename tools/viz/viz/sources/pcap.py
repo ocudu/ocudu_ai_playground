@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from parsers.pcap import f1ap, frames, messages, run
+from parsers.ran.rnti import normalize as normalize_rnti
 from parsers.pcap.tshark import Tshark
 
 from .base import DatasetWriter, EventWriter, ProgressFn, RunIdentity
@@ -23,12 +24,12 @@ _PROTOCOLS = {"ngap": "ngap", "f1ap": "f1ap", "e1ap": "e1ap", "mac-nr": "mac", "
 _RELEASE_CODES = {"ngap": "41", "f1ap": "6", "e1ap": "11"}
 # Labels of the UE identifiers shown in the trace, by identifier label.
 _ID_LABELS = {
-    "ran_ue_ngap_id": "ran_ue",
-    "amf_ue_ngap_id": "amf_ue",
-    "du_ue_f1ap_id": "du_ue",
-    "cu_ue_f1ap_id": "cu_ue",
-    "cu_cp_ue_e1ap_id": "cu_cp_ue",
-    "cu_up_ue_e1ap_id": "cu_up_ue",
+    "ran_ue_ngap_id": "ran_ngap",
+    "amf_ue_ngap_id": "amf_ngap",
+    "du_ue_f1ap_id": "du_f1ap",
+    "cu_ue_f1ap_id": "cu_f1ap",
+    "cu_cp_ue_e1ap_id": "cu_cp_e1ap",
+    "cu_up_ue_e1ap_id": "cu_up_e1ap",
 }
 
 
@@ -38,7 +39,7 @@ class PcapSource:
     """
 
     name = "pcap"
-    version = f"1+parsers-{_parsers_version()}"
+    version = f"2+parsers-{_parsers_version()}"
 
     def __init__(self, work_dir: str | os.PathLike[str] | None = None):
         """work_dir holds the pcaps staged for tshark, see parsers.pcap.tshark."""
@@ -70,7 +71,7 @@ class PcapSource:
                 values["len"] = lengths.get(msg["frame"])
                 if proto == "f1ap":
                     detail = rrc.get(msg["frame"], {})
-                    values.update(rrc=detail.get("rrc"), nas=detail.get("nas"), c_rnti=_hex_rnti(detail.get("crnti")))
+                    values.update(rrc=detail.get("rrc"), nas=detail.get("nas"), c_rnti=normalize_rnti(detail.get("crnti")))
                 writer.add_row("messages", msg["frame"], msg["epoch"], values)
             context = ["procedure", "outcome", *(label for label, _ in messages.UE_ID_FIELDS[proto])]
             writer.set_dataset_info("messages", {"len": "bytes"}, context, label=f"{proto.upper()} messages")
@@ -88,7 +89,7 @@ class PcapSource:
             for m in f1ap.messages(self._tshark, path):
                 rrc[m["frame"]] = m["rrc"]
                 if m["crnti"]:
-                    crntis[m["frame"]] = _hex_rnti(m["crnti"])
+                    crntis[m["frame"]] = normalize_rnti(m["crnti"])
         id_labels = [label for label, _ in messages.UE_ID_FIELDS[proto]]
         # Lane of each UE identifier in use, by label and value, and the identifiers and RNTI of each lane.
         lane_of: dict[tuple[str, str], int] = {}
@@ -128,8 +129,8 @@ class PcapSource:
                 for k, v in ids.items():
                     lane_of.pop((k, v), None)
         for i, lane in enumerate(lanes):
-            label = " ".join(f"{_ID_LABELS[k]}={v}" for k, v in lane["ids"].items())
-            writer.add_lane(i, None, lane["rnti"], label + (f" {lane['rnti']}" if lane["rnti"] else ""))
+            label = " ".join(f"{_ID_LABELS[k]}={lane['ids'][k]}" for k in id_labels if k in lane["ids"])
+            writer.add_lane(i, None, lane["rnti"], label)
 
     def run_identity(self, path: Path) -> RunIdentity | None:
         span = frames.time_span(path)
@@ -148,11 +149,3 @@ class PcapSource:
 
 def _iso(epoch: float) -> str:
     return datetime.fromtimestamp(epoch, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")
-
-
-def _hex_rnti(crnti: str | None) -> str | None:
-    """C-RNTI as logs print it, e.g. 0x4601, from the decimal F1AP value."""
-    try:
-        return f"0x{int(crnti):04x}" if crnti else None
-    except ValueError:
-        return crnti

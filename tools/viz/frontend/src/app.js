@@ -623,7 +623,7 @@ const App = {
             <span v-for="n in activeNotes" :key="n" class="muted event-note">{{ n }}</span>
           </div>
           <template v-for="p in activeTab.plots" :key="p.id">
-            <trace-panel v-if="p.kind === 'trace'" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
+            <trace-panel v-if="p.kind === 'trace'" :panel="p" :sources="sources" :choices="runSources" :run-id="activeId" :view="view" :shifts="shifts"
                          :time-mode="timeMode" :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)"
                          @select-record="selection = $event" />
             <table-panel v-else-if="p.kind === 'table'" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
