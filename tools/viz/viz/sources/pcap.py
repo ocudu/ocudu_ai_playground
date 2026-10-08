@@ -12,24 +12,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from parsers.pcap import capture, frames, messages
+from parsers.pcap import capture, contexts, frames, messages
 from parsers.pcap.tshark import Tshark
 from parsers.ran.rnti import normalize as normalize_rnti
 
 from .base import DatasetWriter, EventWriter, ProgressFn, RunIdentity
 from .log_metrics import _parsers_version
 
-# Procedure code that releases the UE context of each protocol, whose response ends the lane of its UE.
-_RELEASE_CODES = {"ngap": "41", "f1ap": "6", "e1ap": "11"}
-# Labels of the UE identifiers shown in the trace, by identifier label.
-_ID_LABELS = {
-    "ran_ue_ngap_id": "ran_ngap",
-    "amf_ue_ngap_id": "amf_ngap",
-    "du_ue_f1ap_id": "du_f1ap",
-    "cu_ue_f1ap_id": "cu_f1ap",
-    "cu_cp_ue_e1ap_id": "cu_cp_e1ap",
-    "cu_up_ue_e1ap_id": "cu_up_e1ap",
-}
 
 
 class PcapSource:
@@ -89,24 +78,11 @@ class PcapSource:
         if cap is None:
             cap = self._read(path)
         proto = cap.proto
-        if proto not in _RELEASE_CODES:
+        if proto not in contexts.RELEASE_CODES:
             return
-        id_labels = [label for label, _ in messages.UE_ID_FIELDS[proto]]
-        # Lane of each UE identifier in use, by label and value, and the identifiers and RNTI of each lane.
-        lane_of: dict[tuple[str, str], int] = {}
-        lanes: list[dict[str, Any]] = []
+        tracker = contexts.ContextTracker(proto)
         for msg in cap.messages:
-            ids = {label: msg[label] for label in id_labels if msg[label]}
-            lane = next((lane_of[(k, v)] for k, v in ids.items() if (k, v) in lane_of), None)
-            if lane is None and ids:
-                lane = len(lanes)
-                lanes.append({"ids": {}, "rnti": None})
-            if lane is not None:
-                for k, v in ids.items():
-                    lane_of[(k, v)] = lane
-                    lanes[lane]["ids"].setdefault(k, v)
-                if msg.get("crnti"):
-                    lanes[lane]["rnti"] = lanes[lane]["rnti"] or normalize_rnti(msg["crnti"])
+            ctx = tracker.assign(msg)
             rrc_type = msg.get("rrc")
             if msg["outcome"] == "unsuccessful":
                 category = "failure"
@@ -121,17 +97,12 @@ class PcapSource:
                 "layer": proto.upper(),
                 "cause": msg["cause"],
                 "text": text,
-                "lane": lane,
-                "rnti": lanes[lane]["rnti"] if lane is not None else None,
+                "lane": ctx.id if ctx is not None else None,
+                "rnti": ctx.rnti if ctx is not None else None,
             }
             writer.add_event(msg["frame"], msg["epoch"], event)
-            # Identifiers are reused by later UEs once the context of their UE is released.
-            if lane is not None and msg["code"] == _RELEASE_CODES[proto] and msg["outcome"] == "successful":
-                for k, v in ids.items():
-                    lane_of.pop((k, v), None)
-        for i, lane in enumerate(lanes):
-            label = " ".join(f"{_ID_LABELS[k]}={lane['ids'][k]}" for k in id_labels if k in lane["ids"])
-            writer.add_lane(i, None, lane["rnti"], label)
+        for ctx in tracker.contexts:
+            writer.add_lane(ctx.id, None, ctx.rnti, ctx.label())
 
     def run_identity(self, path: Path) -> RunIdentity | None:
         span = frames.time_span(path)

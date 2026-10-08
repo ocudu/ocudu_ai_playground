@@ -157,6 +157,8 @@ the NGAP, F1AP or E1AP messages of a pcap with their procedure, outcome, UE iden
 the one-line tshark summary of each frame and `frames.decode()` decodes one frame. `frames.time_span()` reads the time
 span of a pcap from its packet headers, without `tshark`. `capture.read()` gives the protocol, the frame summaries and
 the messages or PDUs of a pcap in one pass over its frames, after reading its first frame for the protocol.
+`contexts.ContextTracker` assigns the NGAP, F1AP or E1AP messages to UE contexts, by their UE identifiers until the
+release of the context, with the C-RNTI of the F1AP ones.
 
 ### UEs of a run
 
@@ -175,6 +177,18 @@ for ue in combine(f1ap, log):
 A context of a later source joins a UE of an earlier one by RNTI with overlapping lifetimes, or without RNTI by
 creation time, e.g. the target of a handover, which a log creates before it knows its RNTI. RNTIs are compared as
 `parsers.ran.rnti` normalizes them.
+
+`parsers.correlate.run` reads the contexts from the files: `log_contexts()` from an OCUDU log (`events.UeTracker`),
+`pcap_contexts()` from an NGAP, F1AP or E1AP pcap (`parsers.pcap.contexts`), and `run_ues()` combines the F1AP pcap
+and the logs of a run:
+
+```python
+from parsers.correlate.run import run_ues
+from parsers.pcap.tshark import Tshark
+
+for ue in run_ues(Tshark(), "run_dir/f1ap.pcap", ["run_dir/gnb.log"]):
+    print(ue.t_start, ue.first("rnti"), ue.first("ue"), ue.first("du_f1ap"), ue.first("cu_f1ap"))
+```
 
 ## Tests
 

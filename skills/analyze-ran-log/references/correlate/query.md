@@ -13,7 +13,7 @@ is only a summary of it.
 | "Did every PRACH/PUSCH the UE sent reach the gNB?" | `correlate_radio.py <run-dir> --kind pusch` (and `--kind prach`) |
 | "Is the UE↔gNB↔pcap on the same clock?" | `align_clocks.py <run-dir>` |
 | "Trace UE 0003 end to end" | `map_ue_ids.py` + `correlate_radio.py --rnti`, guided by `procedures/attach-end-to-end.md` |
-| "Which UE owns C-RNTI 0x4607 across the logs and pcap?" | `map_ue_ids.py <ngap\|f1ap\|e1ap>.pcap`, guided by `ue-identity-map.md` |
+| "Which UE owns C-RNTI 0x4607 across the logs and pcap?" | `ue_table.py <run-dir> --where rnti=0x4607` (log + F1AP); `map_ue_ids.py <ngap\|f1ap\|e1ap>.pcap` for NGAP/E1AP ids; guided by `ue-identity-map.md` |
 | "Did the handover complete on the target cell?" | `procedures/handover-end-to-end.md` |
 | "Which side dropped the UE — UE, radio, or gNB?" | `procedures/radio-link-failure.md` |
 
