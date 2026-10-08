@@ -239,6 +239,9 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   others with its own scrollbar, keeping the time axis and the row of events of no UE in view. Events are assigned to UE contexts by `parsers.log.events.UeTracker` while they are parsed: by
   RNTI, by DU UE index, and for CU-CP events by the RNTI of the RRC messages of their CU-CP UE index.
   `GET /api/trace?source&t0&t1&max_lanes&limit` returns the UE contexts active in a window and its events.
+- The trace has a filter like the plots (D6), over the event fields type, category, layer, level, ue, rnti, cause and
+  text, evaluated by SQLite over the events of the window, with the UE index and RNTI of their lane for events
+  without them. It keeps the matching events and the lanes they are in, and applies to joined traces too.
 - Most UE events are info lines, so logs whose layers log below info lack them. The log levels come from the
   configuration echo at the top of the log (`parsers.log.config`), and `/api/sources` reports a note naming the quiet
   layers and the events they hide, shown in the event bar and the trace.

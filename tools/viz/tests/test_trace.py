@@ -3,7 +3,8 @@
 
 import unittest
 
-from viz.trace import RunTrace, join_lanes
+from viz.filters import FilterError
+from viz.trace import RunTrace, filter_trace, join_lanes
 
 
 def lane(lane_id, t_start, t_end, ue=None, rnti=None, label=None, open_=False):
@@ -86,6 +87,24 @@ class JoinTest(unittest.TestCase):
         self.assertEqual([lane["lane"] for lane in trace["lanes"]], ["7:0", "7:1", "3:3"])
         self.assertEqual({e["source"] for e in trace["events"]}, {3})
         self.assertEqual({e["type"]: e["lane"] for e in trace["events"]}["ue_create"], "7:1")
+
+    def test_filter(self):
+        trace = RunTrace((7, F1AP), [(3, LOG)])
+        # The F1AP event of lane 7:1 has no RNTI of its own, it takes the one of its lane.
+        by_rnti = trace.trace(None, None, 300, 100, filter_expr="rnti == 0x4602")
+        self.assertEqual([lane["lane"] for lane in by_rnti["lanes"]], ["7:1"])
+        self.assertEqual(sorted(e["type"] for e in by_rnti["events"]), ["UEContextSetup", "prach", "ue_create"])
+        by_type = trace.trace(None, None, 300, 100, filter_expr="type == prach or category == warning")
+        self.assertEqual([lane["lane"] for lane in by_type["lanes"]], ["7:0", "7:1", "3:3"])
+        self.assertEqual([e["type"] for e in by_type["events"]].count("warning"), 1)
+        with self.assertRaises(FilterError):
+            trace.trace(None, None, 300, 100, filter_expr="rnti ==")
+
+    def test_filter_trace_limits(self):
+        full = RunTrace((7, F1AP), [(3, LOG)]).trace(None, None, 300, 100)
+        limited = filter_trace(full, "category == ra", 1, 1)
+        self.assertEqual((len(limited["lanes"]), limited["total_lanes"]), (1, 3))
+        self.assertEqual((len(limited["events"]), limited["truncated"]), (1, False))
 
     def test_trace_window_and_limits(self):
         trace = RunTrace((7, F1AP), [(3, LOG)]).trace(19.0, 25.0, 1, 100)

@@ -65,5 +65,18 @@ class CompileFilterTest(unittest.TestCase):
         self.assertEqual(conn.execute(f"SELECT pci FROM t WHERE {sql} ORDER BY pci", params).fetchall(), [(1,), (2,)])
 
 
+
+class FilterRowsTest(unittest.TestCase):
+    def test_filter_rows(self):
+        from viz.filters import filter_rows
+
+        rows = [{"type": "prach", "rnti": "0x4601", "ue": None}, {"type": "rlf", "rnti": "0x4602", "ue": 1}, {"type": "warning", "rnti": None, "ue": None}]
+        fields = ("type", "rnti", "ue")
+        self.assertEqual(filter_rows(rows, "rnti == 0x4602 or type == warning", fields), rows[1:])
+        self.assertEqual(filter_rows(rows, "ue is null", fields), [rows[0], rows[2]])
+        with self.assertRaises(FilterError):
+            filter_rows(rows, "nope == 1", fields)
+
+
 if __name__ == "__main__":
     unittest.main()

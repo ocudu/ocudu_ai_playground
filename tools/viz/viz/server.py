@@ -21,8 +21,9 @@ from starlette.types import Scope
 
 from .files import PathNotAllowed, list_dir
 from .registry import OpenError, RunEntry, SourceEntry, SourceRegistry
+from .filters import FilterError
 from .store import QueryError, Store
-from .trace import RunTrace
+from .trace import RunTrace, filter_trace
 
 # Built frontend, produced by "npm run build" in the frontend directory.
 STATIC_DIR = Path(__file__).parent / "static"
@@ -407,6 +408,7 @@ def create_app(
         max_lanes: int = Query(300, ge=1, le=5000),
         limit: int = Query(5000, ge=1, le=50_000),
         sources: list[int] | None = Query(None),
+        filter_expr: str | None = Query(None, alias="filter"),
     ) -> dict[str, Any]:
         """Returns the trace of a run: the UE contexts of its F1AP pcap with the UE events of its logs joined to them,
         like /api/trace. Each event has its source. With sources, only their events and the lanes they have events in.
@@ -421,7 +423,10 @@ def create_app(
         cached = run_traces.get(run_id)
         if cached is None or cached[0] != key:
             cached = run_traces[run_id] = (key, RunTrace((anchor.id, anchor.store), [(e.id, e.store) for e in logs]))
-        return cached[1].trace(t0, t1, max_lanes, limit, set(sources) if sources else None)
+        try:
+            return cached[1].trace(t0, t1, max_lanes, limit, set(sources) if sources else None, filter_expr)
+        except FilterError as e:
+            raise HTTPException(400, str(e)) from None
 
     @app.get("/api/trace")
     def trace(
@@ -430,8 +435,16 @@ def create_app(
         t1: float | None = None,
         max_lanes: int = Query(300, ge=1, le=5000),
         limit: int = Query(5000, ge=1, le=50_000),
+        filter_expr: str | None = Query(None, alias="filter"),
     ) -> dict[str, Any]:
-        return get_store(source).trace(t0, t1, max_lanes, limit)
+        """Returns the UE lanes and events of a time window, of the events matching filter if given, see filter_trace()."""
+        store = get_store(source)
+        if not filter_expr:
+            return store.trace(t0, t1, max_lanes, limit)
+        try:
+            return filter_trace(store.trace(t0, t1, 10**9, 10**9), filter_expr, max_lanes, limit)
+        except FilterError as e:
+            raise HTTPException(400, str(e)) from None
 
     @app.get("/api/context")
     def context(source: int, dataset: str, field: str) -> list[Any]:

@@ -66,7 +66,10 @@ In the page:
   to its deletion, with a glyph per event (random access, lifecycle, RRC, F1AP, NGAP, E1AP, mobility, failures), and
   a last row, `common`, with the events of no UE such as warnings and errors. Each UE has its own row, labelled with
   its UE index, RNTI and protocol identifiers; scroll the trace for more UEs. Hover a bar or glyph for details, click
-  a glyph to see its log line or frame.
+  a glyph to see its log line or frame. The trace filter keeps the events matching an expression like the plot
+  filter, over `type`, `category`, `layer`, `level`, `ue`, `rnti`, `cause` and `text`, and the UEs with such events,
+  e.g. `rnti == 0x4602` for one UE or `type == prach or type == rlf`. Events without a UE index or RNTI take the
+  ones of their UE.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,
   double-click it to reset the height.
 - The top-right corner of a plot shows the time and value under the mouse. The legend below shows the

@@ -16,7 +16,9 @@ A WORD naming a field compares against that field, any other WORD is a string.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+import sqlite3
+from collections.abc import Callable, Sequence
+from contextlib import closing
 from dataclasses import dataclass
 from typing import Any
 
@@ -167,3 +169,19 @@ def compile_filter(expr: str, fields: dict[str, str], quote_field: Callable[[str
         raise FilterError("Empty filter.")
     parser = _Parser(tokens, quote_field, fields)
     return parser.parse(), parser.params
+
+
+def filter_rows(rows: Sequence[dict[str, Any]], expr: str, fields: Sequence[str]) -> list[dict[str, Any]]:
+    """The rows matching a filter expression over the given fields, in order, evaluated by SQLite like the SQL of
+    compile_filter(), so that both accept the same expressions.
+    """
+    cond, params = compile_filter(expr, dict.fromkeys(fields, ""), lambda f: '"' + f.replace('"', '""') + '"')
+    columns = ", ".join('"' + f.replace('"', '""') + '"' for f in fields)
+    with closing(sqlite3.connect(":memory:")) as conn:
+        conn.execute(f"CREATE TABLE rows (_i INTEGER, {columns})")
+        conn.executemany(
+            f"INSERT INTO rows VALUES (?, {', '.join('?' * len(fields))})",
+            [(i, *(row.get(f) for f in fields)) for i, row in enumerate(rows)],
+        )
+        kept = [i for (i,) in conn.execute(f"SELECT _i FROM rows WHERE {cond} ORDER BY _i", params)]
+    return [rows[i] for i in kept]

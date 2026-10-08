@@ -174,6 +174,10 @@ class ServerTest(unittest.TestCase):
         self.assertEqual((res["total_lanes"], res["total_events"], res["truncated"]), (2, 6, False))
         limited = self.client.get("/api/trace", params={"source": 0, "max_lanes": 1, "limit": 2}).json()
         self.assertEqual((len(limited["lanes"]), limited["total_lanes"], len(limited["events"]), limited["truncated"]), (1, 2, 2, True))
+        filtered = self.client.get("/api/trace", params={"source": 0, "filter": "rnti == 0x4601"}).json()
+        self.assertEqual([lane["rnti"] for lane in filtered["lanes"]], ["0x4601"])
+        self.assertTrue(filtered["events"])
+        self.assertEqual(self.client.get("/api/trace", params={"source": 0, "filter": "nope == 1"}).status_code, 400)
 
     def test_sources_status(self):
         src = self.client.get("/api/sources").json()[0]

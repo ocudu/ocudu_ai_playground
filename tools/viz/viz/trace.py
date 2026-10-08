@@ -10,6 +10,7 @@ from typing import Any
 
 from parsers.ran import rnti as rnti_util
 
+from .filters import filter_rows
 from .store import Store
 
 # Slack around the lifetime of an F1AP UE context in which log events of its RNTI belong to it, in seconds. The random
@@ -19,6 +20,31 @@ RNTI_SLACK_S = 2.0
 CREATION_SLACK_S = 1.0
 # Lanes and events read from a store to join its lanes, without limit.
 _ALL = 10**9
+# Fields of the events that trace filters compare, with the UE index and RNTI of its lane for events without them.
+FILTER_FIELDS = ("type", "category", "layer", "level", "ue", "rnti", "cause", "text")
+
+
+def filter_trace(trace: dict[str, Any], expr: str, max_lanes: int, limit: int) -> dict[str, Any]:
+    """A trace, as Store.trace() returns it with all its lanes and events, reduced to the events matching a filter
+    expression over FILTER_FIELDS and the lanes they are in, then to max_lanes lanes and limit events.
+    """
+    lanes = {lane["lane"]: lane for lane in trace["lanes"]}
+    rows = []
+    for ev in trace["events"]:
+        lane = lanes.get(ev["lane"], {})
+        rows.append({**ev, "ue": ev["ue"] if ev["ue"] is not None else lane.get("ue"), "rnti": ev["rnti"] or lane.get("rnti")})
+    kept = filter_rows(rows, expr, FILTER_FIELDS)
+    in_lanes = {ev["lane"] for ev in kept}
+    shown = [lane for lane in trace["lanes"] if lane["lane"] in in_lanes]
+    shown_ids = {lane["lane"] for lane in shown[:max_lanes]}
+    events = [ev for ev in kept if ev["lane"] is None or ev["lane"] in shown_ids]
+    return {
+        "lanes": shown[:max_lanes],
+        "total_lanes": len(shown),
+        "events": events[:limit],
+        "total_events": len(events),
+        "truncated": len(events) > limit,
+    }
 
 
 @dataclass
@@ -46,13 +72,22 @@ class RunTrace:
         self._lane_of = {part: lane.key for lane in self._lanes for part in lane.parts}
 
     def trace(
-        self, t0: float | None, t1: float | None, max_lanes: int, limit: int, sources: set[int] | None = None
+        self,
+        t0: float | None,
+        t1: float | None,
+        max_lanes: int,
+        limit: int,
+        sources: set[int] | None = None,
+        filter_expr: str | None = None,
     ) -> dict[str, Any]:
         """Like Store.trace(), over the joined lanes, with the source of each event. Lane ids are strings.
 
         With sources, only their events and the lanes they have events in, e.g. the events of a log on the UE contexts
         of the F1AP pcap. With the F1AP pcap, the RRC events of the logs are left out, since its packets carry them.
+        With filter_expr, see filter_trace().
         """
+        if filter_expr:
+            return filter_trace(self.trace(t0, t1, _ALL, _ALL, sources), filter_expr, max_lanes, limit)
         lo = -float("inf") if t0 is None else t0
         hi = float("inf") if t1 is None else t1
         active = [

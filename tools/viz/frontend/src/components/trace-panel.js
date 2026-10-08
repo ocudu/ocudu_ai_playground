@@ -7,7 +7,9 @@ import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, formatTime, se
 
 // Height of a row of the trace in CSS pixels, and of the space taken by the time axis.
 const ROW_HEIGHT = 18;
-const AXIS_HEIGHT = 50;
+const AXIS_HEIGHT = 68;
+// Rows of height the chart has at least, so that a trace of one or two rows does not squash them under the axis.
+const MIN_CHART_ROWS = 3;
 // UE rows shown at once. More UEs are reached with the scrollbar of the trace.
 const VISIBLE_UE_ROWS = 25;
 // UEs requested for a window.
@@ -117,6 +119,7 @@ export default {
       // Event or UE under the mouse, shown with the cursor readout.
       cursorEvent: null,
       cursorLane: "",
+      filterDraft: this.panel.filter ?? "",
     };
   },
   computed: {
@@ -131,6 +134,9 @@ export default {
     },
     notes() {
       return this.source?.notes ?? [];
+    },
+    filterDirty() {
+      return this.filterDraft.trim() !== (this.panel.filter ?? "");
     },
     /** F1AP pcap of the tab, whose UE contexts identify the UEs of its logs. */
     f1apSource() {
@@ -172,6 +178,9 @@ export default {
     "panel.source"() {
       this.scheduleFetch();
     },
+    "panel.filter"() {
+      this.scheduleFetch();
+    },
     joined() {
       this.scheduleFetch();
     },
@@ -211,6 +220,10 @@ export default {
     this.chart?.destroy();
   },
   methods: {
+    applyFilter() {
+      this.panel.filter = this.filterDraft.trim();
+    },
+
     scheduleFetch() {
       clearTimeout(this.fetchTimer);
       this.fetchTimer = setTimeout(() => this.fetch(), FETCH_DELAY_MS);
@@ -222,7 +235,7 @@ export default {
       this.abort = new AbortController();
       this.loading = true;
       try {
-        const range = { t0: this.view.min - this.shift, t1: this.view.max - this.shift, max_lanes: MAX_LANES };
+        const range = { t0: this.view.min - this.shift, t1: this.view.max - this.shift, max_lanes: MAX_LANES, filter: this.panel.filter || null };
         let res;
         if (this.joined) {
           res = await getJSON(`/api/runs/${this.runId}/trace`, range, this.abort.signal);
@@ -259,7 +272,7 @@ export default {
       this.totalLanes = res.total_lanes;
       this.truncated = res.truncated;
       const shown = Math.max(1, Math.min(this.nofLanes, VISIBLE_UE_ROWS) + (this.hasCellRow ? 1 : 0));
-      this.chartHeight = shown * ROW_HEIGHT + AXIS_HEIGHT;
+      this.chartHeight = Math.max(shown, MIN_CHART_ROWS) * ROW_HEIGHT + AXIS_HEIGHT;
       this.scrollHeight = this.chartHeight + Math.max(0, this.nofLanes - VISIBLE_UE_ROWS) * ROW_HEIGHT;
       this.firstRow = Math.min(this.firstRow, Math.max(0, this.nofLanes - VISIBLE_UE_ROWS));
     },
@@ -455,6 +468,11 @@ export default {
         <label v-if="source === f1apSource && joinableLogs.length" class="inline muted" title="Join the UE events of the logs of the tab, e.g. random access, to the UE contexts of the F1AP pcap, matched by C-RNTI and time">
           <input type="checkbox" :checked="joined" @change="panel.joined = $event.target.checked" /> + log events
         </label>
+        <form class="filter" @submit.prevent="applyFilter">
+          <input v-model="filterDraft" :class="{ dirty: filterDirty }" placeholder="rnti == 0x4602 or type == rlf"
+                 title="Keeps the events matching comparisons (== != < <= > >=, is null) joined by and/or/not, over type, category, layer, level, ue, rnti, cause and text, and the UEs with such events. Events without ue or rnti take the ones of their UE."
+                 @blur="applyFilter" />
+        </form>
         <span class="trace-legend">
           <span v-for="g in legend" :key="g.category" :class="'ev-' + g.category"><span class="trace-glyph">{{ g.glyph }}</span>{{ g.label }}</span>
         </span>
