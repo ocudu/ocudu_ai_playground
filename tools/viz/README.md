@@ -50,7 +50,8 @@ In the page:
   `executors` lists the executors (`cu_cp_exec`, `mac_cell_exec#0`, ...). `all` selects every entity, which
   combines with split by to compare them.
 - Pick source, dataset (METRICS layer), field and optionally a context field to split by, giving one
-  series per value (e.g. one per `ue`). Without a selection of values, the first 20 are shown.
+  series per value (e.g. one per `ue`), by default `pci` for `sched` and `rnti` for `sched_ue`. Without a selection of
+  values, the first 256 are drawn, and the legend and statistics list the first 16 of them.
 - Drag to zoom, Shift+drag to pan, double-click to reset. `W`/`S` zoom in and out around the middle of the view and
   `A`/`D` pan, within the time range of the files. The mouse wheel scrolls the page. The plots of a tab share the time
   axis.

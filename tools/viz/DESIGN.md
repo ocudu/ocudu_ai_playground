@@ -115,8 +115,9 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 
 - In: CLI, log metrics source type, F1, F2, F6, F7, F8, F9, F12, F13, D1, D2.
 - Deferred: F10 live tail, F14 events, Docker.
-- Without explicit split values, only the first 20 are returned, since sparse splits
-  (e.g. ~1000 short-lived UEs) cannot be reduced by downsampling.
+- Without explicit split values, only the first 256 series are returned, since sparse splits
+  (e.g. ~1000 short-lived UEs) cannot be reduced by downsampling, and the statistics of the first 16, which the
+  legends list too.
 
 ### D5. Layout and API
 

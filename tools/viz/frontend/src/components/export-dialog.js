@@ -3,7 +3,7 @@
 
 import uPlot from "uplot";
 import { getJSON } from "../api.js";
-import { TIME_TICK_SPACE, cssVar, seriesColor, seriesData, timeTicks, utcDate } from "./chart-utils.js";
+import { MAX_LEGEND_SERIES, TIME_TICK_SPACE, cssVar, seriesColor, seriesData, timeTicks, utcDate } from "./chart-utils.js";
 import { chartSvg, escapeXml } from "./svg-export.js";
 
 // Size of the image, in CSS pixels, when the dialog opens.
@@ -59,6 +59,7 @@ export default {
   emits: ["close"],
   data() {
     return {
+      maxLegendSeries: MAX_LEGEND_SERIES,
       width: DEFAULT_WIDTH,
       height: DEFAULT_HEIGHT,
       labels: [],
@@ -325,8 +326,11 @@ export default {
             <div ref="title" class="export-title"><span ref="titleText">{{ title }}</span></div>
             <div ref="chart" class="export-chart"></div>
             <div ref="legend" class="export-legend">
-              <span v-for="(label, i) in labels" :key="i" class="export-legend-item">
+              <span v-for="(label, i) in labels.slice(0, maxLegendSeries)" :key="i" class="export-legend-item">
                 <span class="swatch" :style="{ background: seriesColor(i) }"></span><span class="label">{{ label }}</span>
+              </span>
+              <span v-if="labels.length > maxLegendSeries" class="export-legend-item">
+                <span class="swatch" style="width: 0"></span><span class="label">+{{ labels.length - maxLegendSeries }} more</span>
               </span>
             </div>
           </div>

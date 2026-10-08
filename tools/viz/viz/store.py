@@ -25,7 +25,9 @@ SCHEMA_VERSION = 6
 # Time series windows up to this many points are returned at full resolution.
 MAX_FULL_RES_POINTS = 50_000
 # Split values returned when none are selected.
-MAX_DEFAULT_SPLITS = 20
+MAX_DEFAULT_SPLITS = 256
+# Split values whose statistics are returned when none are selected, the first of the plotted ones.
+MAX_STATS_SPLITS = 16
 # Columns of the events table, after the timestamp and record id.
 EVENT_COLUMNS = ("type", "category", "layer", "level", "ue", "rnti", "cause", "text", "lane")
 # Events returned by default for a time window.
@@ -401,7 +403,7 @@ class Store:
         split_values: list[str] | None = None,
         filter_expr: str | None = None,
         instance: str | None = None,
-        max_splits: int = MAX_DEFAULT_SPLITS,
+        max_splits: int = MAX_STATS_SPLITS,
         max_exact_points: int = MAX_EXACT_PERCENTILE_POINTS,
     ) -> dict[str, Any]:
         """Returns count, min, max, mean and percentiles of a numeric field per split value.

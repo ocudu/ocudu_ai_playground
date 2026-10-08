@@ -5,7 +5,7 @@ import uPlot from "uplot";
 import { buildQuery, getJSON } from "../api.js";
 import ExportDialog from "./export-dialog.js";
 import { displayUnit, formatStat } from "../units.js";
-import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, fmtFull, formatTime, selectToZoom, seriesColor, seriesData, timeTicks, utcDate } from "./chart-utils.js";
+import { CURSOR_SYNC_KEY, MAX_LEGEND_SERIES, TIME_TICK_SPACE, attachZoomPan, capLegend, cssVar, fmtFull, formatTime, selectToZoom, seriesColor, seriesData, timeTicks, utcDate } from "./chart-utils.js";
 
 // Distance in pixels within which the cursor is on an event marker.
 const EVENT_HIT_PX = 5;
@@ -18,6 +18,8 @@ const MAX_LISTED_SPLITS = 300;
 // Dataset and field of new plots, when their source has them.
 const DEFAULT_DATASET = "sched";
 const DEFAULT_FIELD = "total_dl_brate";
+// Field each dataset is split by when picked, e.g. one series per UE.
+const DEFAULT_SPLITS = { sched: "pci", sched_ue: "rnti" };
 
 
 /**
@@ -53,6 +55,7 @@ export default {
   emits: ["zoom", "remove", "select-record"],
   data() {
     return {
+      maxLegendSeries: MAX_LEGEND_SERIES,
       loading: false,
       error: "",
       downsampled: false,
@@ -128,7 +131,8 @@ export default {
     },
     "plot.dataset"() {
       this.plot.field = this.defaultField();
-      this.plot.splitBy = null;
+      const split = DEFAULT_SPLITS[this.plot.dataset];
+      this.plot.splitBy = split && this.splitFields.includes(split) ? split : null;
       this.loadInstanceOptions(true);
     },
     "plot.splitBy"() {
@@ -396,6 +400,7 @@ export default {
         hooks: { setCursor: [(u) => this.updateCursorReadout(u)] },
       };
       const chart = new uPlot(opts, data, this.$refs.chart);
+      capLegend(chart);
       this.trackHover(chart);
       return chart;
     },
@@ -428,6 +433,7 @@ export default {
         },
       };
       const chart = new uPlot(opts, data, this.$refs.chart);
+      capLegend(chart);
       this.trackHover(chart);
       attachZoomPan(chart, (range) => this.$emit("zoom", range), () => this.drillDown(chart));
       return chart;
@@ -554,6 +560,7 @@ export default {
           </div>
         </div>
       </div>
+      <p v-if="nofSeries > maxLegendSeries" class="muted legend-note">legend and statistics list the first {{ maxLegendSeries }} of {{ nofSeries }} series</p>
       <details v-if="statsRows.length" class="stats" open>
         <summary class="muted">statistics of the visible window{{ unit.label ? " [" + unit.label + "]" : "" }}{{ statsSampled ? ", percentiles sampled" : "" }}</summary>
         <table>

@@ -8,6 +8,16 @@ import { displayUnit } from "../units.js";
 export const CURSOR_SYNC_KEY = "ocudu-viz";
 // Minimum pixels between absolute time ticks, so that HH:mm:ss.fff labels do not overlap.
 export const TIME_TICK_SPACE = 110;
+// Series listed in legends, as many as the statistics of the server list. Charts draw all.
+export const MAX_LEGEND_SERIES = 16;
+
+/** Hides the legend rows of a uPlot chart past the first MAX_LEGEND_SERIES series. */
+export function capLegend(chart) {
+  // Row 0 is the one of the x values.
+  chart.root.querySelectorAll(".u-legend .u-series").forEach((row, i) => {
+    if (i > MAX_LEGEND_SERIES) row.style.display = "none";
+  });
+}
 
 const fmtMs = uPlot.fmtDate("{HH}:{mm}:{ss}.{fff}");
 const fmtSec = uPlot.fmtDate("{HH}:{mm}:{ss}");
