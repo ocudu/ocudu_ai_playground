@@ -271,8 +271,8 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   directory. The question is a dialog, shown as soon as the file is opened, and its answer is kept in the URL view
   state. Files are of the same run by content, not name, since names get edited: logs whose first line names the
   same build (`Built in <mode> mode using commit <hash> on branch <branch>`) and whose time spans overlap
-  (`parsers.log.run`), and later pcaps whose time spans overlap such a log. A run can add or remove files of
-  its directory from its tab.
+  (`parsers.log.run`), and pcaps whose time spans, from the times in their packet headers, overlap. Overlaps allow
+  60 s of slack. A run can add or remove files of its directory from its tab.
 - Each source keeps its own parse, cache database, status and id. A run lists its sources, and the page polls them as
   today.
 - Plots name their source: the dataset picker groups datasets by source, e.g. `du.log › sched_ue`, so one tab can
@@ -280,15 +280,36 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - Events and the trace merge the events of all the sources of a run. Pcaps give the protocol messages, i.e. F1AP,
   NGAP and E1AP messages, the RRC and NAS messages that F1AP carries, and failures, independently of log levels and
   log wording. Logs give what pcaps do not show, e.g. PRACH, contention resolution timeouts, RLF, warnings and errors.
-  When a log line and a packet show the same message, the packet is the event, linked to the log line.
+  Logs and F1AP pcaps both show RRC messages, so the RRC events of logs are left out when a pcap of the run has RRC
+  events. Linking a packet to the log line of the same message is open.
 - UE contexts are joined across the sources of a run: F1AP DU and CU UE IDs and C-RNTIs, log UE indexes and RNTIs,
   NGAP RAN and AMF UE IDs and E1AP CU-CP and CU-UP UE IDs, with RNTIs normalized by `parsers.ran` and bounded by the
   lifetime of their UE context. A trace row shows all the identifiers of its UE.
 - Drill-down follows the source of the clicked item: log lines for logs, and the frame and its one-line tshark summary
-  for pcaps, with the decoded frame on demand. An event with both shows both.
+  for pcaps, with the decoded frame on demand (D17).
 - Sources of one run share the gNB clock, so they have no time offset.
 - Steps: runs of several log sources; a pcap source type on `parsers.pcap`, with its events in the trace; the UE join
   and UE filter. The container image adds `tshark`.
+
+### D17. Pcap sources
+
+- `PcapSource` reads NGAP, F1AP, E1AP, MAC-NR and RLC-NR pcaps through `parsers.pcap`, which runs `tshark`. The
+  protocol comes from the dissector of the first frame, not the file name. Without `tshark` on the `PATH`, pcaps are
+  not supported files.
+- Records are frames, identified by frame number, with their tshark summary (time, protocols, info) as text, stored in
+  the cache. The record pane shows the decoded frame beside the frames (`/api/records/detail`), decoded on demand,
+  with the 3GPP layers in full.
+- Datasets: `messages` for NGAP, F1AP and E1AP, one row per message with its procedure, outcome, UE identifiers,
+  cause, tshark summary and size, plus the RRC and NAS messages and C-RNTI for F1AP; `pdus` for MAC and RLC, one row
+  per PDU with its size, direction and UE identifiers.
+- Events: one per NGAP, F1AP or E1AP message, in category `rrc` for F1AP messages carrying RRC, `failure` for
+  unsuccessful outcomes, else `ngap`, `f1ap` or `e1ap`. Each UE context is a trace lane, from the first message with
+  its identifiers until the response that releases it (UEContextRelease for NGAP and F1AP, bearerContextRelease for
+  E1AP), since later UEs reuse the identifiers. Lanes are labelled with their identifiers, and F1AP lanes with their
+  C-RNTI in hex, as logs print it. MAC and RLC pcaps have no events.
+- tshark reads pcaps through a link or copy under the cache directory only when it cannot read them in place, e.g.
+  under the AppArmor profile of tshark on Ubuntu. `--clear-cache` removes them. The container image installs
+  `tshark`.
 
 ## Open questions
 

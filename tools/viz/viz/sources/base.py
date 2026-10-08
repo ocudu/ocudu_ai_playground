@@ -7,11 +7,33 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
 # Called with (bytes_done, bytes_total) while a source is parsed.
 ProgressFn = Callable[[int, int], None]
+
+
+# Slack of the time spans of the files of one run, in seconds.
+RUN_SLACK_S = 60.0
+
+
+@dataclass(frozen=True)
+class RunIdentity:
+    """What tells the files of one run apart: the build that wrote a file, if known, and its time span in epochs."""
+
+    build: tuple[str, ...] | None
+    start: float
+    end: float
+
+    def same_run(self, other: RunIdentity) -> bool:
+        """Whether two files come from the same run: time spans overlapping within RUN_SLACK_S, and the same build
+        when both have one.
+        """
+        if self.build is not None and other.build is not None and self.build != other.build:
+            return False
+        return self.start <= other.end + RUN_SLACK_S and other.start <= self.end + RUN_SLACK_S
 
 
 def column_type(value: Any) -> str | None:
@@ -59,6 +81,9 @@ class DatasetWriter(Protocol):
     def set_time_range(self, t_min: float, t_max: float) -> None:
         """Sets the time span of the source, which may be wider than the span of its datasets."""
 
+    def add_record_text(self, record: int, text: str) -> None:
+        """Sets the text of a record, for sources whose records are not lines of their file."""
+
     def add_record_offset(self, record: int, offset: int) -> None:
         """Registers the byte offset where a raw record starts. Not every record needs one."""
 
@@ -72,16 +97,17 @@ class EventWriter(Protocol):
     def add_event(self, record: int, t: float, event: dict[str, Any]) -> None:
         """Adds an event with its type, category, layer, level, ue, rnti, cause, text and UE lane."""
 
-    def add_lane(self, lane: int, ue: int | None, rnti: str | None) -> None:
-        """Sets the DU UE index and RNTI of a UE lane."""
+    def add_lane(self, lane: int, ue: int | None, rnti: str | None, label: str | None = None) -> None:
+        """Sets the DU UE index and RNTI of a UE lane, or the label shown for it instead."""
 
 
 class SourceType(Protocol):
     """Adapter from one artifact kind to datasets.
 
     A source type may also define parse_events(path, writer: EventWriter) to extract events, which runs after parse()
-    while the datasets are already served, and field_spans(text) to return the span of each field in the text of a
-record, by field name.
+    while the datasets are already served, field_spans(text) to return the span of each field in the text of a record,
+by field name, run_identity(path) to return the RunIdentity of a file, which finds the other files of its run, and
+record_detail(path, record) to return a decoded record as text.
     """
 
     # Unique name, part of the cache key.

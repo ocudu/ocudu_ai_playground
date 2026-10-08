@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import argparse
+import shutil
 import socket
 import sys
 import tempfile
@@ -15,10 +16,16 @@ from pathlib import Path
 
 from . import parallel
 from .registry import SourceRegistry
+from .sources.base import SourceType
 from .sources.log_metrics import LogMetricsSource
+from .sources.pcap import PcapSource
 from .store import StoreCache, default_cache_dir
 
-SOURCE_TYPES = [LogMetricsSource()]
+
+
+def source_types(work_dir: Path) -> list[SourceType]:
+    """The source types, in the order they are tried. work_dir holds the pcaps staged for tshark."""
+    return [LogMetricsSource(), PcapSource(work_dir)]
 
 
 def _progress(name: str):
@@ -66,7 +73,9 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p.add_argument("--cache-dir", type=Path, help=f"Directory of parse caches (default: {default_cache_dir()}).")
     p.add_argument("--cache-size", type=float, default=2.0, help="Cache size limit in GB (default: %(default)s).")
     p.add_argument("--no-cache", action="store_true", help="Keep parsed data in memory only.")
-    p.add_argument("--clear-cache", action="store_true", help="Remove all parse caches before starting.")
+    p.add_argument(
+        "--clear-cache", action="store_true", help="Remove all parse caches, and pcaps staged for tshark, before starting."
+    )
     p.add_argument(
         "-j",
         "--jobs",
@@ -88,8 +97,11 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
     cache = StoreCache(args.cache_dir, int(args.cache_size * (1 << 30)), enabled=not args.no_cache)
+    tshark_dir = cache.cache_dir / "tshark"
     if args.clear_cache:
         cache.clear()
+        # Pcaps staged for tshark, copies when tshark cannot read them in place.
+        shutil.rmtree(tshark_dir, ignore_errors=True)
     roots = [r.resolve() for r in args.root] or _default_roots()
     for r in roots:
         if not r.is_dir():
@@ -100,7 +112,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     parallel.configure(args.jobs)
     parallel.warm_up()
-    registry = SourceRegistry(cache, SOURCE_TYPES, roots)
+    types = source_types(tshark_dir)
+    registry = SourceRegistry(cache, types, roots)
 
     for path in args.files:
         is_dir = path.is_dir()
@@ -116,7 +129,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         source_ids = []
         for f in files:
-            source_type = next((st for st in SOURCE_TYPES if st.accepts(f)), None)
+            source_type = next((st for st in types if st.accepts(f)), None)
             if source_type is None:
                 print(f"ocudu-viz: {f}: unsupported file type.", file=sys.stderr)
                 return 2

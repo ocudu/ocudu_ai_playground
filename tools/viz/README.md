@@ -17,11 +17,16 @@ tools/viz/ocudu-viz du1/du.log du2/du.log    # several files, one tab each
 tools/viz/ocudu-viz run_dir/                 # the gNB artifacts of a directory, in one tab
 ```
 
-Each tab shows a run: a single file, or the supported files of one directory, e.g. the `gnb.log`, or `du.log`
-and `cu.log`, of a test run. Opening a file opens it alone; when other files of its directory were written by the
-same run, i.e. their first lines name the same build and their times overlap, a dialog offers to open the whole run
-in the tab. The files of a tab share its time axis, its events and its zoom, and each plot picks
-its file. The `files` bar of a tab lists them: `✕` removes one, `+ file` adds another file of the same directory.
+Each tab shows a run: a single file, or the supported files of one directory, e.g. the `gnb.log` (or `du.log` and
+`cu.log`) and the `mac`, `rlc`, `f1ap`, `e1ap` and `ngap` pcaps of a test run. Opening a file opens it alone; when
+other files of its directory come from the same run, i.e. logs of the same build (named on their first line) and logs
+or pcaps whose times overlap, a dialog offers to open the whole run in the tab. The files of a tab share its time
+axis, its events and its zoom, and each plot picks its file.
+
+Pcaps need `tshark`, which the container image has. Their frames are the records: clicking a message shows its frame
+with the tshark summary, and the decoded frame beside it. F1AP, NGAP and E1AP pcaps give a `messages` dataset (a
+table of their messages, with the RRC and NAS messages of F1AP) and events, with a trace row per UE context; MAC and
+RLC pcaps give a `pdus` dataset. The `files` bar of a tab lists them: `✕` removes one, `+ file` adds another file of the same directory.
 
 The `+` tab in the page browses the mounted directories (your home, the temp dir and any `--root`) and opens the
 chosen file in a new tab. Its `Recent` view lists the last
@@ -48,10 +53,12 @@ In the page:
   series per value (e.g. one per `ue`). Without a selection of values, the first 20 are shown.
 - Drag to zoom, Shift+drag to pan, double-click to reset. The mouse wheel scrolls the page. The plots of a tab share the time
   axis.
-  `reset zoom` shows the whole time range of the logs, `fit metrics` the time range of the plotted metrics.
+  `reset zoom` shows the whole time range of the files of the tab, `fit plots` the time range of the data in its
+  plots, tables and traces.
 - The `events` chips above the plots show event markers on the time plots, per category (random access, UE
-  lifecycle, RRC, mobility, failures, warnings and errors), with their count in the file. All start hidden.
-  Hover a marker to see its event, click it to see its log line.
+  lifecycle, RRC, F1AP, NGAP, E1AP, mobility, failures, warnings and errors), with their count in the files of the
+  tab. All start hidden. Hover a marker to see its event, click it to see its log line or frame. With an F1AP pcap in
+  the tab, RRC events come from its packets, not the logs.
 - `+ trace` adds a timeline of the UEs: a bar per UE from its random access or creation to its deletion, with a glyph
   per event (random access, lifecycle, RRC, mobility, failures), and a last row with the events of no UE such as
   warnings and errors. Each UE has its own row, labelled with its UE index and RNTI;
@@ -102,7 +109,7 @@ Large windows are downsampled to min/max per pixel, so spikes stay visible. Zoom
 | `--rebuild`       | Rebuild the image from scratch, without the build cache.                    |
 | `--cache-size GB` | Cache size limit, least recently used caches are removed first (default 2). |
 | `--no-cache`      | Keep parsed data in memory only.                                            |
-| `--clear-cache`   | Remove all caches before starting.                                          |
+| `--clear-cache`   | Remove all caches, and pcaps staged for tshark, before starting.            |
 | `-j K`, `--jobs K` | Worker processes that parse large logs, 1 for none (default: one per CPU, up to 12). |
 | `--clean`         | Remove the ocudu-viz images and parse caches, then exit.                    |
 

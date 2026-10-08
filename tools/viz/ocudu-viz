@@ -33,7 +33,7 @@ Options:
   --rebuild         Rebuild the image from scratch, without the build cache.
   --cache-size GB   Parse cache size limit (default: 2).
   --no-cache        Keep parsed data in memory only.
-  --clear-cache     Remove all parse caches before starting.
+  --clear-cache     Remove all parse caches, and pcaps staged for tshark, before starting.
   -j K, --jobs K    Worker processes that parse large logs, 1 to parse in the server process
                     (default: one per CPU, up to 12).
   --clean           Remove the ocudu-viz images and parse caches, then exit.

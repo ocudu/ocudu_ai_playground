@@ -15,6 +15,10 @@ RUN npm run build
 FROM python:3.12-slim
 # Lets the wrapper find the images it built, e.g. to remove the ones replaced by a rebuild.
 LABEL org.ocudu.tool="ocudu-viz"
+# tshark decodes the pcaps.
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends tshark \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
 COPY parsers ./parsers
 COPY viz ./viz

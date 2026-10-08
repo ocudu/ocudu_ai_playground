@@ -79,6 +79,8 @@ def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
         "path": str(entry.path),
         "name": name,
         "file": entry.path.name,
+        "type": entry.source_type.name if entry.source_type else None,
+        "has_detail": hasattr(entry.source_type, "record_detail"),
         "status": entry.status,
         "progress": entry.progress,
         "error": entry.error,
@@ -424,6 +426,19 @@ def create_app(
                 if r["record"] == mark and (span := spans_fn(r["text"]).get(field)) is not None:
                     r["marks"] = [list(span)]
         return out
+
+    @app.get("/api/records/detail")
+    def record_detail(source: int, record: int = Query(..., ge=1)) -> dict[str, Any]:
+        """Returns a record decoded as text, for sources whose type decodes records, e.g. pcap frames."""
+        store = get_store(source)
+        detail_fn = getattr(registry.source_type(source), "record_detail", None)
+        if detail_fn is None:
+            raise HTTPException(400, f"Source {source} has no record details.")
+        try:
+            return {"record": record, "text": detail_fn(store.path, record)}
+        except Exception as e:
+            # A tshark failure is reported on the record rather than crashing the request.
+            raise HTTPException(400, f"Could not decode record {record}: {e}") from None
 
     if (static_dir / "index.html").is_file():
         app.mount("/", _RevalidatedStaticFiles(directory=static_dir, html=True), name="static")

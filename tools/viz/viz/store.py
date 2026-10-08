@@ -21,7 +21,7 @@ from .filters import FilterError, compile_filter
 from .sources.base import ProgressFn, SourceType, column_type, column_value
 
 # Bumped when the database layout changes, part of the cache key.
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 # Time series windows up to this many points are returned at full resolution.
 MAX_FULL_RES_POINTS = 50_000
 # Split values returned when none are selected.
@@ -85,6 +85,7 @@ class StoreWriter:
                 name TEXT PRIMARY KEY, kind TEXT, fields TEXT, units TEXT, context TEXT, label TEXT, instance TEXT
             );
             CREATE TABLE record_offsets (record INTEGER PRIMARY KEY, offset INTEGER);
+            CREATE TABLE record_texts (record INTEGER PRIMARY KEY, text TEXT);
             """
         )
 
@@ -129,6 +130,9 @@ class StoreWriter:
 
     def add_record_offset(self, record: int, offset: int) -> None:
         self._conn.execute("INSERT OR REPLACE INTO record_offsets VALUES (?, ?)", (record, offset))
+
+    def add_record_text(self, record: int, text: str) -> None:
+        self._conn.execute("INSERT OR REPLACE INTO record_texts VALUES (?, ?)", (record, text))
 
     def finish(self, source_path: Path, source_type: str) -> None:
         """Flushes pending rows, writes the dataset metadata and indexes."""
@@ -211,7 +215,7 @@ class EventStoreWriter:
             f"""
             CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
             CREATE TABLE events ({_TS} REAL, {_REC} INTEGER, {cols});
-            CREATE TABLE lane_info (lane INTEGER PRIMARY KEY, ue INTEGER, rnti TEXT);
+            CREATE TABLE lane_info (lane INTEGER PRIMARY KEY, ue INTEGER, rnti TEXT, label TEXT);
             """
         )
 
@@ -220,8 +224,8 @@ class EventStoreWriter:
         if len(self._events) >= _BATCH_SIZE:
             self._flush()
 
-    def add_lane(self, lane: int, ue: int | None, rnti: str | None) -> None:
-        self._conn.execute("INSERT OR REPLACE INTO lane_info VALUES (?, ?, ?)", (lane, ue, rnti))
+    def add_lane(self, lane: int, ue: int | None, rnti: str | None, label: str | None = None) -> None:
+        self._conn.execute("INSERT OR REPLACE INTO lane_info VALUES (?, ?, ?, ?)", (lane, ue, rnti, label))
 
     def finish(self) -> None:
         """Flushes pending events, writes the UE lanes and the indexes."""
@@ -236,6 +240,7 @@ class EventStoreWriter:
                 MAX(e.{_TS}) AS t_end,
                 i.ue,
                 i.rnti,
+                i.label,
                 MAX(e.type = 'ue_create') AND NOT MAX(e.type = 'ue_delete') AS open
             FROM events e LEFT JOIN lane_info i ON i.lane = e.lane WHERE e.lane IS NOT NULL GROUP BY e.lane
             """
@@ -566,9 +571,9 @@ class Store:
             where = "t_start <= ? AND (t_end >= ? OR open)"
             total_lanes = conn.execute(f"SELECT COUNT(*) FROM lanes WHERE {where}", (hi, lo)).fetchone()[0]
             lanes = [
-                {"lane": r[0], "t_start": r[1], "t_end": r[2], "ue": r[3], "rnti": r[4], "open": bool(r[5])}
+                {"lane": r[0], "t_start": r[1], "t_end": r[2], "ue": r[3], "rnti": r[4], "label": r[5], "open": bool(r[6])}
                 for r in conn.execute(
-                    f"SELECT lane, t_start, t_end, ue, rnti, open FROM lanes WHERE {where} ORDER BY t_start, lane LIMIT ?",
+                    f"SELECT lane, t_start, t_end, ue, rnti, label, open FROM lanes WHERE {where} ORDER BY t_start, lane LIMIT ?",
                     (hi, lo, max_lanes),
                 )
             ]
@@ -604,9 +609,14 @@ class Store:
         return [r[0] for r in rows]
 
     def records(self, around: int, count: int = 50) -> list[dict[str, Any]]:
-        """Returns the raw records (log lines) centred on the given record."""
+        """Returns the raw records centred on the given record: the texts set by the source, else the lines of its file."""
         first = max(1, around - count // 2)
         with self._connect() as conn:
+            if conn.execute("SELECT 1 FROM record_texts LIMIT 1").fetchone():
+                texts = conn.execute(
+                    "SELECT record, text FROM record_texts WHERE record >= ? ORDER BY record LIMIT ?", (first, count)
+                ).fetchall()
+                return [{"record": r, "text": text} for r, text in texts]
             row = conn.execute(
                 "SELECT record, offset FROM record_offsets WHERE record <= ? ORDER BY record DESC LIMIT 1", (first,)
             ).fetchone()

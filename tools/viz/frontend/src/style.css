@@ -31,6 +31,9 @@
   --ev-ra: #2e9e44;
   --ev-lifecycle: #7b8794;
   --ev-rrc: #00a3b8;
+  --ev-f1ap: #3d71d9;
+  --ev-ngap: #c2185b;
+  --ev-e1ap: #8d6e63;
   --ev-mobility: #9b51e0;
   --ev-failure: #e0b000;
   --ev-warning: #f57c00;
@@ -65,6 +68,9 @@
   --ev-ra: #4ade80;
   --ev-lifecycle: #9aa0a6;
   --ev-rrc: #22d3ee;
+  --ev-f1ap: #6ea0ff;
+  --ev-ngap: #f06292;
+  --ev-e1ap: #bcaaa4;
   --ev-mobility: #c084fc;
   --ev-failure: #ffd84d;
   --ev-warning: #ff9a3c;
@@ -246,6 +252,9 @@ main { flex: 1 0 auto; padding: 8px 16px 16px; }
 .ev-ra .event-dot { background: var(--ev-ra); }
 .ev-lifecycle .event-dot { background: var(--ev-lifecycle); }
 .ev-rrc .event-dot { background: var(--ev-rrc); }
+.ev-f1ap .event-dot { background: var(--ev-f1ap); }
+.ev-ngap .event-dot { background: var(--ev-ngap); }
+.ev-e1ap .event-dot { background: var(--ev-e1ap); }
 .ev-mobility .event-dot { background: var(--ev-mobility); }
 .ev-failure .event-dot { background: var(--ev-failure); }
 .ev-warning .event-dot { background: var(--ev-warning); }
@@ -265,6 +274,9 @@ main { flex: 1 0 auto; padding: 8px 16px 16px; }
 .ev-ra .trace-glyph { color: var(--ev-ra); }
 .ev-lifecycle .trace-glyph { color: var(--ev-lifecycle); }
 .ev-rrc .trace-glyph { color: var(--ev-rrc); }
+.ev-f1ap .trace-glyph { color: var(--ev-f1ap); }
+.ev-ngap .trace-glyph { color: var(--ev-ngap); }
+.ev-e1ap .trace-glyph { color: var(--ev-e1ap); }
 .ev-mobility .trace-glyph { color: var(--ev-mobility); }
 .ev-failure .trace-glyph { color: var(--ev-failure); }
 .cursor-readout {
@@ -321,6 +333,19 @@ main { flex: 1 0 auto; padding: 8px 16px 16px; }
 }
 
 .record-line { padding: 0 8px; }
+.record-line.clickable { cursor: pointer; }
+.record-body.split { display: flex; }
+.record-body.split .record-lines { flex: 1 1 50%; min-width: 0; }
+.record-detail {
+  flex: 1 1 50%;
+  min-width: 0;
+  height: 35vh;
+  margin: 0;
+  padding: 0 8px;
+  overflow: auto;
+  border-left: 1px solid var(--border);
+  font: 12px/1.5 ui-monospace, monospace;
+}
 .record-line.selected { background: var(--selected); }
 .record-line mark { padding: 0 2px; border-radius: 3px; background: var(--mark-bg); color: var(--mark-fg); }
 .lineno { display: inline-block; min-width: 7ch; margin-right: 12px; text-align: right; color: var(--fg-muted); user-select: none; }

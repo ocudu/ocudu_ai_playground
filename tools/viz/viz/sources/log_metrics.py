@@ -14,9 +14,10 @@ from pathlib import Path
 from typing import Any
 
 from parsers.log import chunks, config, events, metrics, preamble
+from parsers.log.run import log_run
 
 from .. import parallel
-from .base import DatasetWriter, EventWriter, ProgressFn, column_type, column_value
+from .base import DatasetWriter, EventWriter, ProgressFn, RunIdentity, column_type, column_value
 
 logger = logging.getLogger("parsers")
 
@@ -198,6 +199,10 @@ class LogMetricsSource:
 
     def field_spans(self, text: str) -> dict[str, tuple[int, int]]:
         return metrics.field_spans(text)
+
+    def run_identity(self, path: Path) -> RunIdentity | None:
+        r = log_run(path)
+        return RunIdentity((r.mode, r.commit, r.branch), r.start, r.end) if r else None
 
     def parse_events(self, path: Path, writer: EventWriter) -> None:
         # Header line number, line, preamble match and continuation lines of the entry whose events are pending.

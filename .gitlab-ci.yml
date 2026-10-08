@@ -114,6 +114,7 @@ viz tests:
   stage: static
   image: python:3.12-alpine
   before_script:
+    - apk add --no-cache tshark
     - pip install ./tools/parsers "./tools/viz[test]"
   script:
     - python3 -m unittest discover -s tools/viz/tests -t tools/viz -v

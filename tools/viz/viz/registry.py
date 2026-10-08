@@ -9,10 +9,8 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from parsers.log.run import log_run, same_run
-
 from .files import resolve_within
-from .sources.base import SourceType
+from .sources.base import RunIdentity, SourceType
 from .store import Store, StoreCache
 
 
@@ -139,20 +137,20 @@ class SourceRegistry:
     def related_files(self, run_id: int) -> list[Path]:
         """The supported files of the directory of a run, not in it, written by the same run as one of its files.
 
-        Files of the same run have the same build and overlapping time spans, see parsers.log.run.same_run().
+        Files of the same run have overlapping time spans and the same build when known, see RunIdentity.same_run().
         """
         run = self._run(run_id)
         with self._lock:
             in_run = {self._entries[i].path for i in run.source_ids}
-        identities = [i for p in in_run if (i := log_run(p)) is not None]
+        identities = [i for p in in_run if (i := self._run_identity(p)) is not None]
         if not identities:
             return []
         related = []
         for f in self.supported_files(run.directory):
             if f.resolve() in in_run:
                 continue
-            other = log_run(f)
-            if other is not None and any(same_run(i, other) for i in identities):
+            other = self._run_identity(f)
+            if other is not None and any(i.same_run(other) for i in identities):
                 related.append(f)
         return related
 
@@ -248,6 +246,11 @@ class SourceRegistry:
             if not 0 <= source_id < len(self._entries):
                 raise KeyError(source_id)
             return self._entries[source_id].source_type
+
+    def _run_identity(self, path: Path) -> RunIdentity | None:
+        source_type = next((st for st in self.source_types if st.accepts(path)), None)
+        identity_fn = getattr(source_type, "run_identity", None)
+        return identity_fn(path) if identity_fn is not None else None
 
     def _run(self, run_id: int) -> RunEntry:
         with self._lock:

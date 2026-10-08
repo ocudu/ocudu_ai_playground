@@ -19,6 +19,9 @@ const EVENT_CATEGORIES = [
   ["ra", "random access"],
   ["lifecycle", "UE lifecycle"],
   ["rrc", "RRC"],
+  ["f1ap", "F1AP"],
+  ["ngap", "NGAP"],
+  ["e1ap", "E1AP"],
   ["mobility", "mobility"],
   ["failure", "failures"],
   ["warning", "warnings"],
@@ -133,11 +136,21 @@ const App = {
       const states = this.runSources.map((s) => [s.id, s.status, s.events_status]);
       return [this.activeId, states, this.view, this.activeTab?.eventCategories, this.timeMode];
     },
+    /**
+     * Event categories left out of each source of the active run, by source id: the RRC messages of logs when a pcap
+     * has them, since the packets carry the same messages.
+     */
+    hiddenCategories() {
+      const pcapRrc = this.runSources.some((s) => s.type === "pcap" && s.event_counts?.rrc);
+      return Object.fromEntries(this.runSources.map((s) => [s.id, pcapRrc && s.type !== "pcap" ? ["rrc"] : []]));
+    },
     /** Event categories of the active run that have events, with their labels and counts. */
     eventCategoryChips() {
       const counts = {};
       for (const s of this.runSources) {
-        for (const [c, n] of Object.entries(s.event_counts ?? {})) counts[c] = (counts[c] ?? 0) + n;
+        for (const [c, n] of Object.entries(s.event_counts ?? {})) {
+          if (!this.hiddenCategories[s.id].includes(c)) counts[c] = (counts[c] ?? 0) + n;
+        }
       }
       return EVENT_CATEGORIES.filter(([c]) => counts[c]).map(([c, label]) => ({ category: c, label, count: counts[c] }));
     },
@@ -163,15 +176,27 @@ const App = {
     relatedQuestion() {
       return Boolean(this.activeRun?.kind === "file" && this.activeTab?.related?.length && !this.activeTab.relatedAnswered);
     },
-    /** Span of the datasets in the plots of the active tab, or of all its datasets without plots. */
-    metricsRange() {
+    /**
+     * Span of the data shown by the panels of the active tab: the dataset of each plot and table and the file of each
+     * trace, whose events all show. Without panels, the span of all the datasets of the tab.
+     */
+    panelsRange() {
       if (!this.readySources.length) return null;
-      const plotted = this.activeTab?.plots.length ? new Set(this.activeTab.plots.map((p) => `${p.source}/${p.dataset}`)) : null;
-      const spans = this.readySources.flatMap((s) =>
-        s.datasets
-          .filter((d) => d.t_min != null && (!plotted || plotted.has(`${s.id}/${d.name}`)))
-          .map((d) => [d.t_min + this.shifts[s.id], d.t_max + this.shifts[s.id]]),
-      );
+      const ready = new Map(this.readySources.map((s) => [s.id, s]));
+      const plots = this.activeTab?.plots ?? [];
+      let spans;
+      if (plots.length) {
+        spans = plots.flatMap((p) => {
+          const s = ready.get(p.source);
+          if (!s) return [];
+          if (p.kind === "trace") return s.t_min != null ? [[s.t_min, s.t_max ?? s.t_min, s.id]] : [];
+          const d = s.datasets.find((d) => d.name === p.dataset);
+          return d?.t_min != null ? [[d.t_min, d.t_max, s.id]] : [];
+        });
+      } else {
+        spans = this.readySources.flatMap((s) => s.datasets.filter((d) => d.t_min != null).map((d) => [d.t_min, d.t_max, s.id]));
+      }
+      spans = spans.map(([min, max, id]) => [min + this.shifts[id], max + this.shifts[id]]);
       if (!spans.length) return null;
       const min = Math.min(...spans.map((x) => x[0]));
       const max = Math.max(...spans.map((x) => x[1]));
@@ -307,11 +332,16 @@ const App = {
       return run.kind === "dir" ? `${run.name} (${run.sources.length})` : run.name;
     },
 
-    /** First parsed source of a run with a dataset to plot, or with events for a trace. */
+    /**
+     * Parsed source of a run for a new panel: a log for plots and tables, since logs have the metrics, and for a trace
+     * the pcap with the RRC messages, i.e. the F1AP one, else the first source with events.
+     */
     defaultSource(run, kind = "plot") {
       const ready = this.runSourcesOf([run]).filter((s) => s.status === "ready");
-      const fits = (s) => (kind === "trace" ? Object.keys(s.event_counts ?? {}).length : s.datasets.length);
-      return ready.find(fits) ?? ready[0] ?? null;
+      if (kind === "trace") {
+        return ready.find((s) => s.type === "pcap" && s.event_counts?.rrc) ?? ready.find((s) => Object.keys(s.event_counts ?? {}).length) ?? ready[0] ?? null;
+      }
+      return ready.find((s) => s.type !== "pcap" && s.datasets.length) ?? ready.find((s) => s.datasets.length) ?? ready[0] ?? null;
     },
 
     /** Creates the tabs of new runs, drops the ones of closed runs, and keeps a tab selected. */
@@ -324,8 +354,11 @@ const App = {
         if (!this.tabs[run.id]) this.tabs[run.id] = newTab();
         const tab = this.tabs[run.id];
         if (run.kind === "file" && tab.related == null) this.checkRelated(run.id);
-        // A run starts with one plot once a source is parsed, once, so that removing all plots is not undone.
-        const source = this.defaultSource(run);
+        // A run starts with one plot, once, so that removing all plots is not undone. It waits for a log, which has the
+        // metrics, unless no log is coming.
+        const sources = this.runSourcesOf([run]);
+        const logReady = sources.some((s) => s.status === "ready" && s.type !== "pcap" && s.datasets.length);
+        const source = logReady || !sources.some((s) => s.status === "parsing") ? this.defaultSource(run) : null;
         if (source && !tab.defaultPlotAdded) {
           tab.defaultPlotAdded = true;
           addRecent(run.path, run.kind === "dir");
@@ -384,10 +417,12 @@ const App = {
       this.eventsAbort = new AbortController();
       const signal = this.eventsAbort.signal;
       try {
+        const shownOf = (s) => categories.filter((c) => !this.hiddenCategories[s.id].includes(c));
         const results = await Promise.all(
-          sources.map((s) => {
+          // An empty category list would be left out of the query, which then matches all categories.
+          sources.filter((s) => shownOf(s).length).map((s) => {
             const shift = this.shifts[s.id];
-            const params = { source: s.id, t0: this.view.min - shift, t1: this.view.max - shift, categories, limit: MAX_EVENTS };
+            const params = { source: s.id, t0: this.view.min - shift, t1: this.view.max - shift, categories: shownOf(s), limit: MAX_EVENTS };
             return getJSON("/api/events", params, signal).then((res) => ({ res, s, shift }));
           }),
         );
@@ -541,7 +576,7 @@ const App = {
         </select>
       </label>
       <button @click="zoom(null)" :disabled="!activeTab || !activeTab.userRange" title="Show the whole time range of the files">reset zoom</button>
-      <button @click="zoom(metricsRange)" :disabled="!metricsRange" title="Fit the time range of the plotted metrics">fit metrics</button>
+      <button @click="zoom(panelsRange)" :disabled="!panelsRange" title="Fit the time range of the data in the plots, tables and traces">fit plots</button>
     </header>
     <main>
       <p v-if="error" class="error">{{ error }}</p>
@@ -571,7 +606,7 @@ const App = {
           <p class="muted">{{ activeRun.path }}</p>
         </div>
         <template v-else-if="activeTab">
-          <p class="hint muted">Drag to zoom, Shift+drag to pan, double-click to reset, click a point or an event marker to see its log line.</p>
+          <p class="hint muted">Drag to zoom, Shift+drag to pan, double-click to reset, click a point or an event marker to see its log line or frame.</p>
           <div v-if="eventCategoryChips.length || eventsState || activeNotes.length" class="event-bar">
             <span class="muted">events</span>
             <span v-if="eventsState === 'parsing'" class="muted">parsing…</span>

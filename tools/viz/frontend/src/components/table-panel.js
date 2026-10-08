@@ -221,7 +221,7 @@ export default {
         <div class="table-scroll">
           <table>
             <thead>
-              <tr><th>time (UTC)</th><th>line</th><th v-for="i in shownColumns" :key="fields[i].name">{{ header(i) }}</th></tr>
+              <tr><th>time (UTC)</th><th>{{ source?.has_detail ? "frame" : "line" }}</th><th v-for="i in shownColumns" :key="fields[i].name">{{ header(i) }}</th></tr>
             </thead>
             <tbody>
               <tr v-for="r in rows" :key="r[1]" class="clickable" title="Show the log line"

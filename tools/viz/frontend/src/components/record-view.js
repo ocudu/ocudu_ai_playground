@@ -40,17 +40,53 @@ export default {
   },
   emits: ["close"],
   data() {
-    return { records: [], center: 0, error: "", height: loadHeight() };
+    // current is the highlighted record, the selected one until another record is clicked, and detail its decoding.
+    return { records: [], center: 0, error: "", height: loadHeight(), current: null, detail: "", detailError: "" };
   },
   computed: {
+    source() {
+      return this.sources[this.selection.source];
+    },
     sourceName() {
-      return this.sources[this.selection.source]?.name ?? "";
+      return this.source?.name ?? "";
+    },
+    /** Whether records decode, e.g. pcap frames, which are then shown beside the records. */
+    hasDetail() {
+      return Boolean(this.source?.has_detail);
     },
   },
   watch: {
-    selection: { handler() { this.load(this.selection.record); }, immediate: true, deep: true },
+    selection: {
+      handler() {
+        this.current = this.selection.record;
+        this.load(this.selection.record);
+        this.loadDetail();
+      },
+      immediate: true,
+      deep: true,
+    },
   },
   methods: {
+    /** Highlights a record and shows its decoding, for sources whose records decode. */
+    select(record) {
+      if (!this.hasDetail) return;
+      this.current = record;
+      this.loadDetail();
+    },
+
+    async loadDetail() {
+      this.detail = "";
+      this.detailError = "";
+      if (!this.hasDetail) return;
+      const record = this.current;
+      try {
+        const res = await getJSON("/api/records/detail", { source: this.selection.source, record });
+        if (record === this.current) this.detail = res.text;
+      } catch (e) {
+        this.detailError = e.message;
+      }
+    },
+
     /** Resizes the log lines by dragging the top edge of the pane. */
     startResize(e) {
       e.preventDefault();
@@ -121,17 +157,20 @@ export default {
       <div class="resize-handle" title="Drag to resize, double-click to reset" @pointerdown="startResize" @dblclick="resetHeight"></div>
       <header class="panel-bar">
         <strong>{{ sourceName }}</strong>
-        <span class="muted">line {{ selection.record }}</span>
+        <span class="muted">{{ hasDetail ? "frame" : "line" }} {{ current }}</span>
         <button @click="load(center - WINDOW)">earlier</button>
         <button @click="load(center + WINDOW)">later</button>
         <span v-if="error" class="error">{{ error }}</span>
         <button class="icon" title="Close" @click="$emit('close')">✕</button>
       </header>
-      <div ref="lines" class="record-lines" :style="height ? { height: height + 'px' } : null">
-        <div v-for="r in records" :key="r.record"
-             :class="['record-line', { selected: r.record === selection.record }]">
-          <span class="lineno">{{ r.record }}</span><span class="text"><template v-for="(part, i) in segments(r)" :key="i"><mark v-if="part.mark">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>
+      <div :class="['record-body', { split: hasDetail }]">
+        <div ref="lines" class="record-lines" :style="height ? { height: height + 'px' } : null">
+          <div v-for="r in records" :key="r.record"
+               :class="['record-line', { selected: r.record === current, clickable: hasDetail }]" @click="select(r.record)">
+            <span class="lineno">{{ r.record }}</span><span class="text"><template v-for="(part, i) in segments(r)" :key="i"><mark v-if="part.mark">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>
+          </div>
         </div>
+        <pre v-if="hasDetail" class="record-detail" :style="height ? { height: height + 'px' } : null"><span v-if="detailError" class="error">{{ detailError }}</span>{{ detail || (detailError ? "" : "decoding…") }}</pre>
       </div>
     </aside>
   `,

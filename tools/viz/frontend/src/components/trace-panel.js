@@ -20,11 +20,15 @@ const BAR_POSITION = 0.6;
 const EVENT_HIT_PX = 5;
 const FETCH_DELAY_MS = 120;
 // Glyph of each event category, also shown in the legend.
-const GLYPHS = { ra: "▲", lifecycle: "■", rrc: "●", mobility: "◆", failure: "✖", warning: "●", error: "●" };
+const GLYPHS = { ra: "▲", lifecycle: "■", rrc: "●", f1ap: "●", ngap: "●", e1ap: "●", mobility: "◆", failure: "✖", warning: "●", error: "●" };
+// Categories of the legend, in order, shown when the source has events of them.
 const LEGEND = [
   ["ra", "random access"],
   ["lifecycle", "UE lifecycle"],
   ["rrc", "RRC"],
+  ["f1ap", "F1AP"],
+  ["ngap", "NGAP"],
+  ["e1ap", "E1AP"],
   ["mobility", "mobility"],
   ["failure", "failures"],
 ];
@@ -64,8 +68,9 @@ function drawGlyph(ctx, category, x, y, r) {
   ctx.fill();
 }
 
-/** @param {{ue: number | null, rnti: string | null}} lane */
+/** @param {{ue: number | null, rnti: string | null, label: string | null}} lane */
 function laneLabel(lane) {
+  if (lane.label) return lane.label;
   return [lane.ue != null ? `ue=${lane.ue}` : null, lane.rnti].filter(Boolean).join(" ") || "UE";
 }
 
@@ -96,7 +101,6 @@ export default {
       // Event or UE under the mouse, shown with the cursor readout.
       cursorEvent: null,
       cursorLane: "",
-      legend: LEGEND.map(([category, label]) => ({ category, label, glyph: GLYPHS[category] })),
     };
   },
   computed: {
@@ -111,6 +115,10 @@ export default {
     },
     notes() {
       return this.source?.notes ?? [];
+    },
+    legend() {
+      const counts = this.source?.event_counts ?? {};
+      return LEGEND.filter(([category]) => counts[category]).map(([category, label]) => ({ category, label, glyph: GLYPHS[category] }));
     },
     scrollable() {
       return this.nofLanes > VISIBLE_UE_ROWS;
