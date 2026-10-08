@@ -10,9 +10,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-from .names import epoch_to_iso
 from .run import find_pcaps
 from .tshark import Tshark, TsharkError
+from .values import epoch_to_iso
 
 logger = logging.getLogger("parsers")
 

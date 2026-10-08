@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from parsers.pcap import e1ap, f1ap, names, ngap, overview, run, timeline
+from parsers.pcap import e1ap, f1ap, ngap, overview, run, timeline, values
 from parsers.pcap.tshark import Tshark, _filter_stderr, split_fields
 
 # A single-UE F1AP capture: F1Setup, RRC and NAS attach, and UEContextRelease.
@@ -23,23 +23,15 @@ class FakeTshark:
         return iter(self.rows)
 
 
-class NamesTest(unittest.TestCase):
-    def test_proc_name(self):
-        self.assertEqual(names.proc_name("ngap", "15"), "InitialUEMessage(15)")
-        self.assertEqual(names.proc_name("ngap", 15, with_code=False), "InitialUEMessage")
-        self.assertEqual(names.proc_name("f1ap", "99"), "99")
-        self.assertEqual(names.proc_name("f1ap", "99", with_code=False), "proc-99")
-        self.assertEqual(names.proc_name("e1ap", "", with_code=False), "?")
-
-    def test_nas_name(self):
-        self.assertEqual(names.nas_name("0x41", ""), "RegistrationRequest")
-        self.assertEqual(names.nas_name("0x68", "0xc1"), "PDUSessionEstablishmentRequest")
-        self.assertEqual(names.nas_name("0x7f", None), "5GMM(0x7f)")
-        self.assertIsNone(names.nas_name("", ""))
-
+class ValuesTest(unittest.TestCase):
     def test_epoch_to_iso(self):
-        self.assertEqual(names.epoch_to_iso("1759326404.3901"), "2025-10-01T13:46:44.390")
-        self.assertEqual(names.epoch_to_iso("x"), "x")
+        self.assertEqual(values.epoch_to_iso("1759326404.3901"), "2025-10-01T13:46:44.390")
+        self.assertEqual(values.epoch_to_iso("x"), "x")
+
+    def test_to_int(self):
+        self.assertEqual(values.to_int("0x41"), 0x41)
+        self.assertEqual(values.to_int("65"), 65)
+        self.assertIsNone(values.to_int(""))
 
 
 class TsharkHelpersTest(unittest.TestCase):
@@ -65,13 +57,6 @@ class TsharkHelpersTest(unittest.TestCase):
 class F1apDecodeTest(unittest.TestCase):
     def row(self, code, srbid=None, container="", elements=None):
         return {"code": code, "srbid": srbid, "rrc_container": container, "rrc_elements": elements or {}}
-
-    def test_decode_ccch_type(self):
-        self.assertEqual(f1ap.decode_ccch_type("20", "dl"), "rrcSetup")
-        self.assertEqual(f1ap.decode_ccch_type("00", "dl"), "rrcReject")
-        self.assertEqual(f1ap.decode_ccch_type("40", "ul"), "rrcReestablishmentRequest")
-        self.assertIsNone(f1ap.decode_ccch_type("80", "ul"))
-        self.assertIsNone(f1ap.decode_ccch_type("zz", "ul"))
 
     def test_resolve_rrc(self):
         self.assertEqual(f1ap.resolve_rrc(self.row("12", elements={"rrcSetup": "", "rrcRelease": "1"})), "rrcRelease")

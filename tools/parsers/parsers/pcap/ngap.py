@@ -10,8 +10,8 @@ from collections import defaultdict
 from typing import Any
 
 from ._ues import ue_ids_by_key
-from .names import epoch_to_iso
 from .tshark import Tshark
+from .values import epoch_to_iso
 
 PROCEDURE_FIELDS = [
     "frame.number",

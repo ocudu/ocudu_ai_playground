@@ -10,6 +10,7 @@ Standard-library only, so it can be imported by visualization or analysis tools 
 |---------------|---------------------------------------------------------------|
 | `parsers.log` | OCUDU text logs: line preamble, `METRICS` lines, events and the configuration echo. |
 | `parsers.pcap` | The pcaps of a run (`mac`, `rlc`, `f1ap`, `e1ap`, `ngap`), through `tshark`: UE identifiers, F1AP messages with their RRC and NAS messages, NGAP procedures, overviews and a merged timeline. |
+| `parsers.ran` | 3GPP knowledge shared by the artifacts: NGAP, F1AP and E1AP procedure codes, NAS and RRC message types. |
 
 ## Installation
 

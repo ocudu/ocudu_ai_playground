@@ -8,8 +8,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from .names import epoch_to_iso, proc_name
+from ..ran.procedures import proc_name
 from .tshark import Tshark
+from .values import epoch_to_iso
 
 
 def ue_ids_by_key(

@@ -28,7 +28,7 @@ from pathlib import Path
 
 import utils
 from parsers.pcap import overview
-from parsers.pcap.names import proc_name
+from parsers.ran.procedures import proc_name
 from parsers.pcap.run import PCAP_NAMES
 
 

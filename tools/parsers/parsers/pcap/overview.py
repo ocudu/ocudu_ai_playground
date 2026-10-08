@@ -10,8 +10,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from .names import epoch_to_iso
 from .tshark import Tshark, TsharkError
+from .values import epoch_to_iso
 
 logger = logging.getLogger("parsers")
 

@@ -8,8 +8,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from .names import epoch_to_iso, nas_name, proc_name, to_int
+from ..ran.nas import nas_name
+from ..ran.procedures import proc_name
+from ..ran.rrc import RRC_MESSAGE_TYPES, decode_ccch_type
 from .tshark import Tshark
+from .values import epoch_to_iso, to_int
 
 UE_ID_FIELDS = [
     "frame.number",
@@ -31,23 +34,6 @@ MESSAGE_FIELDS = [
     "f1ap.RRCContainer",
     "nas_5gs.mm.message_type",
     "nas_5gs.sm.message_type",
-]
-
-# RRC message types (TS 38.331), each with a "nr-rrc.<type>_element" field set when the frame carries it.
-RRC_MESSAGE_TYPES = [
-    # UL-CCCH.
-    "rrcSetupRequest", "rrcResumeRequest", "rrcReestablishmentRequest", "rrcSystemInfoRequest",
-    # DL-CCCH.
-    "rrcReject", "rrcSetup",
-    # DL-DCCH.
-    "rrcReconfiguration", "rrcResume", "rrcRelease", "rrcReestablishment",
-    "securityModeCommand", "dlInformationTransfer", "ueCapabilityEnquiry",
-    "counterCheck", "mobilityFromNRCommand", "ueInformationRequest",
-    # UL-DCCH.
-    "measurementReport", "rrcReconfigurationComplete", "rrcSetupComplete",
-    "rrcReestablishmentComplete", "rrcResumeComplete", "securityModeComplete",
-    "securityModeFailure", "ulInformationTransfer", "ueCapabilityInformation",
-    "counterCheckResponse", "ueAssistanceInformation", "failureInformation",
 ]
 
 # Procedures carrying an RRC container, and the downlink ones among them.
@@ -130,23 +116,6 @@ def valid_rrc_types(tshark: Tshark, pcap: str | os.PathLike[str]) -> list[str]:
     """The RRC message types whose field this tshark build knows."""
     valid = set(tshark.valid_fields(pcap, [_rrc_field(m) for m in RRC_MESSAGE_TYPES]))
     return [m for m in RRC_MESSAGE_TYPES if _rrc_field(m) in valid]
-
-
-def decode_ccch_type(container_hex: str, direction: str) -> str | None:
-    """RRC message type of a CCCH container, "dl" or "ul", from its first bits, or None if not a c1 message.
-
-    {DL,UL}-CCCH-Message ::= message CHOICE { c1 (2-bit index), messageClassExtension }.
-    """
-    try:
-        b = bytes.fromhex(container_hex)
-    except ValueError:
-        return None
-    if not b or (b[0] >> 7) & 1:
-        return None
-    idx = (b[0] >> 5) & 0b11
-    dl = {0: "rrcReject", 1: "rrcSetup"}
-    ul = {0: "rrcSetupRequest", 1: "rrcResumeRequest", 2: "rrcReestablishmentRequest", 3: "rrcSystemInfoRequest"}
-    return (dl if direction == "dl" else ul).get(idx)
 
 
 def resolve_rrc(row: dict[str, Any]) -> str | None:
