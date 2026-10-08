@@ -91,12 +91,14 @@ def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
         "events_status": entry.events_status,
         "notes": [],
         "event_counts": {},
+        "event_type_counts": {},
     }
     s = entry.store
     if s is None:
         return info
     info["t_min"], info["t_max"] = s.meta.get("t_min"), s.meta.get("t_max")
     info["event_counts"] = s.event_counts
+    info["event_type_counts"] = s.event_type_counts
     info["notes"] = s.meta.get("notes") or []
     info["datasets"] = [
         {
@@ -389,8 +391,10 @@ def create_app(
         categories: list[str] | None = Query(None),
         ue: int | None = None,
         limit: int = Query(5000, ge=1, le=50_000),
+        types: list[str] | None = Query(None),
     ) -> dict[str, Any]:
-        return get_store(source).events(t0, t1, categories, ue, limit)
+        """Returns the events of a time window, of the given categories or types, all without either."""
+        return get_store(source).events(t0, t1, categories, ue, limit, types)
 
     # Joined trace of each run, with the source states it was built from.
     run_traces: dict[int, tuple[tuple, RunTrace]] = {}

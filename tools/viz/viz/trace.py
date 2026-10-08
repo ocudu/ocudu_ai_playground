@@ -51,7 +51,7 @@ class RunTrace:
         """Like Store.trace(), over the joined lanes, with the source of each event. Lane ids are strings.
 
         With sources, only their events and the lanes they have events in, e.g. the events of a log on the UE contexts
-        of the F1AP pcap.
+        of the F1AP pcap. With the F1AP pcap, the RRC events of the logs are left out, since its packets carry them.
         """
         lo = -float("inf") if t0 is None else t0
         hi = float("inf") if t1 is None else t1
@@ -62,10 +62,15 @@ class RunTrace:
         ]
         shown = {lane.key for lane in active[:max_lanes]}
         events = []
+        anchor = self._sources[0][0]
+        # The packets of the F1AP pcap carry the RRC messages that its logs print, so they stand for them.
+        drop_log_rrc = sources is None or anchor in sources
         for source, store in self._sources:
             if sources is not None and source not in sources:
                 continue
             for ev in store.trace(t0, t1, _ALL, _ALL)["events"]:
+                if drop_log_rrc and source != anchor and ev["category"] == "rrc":
+                    continue
                 key = self._lane_of.get((source, ev["lane"])) if ev["lane"] is not None else None
                 if key is not None and key not in shown:
                     continue

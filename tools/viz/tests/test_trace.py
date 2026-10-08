@@ -73,6 +73,13 @@ class JoinTest(unittest.TestCase):
         self.assertEqual(by_type["prach"], (3, "3:3"))
         self.assertEqual(by_type["warning"], (3, None))
 
+    def test_log_rrc_left_out_with_the_f1ap_pcap(self):
+        log = FakeStore([lane(0, 9.9, 20.5, ue=0, rnti="0x4601")], [event(10.1, 0, "rrc", "rrc_setup_complete"), event(10.2, 0, "ra", "conres")])
+        joined = RunTrace((7, F1AP), [(3, log)])
+        self.assertEqual([e["type"] for e in joined.trace(None, None, 300, 100)["events"] if e["source"] == 3], ["conres"])
+        log_only = joined.trace(None, None, 300, 100, {3})["events"]
+        self.assertEqual([e["type"] for e in log_only], ["rrc_setup_complete", "conres"])
+
     def test_trace_of_one_source(self):
         trace = RunTrace((7, F1AP), [(3, LOG)]).trace(None, None, 300, 100, {3})
         # The lanes of the log only, the F1AP contexts it joined and its own.

@@ -191,6 +191,10 @@ class StoreTest(unittest.TestCase):
         store = self.open_with_events()
         t_min = store.meta["t_min"]
         self.assertEqual([e["type"] for e in store.events(categories=["failure", "warning"])["events"]], ["rlf", "warning"])
+        self.assertEqual(store.event_type_counts, {"prach": 2, "ue_create": 2, "rlf": 1, "warning": 1})
+        by_type = store.events(categories=["warning"], types=["prach", "rlf"])["events"]
+        self.assertEqual([e["type"] for e in by_type], ["prach", "prach", "rlf", "warning"])
+        self.assertEqual([e["type"] for e in store.events(categories=[], types=["rlf"])["events"]], ["rlf"])
         self.assertEqual([e["type"] for e in store.events(ue=1)["events"]], ["ue_create", "rlf"])
         self.assertEqual([e["type"] for e in store.events(t0=t_min + 6, t1=t_min + 11)["events"]], ["warning"])
         limited = store.events(limit=1)

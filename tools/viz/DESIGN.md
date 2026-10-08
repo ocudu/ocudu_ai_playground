@@ -229,8 +229,10 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   returns the events of a window, capped at 5000.
 - Events are dashed vertical lines over the time plots of the tab, coloured by category. Hovering one shows its text,
   clicking it opens its log line.
-- Each tab has a chip per category present in its file, with its count. All categories start hidden, and the shown
-  ones are kept in the URL view state.
+- The time plots mark only the log events that matter next to metrics, each with a chip and its count in the logs of
+  the tab: `RACH` (PRACH detections), `RLF`, `warnings` and `errors`, disabled at 0 so that a clean log reads as one.
+  `/api/events` selects events by category and by type. All start hidden, and the shown ones are kept in the URL view
+  state. The trace shows all the events of all the categories.
 - The `+ trace` widget shows the events per UE on the time axis of the tab: one bar per UE context, from its random
   access or creation to its deletion, with a glyph per event, and a last row, `common`, with the events of no UE. Each UE has its own
   row, labelled with its DU UE index and RNTI, in start order. The trace shows 25 UE rows at a time and scrolls over the
@@ -280,8 +282,8 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - Events and the trace merge the events of all the sources of a run. Pcaps give the protocol messages, i.e. F1AP,
   NGAP and E1AP messages, the RRC and NAS messages that F1AP carries, and failures, independently of log levels and
   log wording. Logs give what pcaps do not show, e.g. PRACH, contention resolution timeouts, RLF, warnings and errors.
-  Logs and F1AP pcaps both show RRC messages, so the RRC events of logs are left out when a pcap of the run has RRC
-  events. Linking a packet to the log line of the same message is open.
+  Logs and F1AP pcaps both show RRC messages, so a trace of the F1AP pcap with the events of the logs leaves out the RRC
+  events of the logs. Linking a packet to the log line of the same message is open.
 - UE contexts are joined across the sources of a run, since pcaps identify UEs more reliably than logs: a log can
   create a UE without its RNTI, e.g. the target of a handover, and log the RNTI of its later events only. The trace
   of an F1AP pcap joins the UE lanes of the logs of its run (`/api/runs/{id}/trace`, `+ log events`): a log lane with

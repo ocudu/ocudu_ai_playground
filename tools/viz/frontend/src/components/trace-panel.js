@@ -452,13 +452,11 @@ export default {
         <select v-if="choices && choices.length > 1" v-model.number="panel.source" :title="source ? source.path : 'Source'">
           <option v-for="s in choices" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">{{ s.file ?? s.name }}</option>
         </select>
-        <span v-if="logOnF1ap" class="muted" :title="'The UEs of the log are identified by the UE contexts of ' + f1apSource.file + ', matched by C-RNTI and time'">UEs from {{ f1apSource.file }}</span>
         <label v-if="source === f1apSource && joinableLogs.length" class="inline muted" title="Join the UE events of the logs of the tab, e.g. random access, to the UE contexts of the F1AP pcap, matched by C-RNTI and time">
           <input type="checkbox" :checked="joined" @change="panel.joined = $event.target.checked" /> + log events
         </label>
         <span class="trace-legend">
           <span v-for="g in legend" :key="g.category" :class="'ev-' + g.category"><span class="trace-glyph">{{ g.glyph }}</span>{{ g.label }}</span>
-          <span class="muted">last row "common": events of no UE</span>
         </span>
         <span class="status">
           <span v-if="eventsStatus !== 'ready'" class="muted">{{ eventsStatus === "error" ? "events could not be parsed" : "parsing events" }}</span>

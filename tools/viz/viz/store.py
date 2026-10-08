@@ -267,8 +267,9 @@ class Store:
         self._events_uri: str | None = None
         self._events_keepalive: sqlite3.Connection | None = None
         self.events_ready = False
-        # Event count per category, empty until the events are parsed.
+        # Event count per category and per type, empty until the events are parsed.
         self.event_counts: dict[str, int] = {}
+        self.event_type_counts: dict[str, int] = {}
         with self._connect() as conn:
             self.meta = {k: json.loads(v) for k, v in conn.execute("SELECT key, value FROM meta")}
             self.datasets = {
@@ -296,10 +297,13 @@ class Store:
     def set_events(self, uri: str | None, keepalive: sqlite3.Connection | None = None) -> None:
         """Serves the events of the database at the SQLite URI, or no events for None."""
         counts: dict[str, int] = {}
+        type_counts: dict[str, int] = {}
         if uri is not None:
             with closing(sqlite3.connect(uri, uri=True, check_same_thread=False)) as conn:
                 counts = dict(conn.execute("SELECT category, COUNT(*) FROM events GROUP BY category"))
-        self._events_uri, self._events_keepalive, self.event_counts = uri, keepalive, counts
+                type_counts = dict(conn.execute("SELECT type, COUNT(*) FROM events GROUP BY type"))
+        self._events_uri, self._events_keepalive = uri, keepalive
+        self.event_counts, self.event_type_counts = counts, type_counts
         self.events_ready = True
 
     def series(
@@ -519,12 +523,14 @@ class Store:
         categories: list[str] | None = None,
         ue: int | None = None,
         limit: int = DEFAULT_MAX_EVENTS,
+        types: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Returns the events of a time window in time order, optionally of some categories or of one UE.
+        """Returns the events of a time window in time order, optionally of some categories or types, or of one UE.
 
-        At most limit events are returned; total counts all the matching ones.
+        With both categories and types, events of either are returned. At most limit events are returned; total counts
+        all the matching ones.
         """
-        if self._events_uri is None or (categories is not None and not categories):
+        if self._events_uri is None or (categories is not None and not categories and not types):
             return {"total": 0, "truncated": False, "events": []}
         where, params = ["1"], []
         if t0 is not None:
@@ -533,9 +539,15 @@ class Store:
         if t1 is not None:
             where.append(f"{_TS} <= ?")
             params.append(t1)
-        if categories is not None:
-            where.append(f"category IN ({', '.join('?' * len(categories))})")
-            params.extend(categories)
+        if categories is not None or types:
+            kinds = []
+            if categories:
+                kinds.append(f"category IN ({', '.join('?' * len(categories))})")
+                params.extend(categories)
+            if types:
+                kinds.append(f"type IN ({', '.join('?' * len(types))})")
+                params.extend(types)
+            where.append(f"({' OR '.join(kinds)})")
         if ue is not None:
             where.append("ue = ?")
             params.append(ue)

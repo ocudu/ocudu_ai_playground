@@ -14,21 +14,14 @@ import { applyTheme, loadThemePreference, onSystemThemeChange, saveThemePreferen
 import { addRecent, removeRecent } from "./recent.js";
 import { decodeView, encodeView } from "./view-state.js";
 
-// Event categories, in display order, with their labels.
-const EVENT_CATEGORIES = [
-  ["ra", "random access"],
-  ["lifecycle", "UE lifecycle"],
-  ["rrc", "RRC"],
-  ["f1ap", "F1AP"],
-  ["ngap", "NGAP"],
-  ["e1ap", "E1AP"],
-  ["mobility", "mobility"],
-  ["failure", "failures"],
-  ["warning", "warnings"],
-  ["error", "errors"],
+// Events that the time plots can mark, in display order: each a whole category of the events of logs, or one type of
+// event of a category. The trace shows all the events.
+const PLOT_EVENTS = [
+  { key: "rach", label: "RACH", category: "ra", type: "prach" },
+  { key: "rlf", label: "RLF", category: "failure", type: "rlf" },
+  { key: "warning", label: "warnings", category: "warning" },
+  { key: "error", label: "errors", category: "error" },
 ];
-// Categories whose chip shows for tabs with a log even without events, disabled.
-const ALWAYS_SHOWN_CATEGORIES = ["warning", "error"];
 // Events fetched for the visible window of a tab, per source.
 const MAX_EVENTS = 5000;
 // Delay before fetching events after the view changes, to coalesce zoom and pan events.
@@ -138,26 +131,20 @@ const App = {
       const states = this.runSources.map((s) => [s.id, s.status, s.events_status]);
       return [this.activeId, states, this.view, this.activeTab?.eventCategories, this.timeMode];
     },
-    /**
-     * Event categories left out of each source of the active run, by source id: the RRC messages of logs when a pcap
-     * has them, since the packets carry the same messages.
-     */
-    hiddenCategories() {
-      const pcapRrc = this.runSources.some((s) => s.type === "pcap" && s.event_counts?.rrc);
-      return Object.fromEntries(this.runSources.map((s) => [s.id, pcapRrc && s.type !== "pcap" ? ["rrc"] : []]));
+    /** Logs of the active run whose events are parsed, the sources of the events marked on the plots. */
+    eventLogs() {
+      return this.readySources.filter((s) => s.type !== "pcap" && s.events_status === "ready");
     },
-    /** Event categories of the active run that have events, with their labels and counts. */
+    /**
+     * PLOT_EVENTS with their count in the logs of the active run, all shown once a log is parsed, so that a clean log
+     * reads as one.
+     */
     eventCategoryChips() {
-      const counts = {};
-      for (const s of this.runSources) {
-        for (const [c, n] of Object.entries(s.event_counts ?? {})) {
-          if (!this.hiddenCategories[s.id].includes(c)) counts[c] = (counts[c] ?? 0) + n;
-        }
-      }
-      // Warnings and errors show even without any once the events of a log are parsed, so that a clean log reads as one.
-      const logParsed = this.readySources.some((s) => s.type !== "pcap" && s.events_status === "ready");
-      const shown = (c) => counts[c] || (logParsed && ALWAYS_SHOWN_CATEGORIES.includes(c));
-      return EVENT_CATEGORIES.filter(([c]) => shown(c)).map(([c, label]) => ({ category: c, label, count: counts[c] ?? 0 }));
+      if (!this.eventLogs.length) return [];
+      return PLOT_EVENTS.map((kind) => {
+        const counts = (s) => (kind.type ? s.event_type_counts?.[kind.type] : s.event_counts?.[kind.category]) ?? 0;
+        return { ...kind, count: this.eventLogs.reduce((sum, s) => sum + counts(s), 0) };
+      });
     },
     /** Notes about the sources of the active run, e.g. why some events are missing. */
     activeNotes() {
@@ -296,7 +283,7 @@ const App = {
         const tab = newTab();
         tab.userRange = t.range && t.range.max > t.range.min ? t.range : null;
         tab.plots = t.plots.map((p) => newPlot(p));
-        tab.eventCategories = t.eventCategories ?? [];
+        tab.eventCategories = (t.eventCategories ?? []).filter((key) => PLOT_EVENTS.some((kind) => kind.key === key));
         tab.relatedAnswered = t.relatedAnswered;
         tab.defaultPlotAdded = true;
         this.tabs[t.run] = tab;
@@ -397,21 +384,21 @@ const App = {
       this.activeId = run.id;
     },
 
-    /** @param {string} category */
-    toggleEventCategory(category) {
+    /** @param {string} key Key of one of PLOT_EVENTS. */
+    toggleEventCategory(key) {
       const tab = this.activeTab;
       const shown = new Set(tab.eventCategories ?? []);
-      if (shown.has(category)) shown.delete(category);
-      else shown.add(category);
-      tab.eventCategories = EVENT_CATEGORIES.map(([c]) => c).filter((c) => shown.has(c));
+      if (shown.has(key)) shown.delete(key);
+      else shown.add(key);
+      tab.eventCategories = PLOT_EVENTS.map((kind) => kind.key).filter((k) => shown.has(k));
     },
 
-    /** Fetches the events of the visible window of the active tab, from all its sources, in the shown categories. */
+    /** Fetches the events of the visible window of the active tab marked on the plots, from all its logs. */
     async fetchEvents() {
       this.eventsAbort?.abort();
-      const categories = this.activeTab?.eventCategories;
-      const sources = this.readySources.filter((s) => s.events_status === "ready");
-      if (!sources.length || !categories?.length || !this.view) {
+      const kinds = PLOT_EVENTS.filter((kind) => this.activeTab?.eventCategories?.includes(kind.key));
+      const sources = this.eventLogs;
+      if (!sources.length || !kinds.length || !this.view) {
         this.events = [];
         this.eventsTruncated = false;
         return;
@@ -419,12 +406,13 @@ const App = {
       this.eventsAbort = new AbortController();
       const signal = this.eventsAbort.signal;
       try {
-        const shownOf = (s) => categories.filter((c) => !this.hiddenCategories[s.id].includes(c));
+        // Whole categories and single types; an empty category list is left out of the query, matching only the types.
+        const categories = kinds.filter((kind) => !kind.type).map((kind) => kind.category);
+        const types = kinds.filter((kind) => kind.type).map((kind) => kind.type);
         const results = await Promise.all(
-          // An empty category list would be left out of the query, which then matches all categories.
-          sources.filter((s) => shownOf(s).length).map((s) => {
+          sources.map((s) => {
             const shift = this.shifts[s.id];
-            const params = { source: s.id, t0: this.view.min - shift, t1: this.view.max - shift, categories: shownOf(s), limit: MAX_EVENTS };
+            const params = { source: s.id, t0: this.view.min - shift, t1: this.view.max - shift, categories, types, limit: MAX_EVENTS };
             return getJSON("/api/events", params, signal).then((res) => ({ res, s, shift }));
           }),
         );
@@ -614,10 +602,10 @@ const App = {
             <span class="muted">events</span>
             <span v-if="eventsState === 'parsing'" class="muted">parsing…</span>
             <span v-else-if="eventsState === 'error'" class="error">could not be parsed</span>
-            <button v-for="c in eventCategoryChips" :key="c.category" :disabled="!c.count"
-                    :class="['event-chip', 'ev-' + c.category, { off: !c.count || !(activeTab.eventCategories || []).includes(c.category) }]"
-                    :title="c.count ? 'Show or hide the ' + c.label + ' events' : 'The files of this tab have no ' + c.label"
-                    @click="toggleEventCategory(c.category)">
+            <button v-for="c in eventCategoryChips" :key="c.key" :disabled="!c.count"
+                    :class="['event-chip', 'ev-' + c.category, { off: !c.count || !(activeTab.eventCategories || []).includes(c.key) }]"
+                    :title="c.count ? 'Show or hide the ' + c.label + ' on the plots' : 'The logs of this tab have no ' + c.label"
+                    @click="toggleEventCategory(c.key)">
               <span class="event-dot"></span>{{ c.label }} <span class="muted">{{ c.count }}</span>
             </button>
             <span v-if="eventsTruncated" class="muted">only the first events of the window are shown, zoom in for all</span>
