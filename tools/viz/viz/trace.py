@@ -5,19 +5,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any
 
-from parsers.ran import rnti as rnti_util
+from parsers.correlate import ues as ues_util
 
 from .filters import filter_rows
 from .store import Store
 
-# Slack around the lifetime of an F1AP UE context in which log events of its RNTI belong to it, in seconds. The random
-# access logged before the first F1AP message of a UE is within it.
-RNTI_SLACK_S = 2.0
-# Largest gap between the creation of a UE in a log and the first F1AP message of its UE context, in seconds.
-CREATION_SLACK_S = 1.0
 # Lanes and events read from a store to join its lanes, without limit.
 _ALL = 10**9
 # Fields of the events that trace filters compare, with the UE index and RNTI of its lane for events without them.
@@ -26,8 +20,10 @@ FILTER_FIELDS = ("type", "category", "layer", "level", "ue", "rnti", "cause", "t
 
 def lane_keys(lane: dict[str, Any]) -> dict[str, str]:
     """The identifiers of a lane rows can be grouped by: "ue", "rnti" and the protocol identifiers of its label, e.g.
-    "du_f1ap".
+    "du_f1ap", or the first value of each of its "ids".
     """
+    if lane.get("ids"):
+        return {name: values[0] for name, values in lane["ids"].items() if values}
     keys = dict(token.split("=", 1) for token in (lane.get("label") or "").split() if "=" in token)
     if lane.get("ue") is not None:
         keys["ue"] = str(lane["ue"])
@@ -39,24 +35,27 @@ def lane_keys(lane: dict[str, Any]) -> dict[str, str]:
 def group_trace(trace: dict[str, Any], by: str, max_lanes: int, limit: int) -> dict[str, Any]:
     """A trace, as Store.trace() returns it with all its lanes and events, with the lanes of the same identifier by,
     see lane_keys(), merged into one, labelled with it, then reduced to max_lanes lanes and limit events. Lanes
-    without the identifier keep their own. Each lane gets "ids", the values of each identifier of the lanes it merges.
+    without the identifier keep their own. Each lane gets "ids", the values of each identifier of the lanes it merges,
+    and "contexts", the time span and ids of each of them. Each event gets "context", the index of its lane there.
     """
     merged: dict[Any, dict[str, Any]] = {}
-    lane_of: dict[Any, Any] = {}
+    # Merged lane and index in its contexts of each lane.
+    lane_of: dict[Any, tuple[Any, int]] = {}
     for lane in trace["lanes"]:
         keys = lane_keys(lane)
         value = keys.get(by)
         key = f"{by}={value}" if value is not None else lane["lane"]
-        lane_of[lane["lane"]] = key
         if key not in merged:
-            merged[key] = {**lane, "lane": key, "ids": {}}
+            merged[key] = {**lane, "lane": key, "ids": {}, "contexts": []}
             if value is not None:
                 merged[key].update(label=key, ue=None, rnti=None)
         m = merged[key]
-        for name, v in keys.items():
+        lane_ids = lane.get("ids") or {k: [v] for k, v in keys.items()}
+        lane_of[lane["lane"]] = (key, len(m["contexts"]))
+        m["contexts"].append({"t_start": lane["t_start"], "t_end": lane["t_end"], "open": lane["open"], "ids": lane_ids})
+        for name, lane_values in lane_ids.items():
             values = m["ids"].setdefault(name, [])
-            if v not in values:
-                values.append(v)
+            values.extend(v for v in lane_values if v not in values)
         m["t_start"] = min(m["t_start"], lane["t_start"])
         m["t_end"] = max(m["t_end"], lane["t_end"])
         m["open"] = m["open"] or lane["open"]
@@ -64,9 +63,9 @@ def group_trace(trace: dict[str, Any], by: str, max_lanes: int, limit: int) -> d
     shown = {lane["lane"] for lane in lanes[:max_lanes]}
     events = []
     for ev in trace["events"]:
-        key = lane_of.get(ev["lane"]) if ev["lane"] is not None else None
+        key, context = lane_of.get(ev["lane"], (None, None)) if ev["lane"] is not None else (None, None)
         if key is None or key in shown:
-            events.append({**ev, "lane": key})
+            events.append({**ev, "lane": key, "context": context})
     return {
         "lanes": lanes[:max_lanes],
         "total_lanes": len(lanes),
@@ -99,28 +98,15 @@ def filter_trace(trace: dict[str, Any], expr: str, max_lanes: int, limit: int) -
     }
 
 
-@dataclass
-class _Lane:
-    """UE context of the run trace: an F1AP UE context with the log lanes joined to it, or a log lane of none."""
-
-    key: str
-    t_start: float
-    t_end: float
-    label: str | None
-    ue: int | None
-    rnti: str | None
-    open: bool
-    # Lanes of the sources joined into this one, as (source id, lane id).
-    parts: list[tuple[int, int]] = field(default_factory=list)
-
-
 class RunTrace:
     """Joins the lanes of the logs of a run to the UE contexts of its F1AP pcap, see join_lanes()."""
 
     def __init__(self, anchor: tuple[int, Store], logs: list[tuple[int, Store]]):
         """anchor is the F1AP pcap of the run and logs its logs, each as (source id, store)."""
         self._sources = [anchor, *logs]
-        self._lanes = join_lanes(anchor, logs)
+        lanes = {source: _lanes(store) for source, store in self._sources}
+        self._labels = {(source, lane["lane"]): lane["label"] for source, ls in lanes.items() for lane in ls}
+        self._lanes = ues_util.combine(*(_contexts(source, ls) for source, ls in lanes.items()))
         self._lane_of = {part: lane.key for lane in self._lanes for part in lane.parts}
 
     def trace(
@@ -167,8 +153,8 @@ class RunTrace:
                 events.append({**ev, "lane": key, "source": source})
         events.sort(key=lambda e: e["t"])
         lanes = [
-            {"lane": lane.key, "t_start": lane.t_start, "t_end": lane.t_end, "ue": lane.ue, "rnti": lane.rnti,
-             "label": lane.label, "open": lane.open}
+            {"lane": lane.key, "t_start": lane.t_start, "t_end": lane.t_end, "ue": _int(lane.first("ue")),
+             "rnti": lane.first("rnti"), "label": self._labels.get(lane.parts[0]), "open": lane.open, "ids": lane.ids}
             for lane in active[:max_lanes]
         ]
         return {
@@ -180,46 +166,20 @@ class RunTrace:
         }
 
 
-def join_lanes(anchor: tuple[int, Store], logs: list[tuple[int, Store]]) -> list[_Lane]:
-    """The UE contexts of the F1AP pcap, each with the log lanes of the same UE, then the log lanes of no context.
-
-    A log lane with an RNTI joins the context with that C-RNTI whose lifetime, within RNTI_SLACK_S, overlaps it. A log
-    lane without one, i.e. a UE created in the log without its RNTI, joins the context starting nearest its creation,
-    within CREATION_SLACK_S. Lanes are in start order.
+def join_lanes(anchor: tuple[int, Store], logs: list[tuple[int, Store]]) -> list[ues_util.Ue]:
+    """The UEs of a run from the UE contexts of its F1AP pcap, then of its logs, see parsers.correlate.ues.combine().
+    UE keys are "<source id>:<lane id>".
     """
-    anchor_id, anchor_store = anchor
-    lanes = [
-        _Lane(f"{anchor_id}:{lane['lane']}", lane["t_start"], lane["t_end"], lane["label"], lane["ue"],
-              rnti_util.normalize(lane["rnti"]), lane["open"], [(anchor_id, lane["lane"])])
-        for lane in anchor_store.trace(None, None, _ALL, 0)["lanes"]
-    ]
-    unjoined = []
-    for source, store in logs:
-        for log_lane in store.trace(None, None, _ALL, 0)["lanes"]:
-            target = _target(lanes, log_lane)
-            part = (source, log_lane["lane"])
-            if target is None:
-                unjoined.append(
-                    _Lane(f"{source}:{log_lane['lane']}", log_lane["t_start"], log_lane["t_end"], None, log_lane["ue"],
-                          log_lane["rnti"], log_lane["open"], [part])
-                )
-                continue
-            target.parts.append(part)
-            target.t_start = min(target.t_start, log_lane["t_start"])
-            target.t_end = max(target.t_end, log_lane["t_end"])
-            if target.ue is None:
-                target.ue = log_lane["ue"]
-    return sorted(lanes + unjoined, key=lambda lane: (lane.t_start, lane.key))
+    return ues_util.combine(*(_contexts(source, _lanes(store)) for source, store in [anchor, *logs]))
 
 
-def _target(lanes: list[_Lane], log_lane: dict[str, Any]) -> _Lane | None:
-    rnti = rnti_util.normalize(log_lane["rnti"])
-    start, end = log_lane["t_start"], log_lane["t_end"]
-    if rnti is not None:
-        candidates = [
-            lane for lane in lanes
-            if lane.rnti == rnti and lane.t_start - RNTI_SLACK_S <= end and start <= lane.t_end + RNTI_SLACK_S
-        ]
-    else:
-        candidates = [lane for lane in lanes if abs(lane.t_start - start) <= CREATION_SLACK_S]
-    return min(candidates, key=lambda lane: abs(lane.t_start - start), default=None)
+def _lanes(store: Store) -> list[dict[str, Any]]:
+    return store.trace(None, None, _ALL, 0)["lanes"]
+
+
+def _contexts(source: int, lanes: list[dict[str, Any]]) -> list[ues_util.Context]:
+    return [ues_util.Context(source, lane["lane"], lane["t_start"], lane["t_end"], lane_keys(lane), lane["open"]) for lane in lanes]
+
+
+def _int(value: str | None) -> int | None:
+    return None if value is None else int(value)

@@ -242,10 +242,12 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - The trace has a filter like the plots (D6), over the event fields type, category, layer, level, ue, rnti, cause and
   text, evaluated by SQLite over the events of the window, with the UE index and RNTI of their lane for events
   without them. It keeps the matching events and the lanes they are in, and applies to joined traces too.
-- Trace rows are the values of one identifier (`group_by`), the RNTI by default: the RNTI, the DU UE index (of logs, so for a pcap only when joined), or the UE
+- Trace rows are the values of one identifier (`group_by`), the RNTI by default: the RNTI, the DU UE index (of logs, so for a pcap only on the UEs of its run), or the UE
   identifiers of a pcap (from its lane labels, e.g. `du_f1ap`). Lanes sharing the value merge into one row, labelled
   with the identifier and value (e.g. `rnti=0x4601`), after the join and the filter; lanes without it keep their own
-  row, labelled `–`. Each row lists the values of all the identifiers of the lanes it merges (`ids`), shown on hover.
+  row, labelled `–`. Each row lists the values of all the identifiers of the lanes it merges (`ids`)
+  and the span and identifiers of each (`contexts`), which its events point to (`context`), so that hovering shows
+  the ones of the hovered event or time.
 - Most UE events are info lines, so logs whose layers log below info lack them. The log levels come from the
   configuration echo at the top of the log (`parsers.log.config`), and `/api/sources` reports a note naming the quiet
   layers and the events they hide, shown in the event bar and the trace.
@@ -292,8 +294,10 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   Logs and F1AP pcaps both show RRC messages, so a trace of the F1AP pcap with the events of the logs leaves out the RRC
   events of the logs. Linking a packet to the log line of the same message is open.
 - UE contexts are joined across the sources of a run, since pcaps identify UEs more reliably than logs: a log can
-  create a UE without its RNTI, e.g. the target of a handover, and log the RNTI of its later events only. The trace
-  of an F1AP pcap joins the UE lanes of the logs of its run (`/api/runs/{id}/trace`, `log events`, off by default): a log lane with
+  create a UE without its RNTI, e.g. the target of a handover, and log the RNTI of its later events only. The UEs of
+  a run (`parsers.correlate.ues`) are its F1AP UE contexts with the UE lanes of its logs joined to them, each with the
+  identifiers of all of them, whatever events are shown. The trace of an F1AP pcap of a run with logs is on these UEs
+  (`/api/runs/{id}/trace`), with the events of the logs too with `log events`, off by default: a log lane with
   an RNTI joins the F1AP UE context with that C-RNTI whose lifetime, with 2 s of slack, overlaps it, and a log lane
   without one joins the context starting nearest its creation, within 1 s, i.e. its InitialULRRCMessageTransfer or
   UEContextSetup. Log lanes of no context keep their own row. A trace of a log of a run with an F1AP pcap also shows

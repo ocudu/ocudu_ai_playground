@@ -11,6 +11,7 @@ Standard-library only, so it can be imported by visualization or analysis tools 
 | `parsers.log` | OCUDU text logs: line preamble, `METRICS` lines, events and the configuration echo. |
 | `parsers.pcap` | The pcaps of a run (`mac`, `rlc`, `f1ap`, `e1ap`, `ngap`), through `tshark`: UE identifiers, F1AP messages with their RRC and NAS messages, NGAP procedures, overviews and a merged timeline. |
 | `parsers.ran` | 3GPP knowledge shared by the artifacts: NGAP, F1AP and E1AP procedure codes, NAS and RRC message types. |
+| `parsers.correlate` | Correlation of the artifacts of a run: the UEs that its logs and pcaps see, each with the identifiers of all of them. |
 
 ## Installation
 
@@ -155,6 +156,24 @@ the NGAP, F1AP or E1AP messages of a pcap with their procedure, outcome, UE iden
 the one-line tshark summary of each frame and `frames.decode()` decodes one frame. `frames.time_span()` reads the time
 span of a pcap from its packet headers, without `tshark`. `capture.read()` gives the protocol, the frame summaries and
 the messages or PDUs of a pcap in one pass over its frames, after reading its first frame for the protocol.
+
+### UEs of a run
+
+`parsers.correlate.ues.combine()` combines the UE contexts that the sources of a run see, the most reliable source
+first, into one UE each with the identifiers of all of them:
+
+```python
+from parsers.correlate.ues import Context, combine
+
+f1ap = [Context("f1ap.pcap", 0, 10.0, 20.5, {"rnti": "17921", "du_f1ap": "0", "cu_f1ap": "0"})]
+log = [Context("gnb.log", 0, 9.9, 20.5, {"ue": "0", "rnti": "0x4601"})]
+for ue in combine(f1ap, log):
+    print(ue.key, ue.ids, ue.parts)  # f1ap.pcap:0 {"rnti": ["0x4601"], "du_f1ap": ["0"], "cu_f1ap": ["0"], "ue": ["0"]} ...
+```
+
+A context of a later source joins a UE of an earlier one by RNTI with overlapping lifetimes, or without RNTI by
+creation time, e.g. the target of a handover, which a log creates before it knows its RNTI. RNTIs are compared as
+`parsers.ran.rnti` normalizes them.
 
 ## Tests
 

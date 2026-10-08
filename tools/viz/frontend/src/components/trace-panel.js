@@ -80,13 +80,32 @@ function drawGlyph(ctx, category, x, y, r) {
  * @param {string} by
  */
 function laneLabel(lane, by) {
-  if (lane.ids && Object.keys(lane.ids).length) {
-    const rank = (name) => (name === by ? 0 : name === "rnti" ? 1 : name === "ue" ? 2 : 3);
-    const names = Object.keys(lane.ids).sort((a, b) => rank(a) - rank(b));
-    return names.map((name) => `${name}=${lane.ids[name].join(",")}`).join(" ");
-  }
+  if (lane.ids && Object.keys(lane.ids).length) return idsLabel(lane.ids, by);
   const ids = [lane.ue != null ? `ue=${lane.ue}` : null, lane.rnti ? `rnti=${lane.rnti}` : null, lane.label];
   return ids.filter(Boolean).join(" ") || "UE";
+}
+
+/**
+ * UE identifiers with their values, the one the rows are grouped by first, e.g. "ue=0 rnti=0x4601,0x4603".
+ * @param {Record<string, string[]>} ids
+ * @param {string} by
+ */
+function idsLabel(ids, by) {
+  const rank = (name) => (name === by ? 0 : name === "rnti" ? 1 : name === "ue" ? 2 : 3);
+  const names = Object.keys(ids).sort((a, b) => rank(a) - rank(b));
+  return names.map((name) => `${name}=${ids[name].join(",")}`).join(" ");
+}
+
+/**
+ * UE context of a row that an event is of, or else alive at time t, the latest started one, or null.
+ * @param {{contexts?: Array<{t0: number, t1: number}>}} lane
+ * @param {{context?: number | null} | null} event
+ * @param {number} t
+ */
+function contextAt(lane, event, t) {
+  if (!lane.contexts) return null;
+  if (event?.context != null) return lane.contexts[event.context] ?? null;
+  return lane.contexts.findLast((c) => c.t0 <= t && t <= c.t1) ?? null;
 }
 
 /**
@@ -156,7 +175,7 @@ export default {
       const counts = this.source?.event_counts ?? {};
       const isPcap = this.source?.type === "pcap";
       const protocolIds = isPcap ? Object.keys(PROTOCOL_IDS).filter((p) => counts[p]).flatMap((p) => PROTOCOL_IDS[p]) : [];
-      return ["rnti", ...(!isPcap || this.joined ? ["ue"] : []), ...protocolIds];
+      return ["rnti", ...(!isPcap || this.onRunUes ? ["ue"] : []), ...protocolIds];
     },
     /** F1AP pcap of the tab, whose UE contexts identify the UEs of its logs. */
     f1apSource() {
@@ -175,6 +194,10 @@ export default {
     /** Whether a trace of a log shows its UE events on the UE contexts of the F1AP pcap, rather than its own. */
     logOnF1ap() {
       return this.joinableLogs.includes(this.source);
+    },
+    /** Whether the rows are the UEs of the run, with the identifiers of all its sources, rather than of the source. */
+    onRunUes() {
+      return this.logOnF1ap || (this.source === this.f1apSource && this.joinableLogs.length > 0);
     },
     legend() {
       const counts = { ...(this.source?.event_counts ?? {}) };
@@ -207,7 +230,7 @@ export default {
     joined() {
       this.scheduleFetch();
     },
-    logOnF1ap() {
+    onRunUes() {
       this.scheduleFetch();
     },
     timeMode() {
@@ -268,7 +291,7 @@ export default {
         let res;
         if (this.joined) {
           res = await getJSON(`/api/runs/${this.runId}/trace`, range, this.abort.signal);
-        } else if (this.logOnF1ap) {
+        } else if (this.onRunUes) {
           res = await getJSON(`/api/runs/${this.runId}/trace`, { ...range, sources: [this.panel.source] }, this.abort.signal);
         } else {
           res = await getJSON("/api/trace", { source: this.panel.source, ...range }, this.abort.signal);
@@ -293,7 +316,8 @@ export default {
         rowOfLane.set(lane.lane, row);
         const t0 = lane.t_start + shift;
         const t1 = lane.open ? Math.max(end, lane.t_end + shift) : lane.t_end + shift;
-        return { ...lane, t0, t1, row, label: laneLabel(lane, this.groupBy), axisLabel: axisLabel(lane, this.groupBy) };
+        const contexts = lane.contexts?.map((c) => ({ ...c, t0: c.t_start + shift, t1: c.open ? Math.max(end, c.t_end + shift) : c.t_end + shift }));
+        return { ...lane, t0, t1, row, contexts, label: laneLabel(lane, this.groupBy), axisLabel: axisLabel(lane, this.groupBy) };
       });
       this.hasCellRow = res.events.some((e) => e.lane == null);
       this.events = res.events.map((e) => ({ ...e, t: e.t + shift, row: e.lane == null ? -1 : rowOfLane.get(e.lane) ?? -2 }));
@@ -472,11 +496,16 @@ export default {
         this.cursorLane = "";
         return;
       }
-      const { event, lane } = this.itemAt(u, left, top);
+      const { event, lane: laneAtT } = this.itemAt(u, left, top);
+      // An event drawn just past the end of its row is still of it.
+      const lane = laneAtT ?? (event?.row >= 0 ? this.lanes[event.row] : null);
       this.cursorEvent = event;
       if (lane) {
-        const span = lane.open ? "until the end" : `${(lane.t1 - lane.t0).toFixed(3)} s`;
-        this.cursorLane = `${lane.label}, ${span}`;
+        // A row of merged UE contexts shows the one hovered rather than all.
+        const context = contextAt(lane, event, u.posToVal(left, "x"));
+        const shown = context ?? lane;
+        const span = shown.open ? "until the end" : `${(shown.t1 - shown.t0).toFixed(3)} s`;
+        this.cursorLane = `${context ? idsLabel(context.ids, this.groupBy) : lane.label}, ${span}`;
       } else {
         this.cursorLane = event && event.lane == null ? "common" : "";
       }
