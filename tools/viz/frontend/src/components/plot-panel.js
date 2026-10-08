@@ -16,6 +16,9 @@ const steppedPath = uPlot.paths.stepped({ align: 1 });
 const FETCH_DELAY_MS = 120;
 // Split values listed in the split value picker.
 const MAX_LISTED_SPLITS = 300;
+// Dataset and field of new plots, when their source has them.
+const DEFAULT_DATASET = "sched";
+const DEFAULT_FIELD = "total_dl_brate";
 
 /** @param {number} i */
 function seriesColor(i) {
@@ -117,13 +120,13 @@ export default {
   },
   watch: {
     "plot.source"() {
-      const dataset = this.datasets[0]?.name ?? null;
+      const dataset = this.defaultDataset();
       // An unchanged dataset name does not trigger its watcher, but the instances differ per source.
       if (dataset === this.plot.dataset) this.loadInstanceOptions(true);
       this.plot.dataset = dataset;
     },
     "plot.dataset"() {
-      this.plot.field = this.numericFields[0]?.name ?? null;
+      this.plot.field = this.defaultField();
       this.plot.splitBy = null;
       this.loadInstanceOptions(true);
     },
@@ -165,8 +168,8 @@ export default {
       if (this.chart) this.chart.setSize({ width: this.$refs.chart.clientWidth, height: CHART_HEIGHT });
     });
     this.resizeObserver.observe(this.$refs.chart);
-    if (!this.plot.dataset) this.plot.dataset = this.datasets[0]?.name ?? null;
-    if (!this.plot.field) this.plot.field = this.numericFields[0]?.name ?? null;
+    if (!this.plot.dataset) this.plot.dataset = this.defaultDataset();
+    if (!this.plot.field) this.plot.field = this.defaultField();
     this.loadInstanceOptions(this.plot.instance == null);
     this.scheduleFetch(true);
   },
@@ -177,6 +180,16 @@ export default {
     this.chart?.destroy();
   },
   methods: {
+    /** DEFAULT_DATASET if the source has it, else its first dataset. */
+    defaultDataset() {
+      return (this.datasets.find((d) => d.name === DEFAULT_DATASET) ?? this.datasets[0])?.name ?? null;
+    },
+
+    /** DEFAULT_FIELD if the dataset has it, else its first numeric field. */
+    defaultField() {
+      return (this.numericFields.find((f) => f.name === DEFAULT_FIELD) ?? this.numericFields[0])?.name ?? null;
+    },
+
     async loadSplitOptions() {
       this.splitOptions = [];
       if (!this.plot.splitBy) return;

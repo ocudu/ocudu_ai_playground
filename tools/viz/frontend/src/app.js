@@ -44,7 +44,7 @@ const URL_UPDATE_DELAY_MS = 300;
 let nextPlotId = 1;
 
 /**
- * Creates a widget: a plot, a table of a whole dataset with kind "table", or the UE trace with kind "trace".
+ * Creates a widget: a plot, a table of a whole dataset with kind "table", or the trace with kind "trace".
  * @param {{source: number, dataset?: string | null, kind?: string} & Record<string, any>} init
  */
 function newPlot(init) {
@@ -334,12 +334,14 @@ const App = {
 
     /**
      * Parsed source of a run for a new panel: a log for plots and tables, since logs have the metrics, and for a trace
-     * the pcap with the RRC messages, i.e. the F1AP one, else the first source with events.
+     * the F1AP pcap, else the NGAP pcap, else the first source with events. Pcaps are told by their event categories.
      */
     defaultSource(run, kind = "plot") {
       const ready = this.runSourcesOf([run]).filter((s) => s.status === "ready");
       if (kind === "trace") {
-        return ready.find((s) => s.type === "pcap" && s.event_counts?.rrc) ?? ready.find((s) => Object.keys(s.event_counts ?? {}).length) ?? ready[0] ?? null;
+        const pcapWith = (category) => ready.find((s) => s.type === "pcap" && s.event_counts?.[category]);
+        const withEvents = ready.find((s) => Object.keys(s.event_counts ?? {}).length);
+        return pcapWith("f1ap") ?? pcapWith("ngap") ?? withEvents ?? ready[0] ?? null;
       }
       return ready.find((s) => s.type !== "pcap" && s.datasets.length) ?? ready.find((s) => s.datasets.length) ?? ready[0] ?? null;
     },
@@ -439,11 +441,12 @@ const App = {
     async addPlot(kind) {
       const tab = this.activeTab;
       if (!tab) return;
+      // Tables continue from the last panel; plots start from the default dataset and field of the plot panel.
       const last = tab.plots.findLast((p) => p.dataset);
-      const sameSource = last && this.runSources.some((s) => s.id === last.source);
-      const source = kind !== "trace" && sameSource ? last.source : this.defaultSource(this.activeRun, kind)?.id;
+      const sameSource = kind === "table" && last && this.runSources.some((s) => s.id === last.source);
+      const source = sameSource ? last.source : this.defaultSource(this.activeRun, kind)?.id;
       if (source == null) return;
-      const dataset = kind !== "trace" && sameSource ? last.dataset : null;
+      const dataset = sameSource ? last.dataset : null;
       tab.plots.push(newPlot({ source, dataset, kind }));
       await this.$nextTick();
       [...document.querySelectorAll("main > .panel")].at(-1)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
