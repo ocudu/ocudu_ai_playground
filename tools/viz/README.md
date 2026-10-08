@@ -51,7 +51,8 @@ In the page:
   combines with split by to compare them.
 - Pick source, dataset (METRICS layer), field and optionally a context field to split by, giving one
   series per value (e.g. one per `ue`). Without a selection of values, the first 20 are shown.
-- Drag to zoom, Shift+drag to pan, double-click to reset. The mouse wheel scrolls the page. The plots of a tab share the time
+- Drag to zoom, Shift+drag to pan, double-click to reset. `W`/`S` zoom in and out around the middle of the view and
+  `A`/`D` pan, within the time range of the files. The mouse wheel scrolls the page. The plots of a tab share the time
   axis.
   `reset zoom` shows the whole time range of the files of the tab, `fit plots` the time range of the data in its
   plots, tables and traces.

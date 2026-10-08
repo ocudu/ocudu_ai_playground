@@ -33,6 +33,9 @@ const SOURCES_POLL_MS = 500;
 function isParsing(s) {
   return s.status === "parsing" || (s.status === "ready" && ["pending", "parsing"].includes(s.events_status));
 }
+// Factor of the time range of a zoom in or out with the keyboard, and fraction of it that a pan moves.
+const KEY_ZOOM_FACTOR = 1.5;
+const KEY_PAN_FRACTION = 0.2;
 // Delay before writing the view to the URL, to coalesce zoom and pan events.
 const URL_UPDATE_DELAY_MS = 300;
 
@@ -267,6 +270,7 @@ const App = {
     window.addEventListener("hashchange", () => {
       if (location.hash !== this.writtenHash) location.reload();
     });
+    window.addEventListener("keydown", (e) => this.onKey(e));
   },
   methods: {
     async restoreView() {
@@ -448,6 +452,33 @@ const App = {
       if (this.activeTab) this.activeTab.userRange = range && range.max > range.min ? range : null;
     },
 
+    /** Zooms with w and s and pans with a and d, unless typing or a dialog is open. */
+    onKey(e) {
+      if (e.ctrlKey || e.metaKey || e.altKey || this.browserOpen || this.relatedQuestion) return;
+      if (e.target.closest?.("input, select, textarea, [contenteditable]")) return;
+      const action = { w: 1 / KEY_ZOOM_FACTOR, s: KEY_ZOOM_FACTOR, a: -KEY_PAN_FRACTION, d: KEY_PAN_FRACTION }[e.key.toLowerCase()];
+      if (action == null || !this.view || !this.fullRange) return;
+      e.preventDefault();
+      const { min, max } = this.view;
+      const width = max - min;
+      const full = this.fullRange;
+      let range;
+      if (e.key.toLowerCase() === "w" || e.key.toLowerCase() === "s") {
+        const center = (min + max) / 2;
+        const half = (width * action) / 2;
+        range = { min: center - half, max: center + half };
+      } else {
+        range = { min: min + width * action, max: max + width * action };
+      }
+      // The view stays within the time range of the files: a zoom out is cut to it, a pan stops at its ends.
+      if (range.max - range.min >= full.max - full.min) {
+        this.zoom(null);
+        return;
+      }
+      const shift = Math.max(0, full.min - range.min) - Math.max(0, range.max - full.max);
+      this.zoom({ min: range.min + shift, max: range.max + shift });
+    },
+
     /**
      * Opens a file or a directory in its own tab and selects it. A run that is already open just gets its tab selected.
      * @param {string} path
@@ -597,7 +628,7 @@ const App = {
           <p class="muted">{{ activeRun.path }}</p>
         </div>
         <template v-else-if="activeTab">
-          <p class="hint muted">Drag to zoom, Shift+drag to pan, double-click to reset, click a point or an event marker to see its log line or frame.</p>
+          <p class="hint muted">Drag to zoom, Shift+drag to pan, double-click to reset, W/S to zoom in and out, A/D to pan, click a point or an event marker to see its log line or frame.</p>
           <div v-if="eventCategoryChips.length || eventsState || activeNotes.length" class="event-bar">
             <span class="muted">events</span>
             <span v-if="eventsState === 'parsing'" class="muted">parsing…</span>
