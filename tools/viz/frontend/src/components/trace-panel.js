@@ -12,7 +12,8 @@ const AXIS_HEIGHT = 50;
 const VISIBLE_UE_ROWS = 25;
 // UEs requested for a window.
 const MAX_LANES = 2000;
-// Width of the row label axis, the same as the value axis of the plots with its label, so that times line up.
+// Width of the row label axis, the same as the value axis of the plots with its label, so that times line up. Full
+// lane labels show when hovering a row.
 const LABEL_AXIS_SIZE = 90;
 // Position of the bars in their row, from its top.
 const BAR_POSITION = 0.6;
@@ -69,11 +70,22 @@ function drawGlyph(ctx, category, x, y, r) {
 }
 
 /**
- * DU UE index, RNTI and the protocol identifiers of a lane, e.g. "ue=0 0x4601 du_f1ap=0 cu_f1ap=0".
+ * DU UE index, RNTI and the protocol identifiers of a lane, e.g. "ue=0 rnti=0x4601 du_f1ap=0 cu_f1ap=0".
  * @param {{ue: number | null, rnti: string | null, label: string | null}} lane
  */
 function laneLabel(lane) {
-  return [lane.ue != null ? `ue=${lane.ue}` : null, lane.rnti, lane.label].filter(Boolean).join(" ") || "UE";
+  const ids = [lane.ue != null ? `ue=${lane.ue}` : null, lane.rnti ? `rnti=${lane.rnti}` : null, lane.label];
+  return ids.filter(Boolean).join(" ") || "UE";
+}
+
+/**
+ * Label of a lane on the row axis, which is as narrow as the value axis of the plots: its DU UE index and RNTI, or
+ * else its first protocol identifier, e.g. "ran_ngap=0".
+ * @param {{ue: number | null, rnti: string | null, label: string | null}} lane
+ */
+function axisLabel(lane) {
+  const ids = [lane.ue != null ? `ue=${lane.ue}` : null, lane.rnti].filter(Boolean).join(" ");
+  return ids || lane.label?.split(" ")[0] || "UE";
 }
 
 export default {
@@ -239,7 +251,7 @@ export default {
         rowOfLane.set(lane.lane, row);
         const t0 = lane.t_start + shift;
         const t1 = lane.open ? Math.max(end, lane.t_end + shift) : lane.t_end + shift;
-        return { ...lane, t0, t1, row, label: laneLabel(lane) };
+        return { ...lane, t0, t1, row, label: laneLabel(lane), axisLabel: axisLabel(lane) };
       });
       this.hasCellRow = res.events.some((e) => e.lane == null);
       this.events = res.events.map((e) => ({ ...e, t: e.t + shift, row: e.lane == null ? -1 : rowOfLane.get(e.lane) ?? -2 }));
@@ -272,7 +284,7 @@ export default {
 
     /** Labels of the drawn rows. */
     shownLabels() {
-      const labels = this.lanes.slice(this.firstRow, this.firstRow + VISIBLE_UE_ROWS).map((lane) => lane.label);
+      const labels = this.lanes.slice(this.firstRow, this.firstRow + VISIBLE_UE_ROWS).map((lane) => lane.axisLabel);
       if (this.hasCellRow) labels.push("common");
       return labels;
     },

@@ -169,7 +169,7 @@ export default {
               <table>
                 <tbody>
                   <tr v-for="e in recentEntries" :key="e.path" class="clickable" :title="e.path" @click="$emit('open', e.path, true)">
-                    <td>{{ e.dir ? "📁" : "📄" }} {{ e.name }}</td>
+                    <td>{{ e.isDir ? "📁" : "📄" }} {{ e.name }}</td>
                     <td class="muted recent-dir">{{ e.dir }}</td>
                     <td class="muted">{{ formatAgo(e.openedAt) }}</td>
                   </tr>

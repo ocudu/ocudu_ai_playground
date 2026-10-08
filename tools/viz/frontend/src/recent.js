@@ -7,18 +7,21 @@
 const STORAGE_KEY = "ocudu-viz-recent";
 const MAX_RECENT = 15;
 
-/** @returns {Array<{path: string, openedAt: number, dir?: boolean}>} */
+/** @returns {Array<{path: string, openedAt: number, isDir?: boolean}>} */
 export function loadRecent() {
   try {
     const list = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    return Array.isArray(list) ? list.filter((e) => e && typeof e.path === "string") : [];
+    // Entries saved before isDir have the flag as dir.
+    return Array.isArray(list)
+      ? list.filter((e) => e && typeof e.path === "string").map((e) => ({ path: e.path, openedAt: e.openedAt, isDir: Boolean(e.isDir ?? e.dir) }))
+      : [];
   } catch {
     // Storage can be unavailable, e.g. in private windows, or hold invalid data.
     return [];
   }
 }
 
-/** @param {Array<{path: string, openedAt: number, dir?: boolean}>} list */
+/** @param {Array<{path: string, openedAt: number, isDir?: boolean}>} list */
 function save(list) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(list.slice(0, MAX_RECENT)));
@@ -30,10 +33,10 @@ function save(list) {
 /**
  * Moves a path to the top of the recent files.
  * @param {string} path
- * @param {boolean} [dir] Whether the path is a directory.
+ * @param {boolean} [isDir] Whether the path is a directory.
  */
-export function addRecent(path, dir = false) {
-  save([{ path, openedAt: Date.now(), dir }, ...loadRecent().filter((e) => e.path !== path)]);
+export function addRecent(path, isDir = false) {
+  save([{ path, openedAt: Date.now(), isDir }, ...loadRecent().filter((e) => e.path !== path)]);
 }
 
 /** @param {string} path */
