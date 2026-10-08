@@ -27,6 +27,8 @@ Pcaps need `tshark`, which the container image has. Their frames are the records
 with the tshark summary, and the decoded frame beside it. F1AP, NGAP and E1AP pcaps give a `messages` dataset (a
 table of their messages, with the RRC and NAS messages of F1AP) and events, with a trace row per UE context; MAC and
 RLC pcaps give a `pdus` dataset. The `files` bar of a tab lists them: `✕` removes one, `+ file` adds another file of the same directory.
+MAC and RLC pcaps of a run, which can be huge, are only parsed on request, with the `parse` button of their chip, or
+when opened on their own; once cached, they open with the run.
 
 The `+` tab in the page browses the mounted directories (your home, the temp dir and any `--root`) and opens the
 chosen file in a new tab. Its `Recent` view lists the last

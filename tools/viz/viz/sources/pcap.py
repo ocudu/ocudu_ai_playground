@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import threading
 from datetime import datetime, timezone
@@ -18,6 +19,9 @@ from parsers.ran.rnti import normalize as normalize_rnti
 
 from .base import DatasetWriter, EventWriter, ProgressFn, RunIdentity
 from .log_metrics import _parsers_version
+
+# Names of the MAC and RLC captures of a run, e.g. mac.pcap or du_rlc.pcap, which can be huge.
+_ON_REQUEST_NAME_RE = re.compile(r"(?:^|[_.-])(?:mac|rlc)(?:[_.-]|$)", re.IGNORECASE)
 
 
 
@@ -39,6 +43,10 @@ class PcapSource:
 
     def accepts(self, path: Path) -> bool:
         return frames.is_pcap(path) and shutil.which("tshark") is not None
+
+    def on_request(self, path: Path) -> bool:
+        """Whether a pcap is a MAC or RLC capture, by its name, parsed only on request with the other files of its run."""
+        return _ON_REQUEST_NAME_RE.search(path.stem) is not None
 
     def parse(self, path: Path, writer: DatasetWriter, progress: ProgressFn | None = None) -> None:
         cap = self._read(path)

@@ -343,6 +343,10 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   its identifiers until the response that releases it (UEContextRelease for NGAP and F1AP, bearerContextRelease for
   E1AP), since later UEs reuse the identifiers. Lanes are labelled with their identifiers, and F1AP lanes with their
   C-RNTI in hex, as logs print it. MAC and RLC pcaps have no events.
+- MAC and RLC pcaps (`PcapSource.on_request()`, by name) are opened "deferred" with the other files of a run, from the
+  command line or the page, since tshark decodes some 40k MAC frames/s and they can be GBs, while they give only a
+  `pdus` dataset: no events, no part in the trace or the UE join. `POST /api/sources/{id}/parse` parses one. A file
+  opened on its own, or with a cache, is parsed at once.
 - tshark reads pcaps through a link or copy under the cache directory only when it cannot read them in place, e.g.
   under the AppArmor profile of tshark on Ubuntu. `--clear-cache` removes them. The container image installs
   `tshark`.

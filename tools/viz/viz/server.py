@@ -76,12 +76,20 @@ class _RevalidatedStaticFiles(StaticFiles):
         return response
 
 
+def _file_size(path: Path) -> int | None:
+    try:
+        return path.stat().st_size
+    except OSError:
+        return None
+
+
 def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
     info: dict[str, Any] = {
         "id": entry.id,
         "path": str(entry.path),
         "name": name,
         "file": entry.path.name,
+        "size": _file_size(entry.path),
         "type": entry.source_type.name if entry.source_type else None,
         "has_detail": hasattr(entry.source_type, "record_detail"),
         "status": entry.status,
@@ -183,6 +191,15 @@ def create_app(
     @app.get("/api/sources")
     def list_sources() -> list[dict[str, Any]]:
         return sources_info()
+
+    @app.post("/api/sources/{source_id}/parse")
+    def parse_source(source_id: int) -> dict[str, Any]:
+        """Parses a source left to parse on request, e.g. the MAC pcap of a run."""
+        try:
+            registry.parse(source_id)
+        except KeyError:
+            raise HTTPException(404, f"Unknown source {source_id}.") from None
+        return {"id": source_id}
 
     @app.get("/api/runs")
     def list_runs() -> list[dict[str, Any]]:

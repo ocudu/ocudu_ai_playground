@@ -24,7 +24,7 @@ class OpenError(ValueError):
 
 @dataclass
 class SourceEntry:
-    """One source and its state: "parsing", "ready", "error" or "closed".
+    """One source and its state: "deferred" (parsed on request, see parse()), "parsing", "ready", "error" or "closed".
 
     Events are parsed once the source is ready, with their own state: "pending", "parsing", "ready" or "error".
     """
@@ -111,7 +111,7 @@ class SourceRegistry:
                 )
         else:
             files = [resolved]
-        source_ids = [self.open(f).id for f in files]
+        source_ids = [self.open(f, defer=is_dir).id for f in files]
         return self.add_run(resolved, is_dir, source_ids)
 
     def supported_files(self, directory: Path) -> list[Path]:
@@ -122,13 +122,13 @@ class SourceRegistry:
             raise OpenError(f"{directory}: {e.strerror or e}.") from None
         return [f for f in files if any(st.accepts(f) for st in self.source_types)]
 
-    def add_to_run(self, run_id: int, path: str | Path) -> RunEntry:
-        """Adds a file of the directory of a run to the run. Raises KeyError for unknown ids."""
+    def add_to_run(self, run_id: int, path: str | Path, defer: bool = False) -> RunEntry:
+        """Adds a file of the directory of a run to the run, see open() for defer. Raises KeyError for unknown ids."""
         run = self._run(run_id)
         resolved = resolve_within(path, self.roots)
         if resolved.parent != run.directory:
             raise OpenError(f"{path}: not in the directory of the run, {run.directory}.")
-        entry = self.open(resolved)
+        entry = self.open(resolved, defer)
         with self._lock:
             if entry.id not in run.source_ids:
                 run.source_ids.append(entry.id)
@@ -170,7 +170,7 @@ class SourceRegistry:
             self.close_run(run_id)
             return existing
         for f in self.related_files(run_id):
-            self.add_to_run(run_id, f)
+            self.add_to_run(run_id, f, defer=True)
         with self._lock:
             run.path, run.is_dir = run.directory, True
         return run
@@ -201,8 +201,12 @@ class SourceRegistry:
         with self._lock:
             return list(self._runs)
 
-    def open(self, path: str | Path) -> SourceEntry:
-        """Opens a file within the roots, parsing it in the background. A file already open is not reopened."""
+    def open(self, path: str | Path, defer: bool = False) -> SourceEntry:
+        """Opens a file within the roots, parsing it in the background. A file already open is not reopened.
+
+        With defer, e.g. for the files of a run, a file that its source type parses only on request and that has no
+        cache is left "deferred" until parse().
+        """
         if self.cache is None:
             raise OpenError("Opening files is not available.")
         resolved = resolve_within(path, self.roots)
@@ -211,13 +215,38 @@ class SourceRegistry:
         source_type = next((st for st in self.source_types if st.accepts(resolved)), None)
         if source_type is None:
             raise OpenError(f"{path}: unsupported file type.")
+        on_request = getattr(source_type, "on_request", None)
+        deferred = defer and on_request is not None and on_request(resolved) and not self.cache.is_cached(resolved, source_type)
         with self._lock:
-            for entry in self._entries:
-                if entry.path == resolved and entry.status in ("parsing", "ready"):
-                    return entry
-            entry = SourceEntry(len(self._entries), resolved, "parsing", source_type=source_type)
+            entry = next((e for e in self._entries if e.path == resolved and e.status in ("deferred", "parsing", "ready")), None)
+            if entry is None:
+                entry = SourceEntry(len(self._entries), resolved, "deferred" if deferred else "parsing", source_type=source_type)
+                self._entries.append(entry)
+            elif entry.status != "deferred" or deferred:
+                return entry
+            else:
+                entry.status = "parsing"
+        if entry.status == "parsing":
+            threading.Thread(target=self._parse, args=(entry, source_type), daemon=True, name=f"parse-{entry.id}").start()
+        return entry
+
+    def add_deferred(self, path: Path, source_type: SourceType) -> SourceEntry:
+        """Adds a file left to parse on request, see parse(), e.g. of a run given on the command line."""
+        with self._lock:
+            entry = SourceEntry(len(self._entries), path, "deferred", source_type=source_type)
             self._entries.append(entry)
-        threading.Thread(target=self._parse, args=(entry, source_type), daemon=True, name=f"parse-{entry.id}").start()
+        return entry
+
+    def parse(self, source_id: int) -> SourceEntry:
+        """Parses a deferred source in the background. Raises KeyError for unknown ids."""
+        with self._lock:
+            if not 0 <= source_id < len(self._entries):
+                raise KeyError(source_id)
+            entry = self._entries[source_id]
+            if entry.status != "deferred":
+                return entry
+            entry.status = "parsing"
+        threading.Thread(target=self._parse, args=(entry, entry.source_type), daemon=True, name=f"parse-{entry.id}").start()
         return entry
 
     def close(self, source_id: int) -> None:

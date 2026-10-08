@@ -111,8 +111,9 @@ class SourceType(Protocol):
 
     A source type may also define parse_events(path, writer: EventWriter) to extract events, which runs after parse()
     while the datasets are already served, field_spans(text) to return the span of each field in the text of a record,
-by field name, run_identity(path) to return the RunIdentity of a file, which finds the other files of its run, and
-record_detail(path, record) to return a decoded record as text.
+    by field name, run_identity(path) to return the RunIdentity of a file, which finds the other files of its run,
+    record_detail(path, record) to return a decoded record as text, and on_request(path) to tell whether a file opened
+    with the other files of its run is parsed only on request, e.g. a large capture.
     """
 
     # Unique name, part of the cache key.

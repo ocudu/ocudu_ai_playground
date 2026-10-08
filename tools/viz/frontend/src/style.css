@@ -239,6 +239,8 @@ main { flex: 1 0 auto; padding: 8px 16px 16px; }
   font-family: ui-monospace, monospace;
 }
 .source-chip.error { color: var(--error); }
+.source-chip.deferred { color: var(--fg-muted); border-style: dashed; }
+.source-chip.deferred button:not(.icon) { font-size: 11px; padding: 0 6px; }
 .source-chip .icon { font-size: 10px; opacity: 0.6; }
 .source-chip .icon:hover { opacity: 1; }
 .run-files { display: inline-flex; flex-wrap: wrap; gap: 4px; }

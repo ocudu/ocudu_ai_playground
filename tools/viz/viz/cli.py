@@ -13,7 +13,7 @@ import sys
 import tempfile
 import threading
 import webbrowser
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -22,7 +22,7 @@ from .registry import SourceRegistry
 from .sources.base import SourceType
 from .sources.log_metrics import LogMetricsSource
 from .sources.pcap import PcapSource
-from .store import StoreCache, default_cache_dir
+from .store import Store, StoreCache, default_cache_dir
 
 
 
@@ -171,17 +171,26 @@ def main(argv: list[str] | None = None) -> int:
         runs.append((path.resolve(), is_dir, typed))
 
     # All the files are parsed at once, like the files of a run opened from the page: logs in the worker pool, pcaps
-    # in tshark processes.
-    tasks = [task for _, _, typed in runs for task in typed]
+    # in tshark processes. Files of a directory that their type parses only on request, e.g. MAC and RLC pcaps, are
+    # left for the page to parse, unless cached.
+    def on_request(f: Path, st: SourceType, is_dir: bool) -> bool:
+        check = getattr(st, "on_request", None)
+        return is_dir and check is not None and check(f) and not cache.is_cached(f, st)
+
+    tasks = [(f, st) for _, is_dir, typed in runs for f, st in typed if not on_request(f, st, is_dir)]
+    stores: Iterator[Store] = iter(())
     if tasks:
         progress = _Progress([f.name for f, _ in tasks])
         with ThreadPoolExecutor(min(len(tasks), os.cpu_count() or 1), thread_name_prefix="parse") as executor:
             futures = [executor.submit(cache.open, f, st, progress.reporter(i)) for i, (f, st) in enumerate(tasks)]
             stores = iter([future.result() for future in futures])
         progress.finish()
-        for path, is_dir, typed in runs:
-            source_ids = [registry.add_store(next(stores), st).id for _, st in typed]
-            registry.add_run(path, is_dir, source_ids)
+    for path, is_dir, typed in runs:
+        source_ids = [
+            registry.add_deferred(f, st).id if on_request(f, st, is_dir) else registry.add_store(next(stores), st).id
+            for f, st in typed
+        ]
+        registry.add_run(path, is_dir, source_ids)
 
     # Imported late so that --help and argument errors do not pay for the web stack.
     import uvicorn

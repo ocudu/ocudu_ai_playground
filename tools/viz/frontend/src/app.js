@@ -535,6 +535,28 @@ const App = {
       await this.pollSources();
     },
 
+    /** Parses a source of the active run left to parse on request. */
+    async parseSource(sourceId) {
+      try {
+        await postJSON(`/api/sources/${sourceId}/parse`, {});
+      } catch (e) {
+        this.warnings = [...this.warnings, e.message];
+      }
+      await this.pollSources();
+    },
+
+    /** @param {number | null} bytes */
+    formatSize(bytes) {
+      if (bytes == null) return "";
+      const units = ["B", "KB", "MB", "GB"];
+      let i = 0;
+      while (bytes >= 1024 && i < units.length - 1) {
+        bytes /= 1024;
+        i++;
+      }
+      return `${bytes.toFixed(i && bytes < 10 ? 1 : 0)} ${units[i]}`;
+    },
+
     /** Removes a source from the active run, with its plots. */
     async removeFromRun(sourceId) {
       this.runFiles = null;
@@ -615,6 +637,7 @@ const App = {
             {{ s.file }}
             <span v-if="s.status === 'parsing'" class="muted">{{ Math.floor(s.progress * 100) }}%</span>
             <span v-else-if="s.status === 'error'">failed</span>
+            <button v-else-if="s.status === 'deferred'" title="Parse this file, left out of the run since such captures can be huge" @click="parseSource(s.id)">parse {{ formatSize(s.size) }}</button>
             <button v-if="runSources.length > 1" class="icon" title="Remove the file from this tab" @click="removeFromRun(s.id)">✕</button>
           </span>
           <button v-if="canOpen" title="Add a file of the same directory to this tab" @click="toggleRunFiles">+ file</button>

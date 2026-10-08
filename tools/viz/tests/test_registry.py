@@ -26,6 +26,13 @@ def wait_ready(registry, source_id, timeout=10.0):
     raise AssertionError("parsing did not finish")
 
 
+class OnRequestLogs(LogMetricsSource):
+    """Logs whose name starts with "mac" are parsed only on request, like MAC pcaps."""
+
+    def on_request(self, path):
+        return path.name.startswith("mac")
+
+
 class RegistryTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -106,6 +113,37 @@ class RegistryTest(unittest.TestCase):
         (self.dir / "empty").mkdir()
         with self.assertRaisesRegex(OpenError, "no supported files"):
             self.registry.open_run(self.dir / "empty")
+
+    def test_files_parsed_on_request(self):
+        run_dir = self.dir / "run"
+        run_dir.mkdir()
+        write_log(run_dir / "gnb.log")
+        mac = write_log(run_dir / "mac.log")
+        cache = StoreCache(self.dir / "cache")
+        registry = SourceRegistry(cache, [OnRequestLogs()], [self.dir])
+        run = registry.open_run(run_dir)
+        gnb_id, mac_id = run.source_ids
+        self.assertEqual(wait_ready(registry, mac_id).status, "deferred")
+        self.assertEqual(wait_ready(registry, gnb_id).status, "ready")
+        # Opening it on its own is a request too.
+        self.assertIs(registry.open(mac), registry.entries()[mac_id])
+        self.assertEqual(wait_ready(registry, mac_id).status, "ready")
+        # Once cached, a run opens it at once.
+        again = SourceRegistry(cache, [OnRequestLogs()], [self.dir])
+        run = again.open_run(run_dir)
+        self.assertEqual([wait_ready(again, i).status for i in run.source_ids], ["ready", "ready"])
+
+    def test_parse_a_deferred_file(self):
+        run_dir = self.dir / "run"
+        run_dir.mkdir()
+        write_log(run_dir / "mac.log")
+        registry = SourceRegistry(StoreCache(self.dir / "cache"), [OnRequestLogs()], [self.dir])
+        (mac_id,) = registry.open_run(run_dir).source_ids
+        self.assertEqual(registry.entries()[mac_id].status, "deferred")
+        registry.parse(mac_id)
+        self.assertEqual(wait_ready(registry, mac_id).status, "ready")
+        with self.assertRaises(KeyError):
+            registry.parse(99)
 
     def test_promote_a_file_to_its_run(self):
         du = write_log(self.dir / "du.log")

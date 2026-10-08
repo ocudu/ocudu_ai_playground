@@ -53,6 +53,10 @@ class PcapSourceTest(unittest.TestCase):
         self.assertTrue(self.source.accepts(self.pcap))
         self.assertFalse(self.source.accepts(write_log(self.dir / "gnb.log")))
 
+    def test_on_request(self):
+        on_request = [n for n in ("mac.pcap", "rlc.pcap", "du_mac.pcap", "MAC-1.pcap", "f1ap.pcap", "machine.pcap") if self.source.on_request(Path(n))]
+        self.assertEqual(on_request, ["mac.pcap", "rlc.pcap", "du_mac.pcap", "MAC-1.pcap"])
+
     def test_messages_dataset(self):
         ds = self.store.datasets["messages"]
         self.assertEqual(ds["label"], "F1AP messages")

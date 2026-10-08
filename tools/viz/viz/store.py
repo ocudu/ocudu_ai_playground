@@ -841,6 +841,13 @@ class StoreCache:
         self.evict(keep={db})
         return Store(_file_uri(db))
 
+    def is_cached(self, path: Path, source_type: SourceType) -> bool:
+        """Whether a source has a valid cache, so that opening it takes no parsing."""
+        if not self.enabled:
+            return False
+        path = path.resolve()
+        return self._is_complete(self.cache_dir / (self._key(path, source_type) + _CACHE_SUFFIX))
+
     def open_events(self, store: Store, source_type: SourceType) -> None:
         """Serves the events of a source in its store, parsing them if there is no valid cache.
 
