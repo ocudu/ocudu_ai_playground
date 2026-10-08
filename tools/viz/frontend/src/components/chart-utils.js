@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
 import uPlot from "uplot";
+import { displayUnit } from "../units.js";
 
 // Key of the cursor shared by the time charts of a page.
 export const CURSOR_SYNC_KEY = "ocudu-viz";
@@ -31,9 +32,48 @@ export function timeTicks(u, splits, axisIdx, space, incr) {
   return splits.map((ts) => fmt(utcDate(ts)));
 }
 
-/** @param {string} name */
-export function cssVar(name) {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+/**
+ * Value of a CSS variable, as the page has it or, given an element, as that element has it.
+ * @param {string} name
+ * @param {Element} [el]
+ */
+export function cssVar(name, el = document.documentElement) {
+  return getComputedStyle(el).getPropertyValue(name).trim();
+}
+
+// Number of series colors defined by the theme, as CSS variables --s0 to --s9.
+const NOF_SERIES_COLORS = 10;
+
+/**
+ * Color of the series at index i.
+ * @param {number} i
+ * @param {Element} [el] Element whose theme gives the color, the page by default.
+ */
+export function seriesColor(i, el) {
+  return cssVar(`--s${i % NOF_SERIES_COLORS}`, el);
+}
+
+/**
+ * Chart data of a /api/series response: the series aligned on the union of their times, shifted to display time and
+ * scaled to a display unit, with their labels and records.
+ * @param {{unit: string | null, series: Array<{label: string, t: number[], v: number[], record: number[]}>}} res
+ * @param {number} shift
+ */
+export function seriesData(res, shift) {
+  const tables = res.series.map((s) => [s.t.map((t) => t + shift), s.v, s.record]);
+  // Series have their own timestamps, so they are aligned on the union of them.
+  const joined = tables.length ? uPlot.join(tables) : [[]];
+  const values = [];
+  const records = [];
+  for (let i = 0; i < tables.length; i++) {
+    values.push(joined[1 + 2 * i]);
+    records.push(joined[2 + 2 * i]);
+  }
+  let maxAbs = 0;
+  for (const s of res.series) for (const v of s.v) maxAbs = Math.max(maxAbs, Math.abs(v));
+  const unit = displayUnit(res.unit, maxAbs);
+  const scaled = values.map((col) => col.map((v) => (v == null ? v : v / unit.divisor)));
+  return { data: [joined[0], ...scaled], labels: res.series.map((s) => s.label), unit, records };
 }
 
 /**

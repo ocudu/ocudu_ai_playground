@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: BSD-3-Clause-Open-MPI
  */
 
-:root {
+/* .theme-light keeps the light colors inside an element in the dark theme, e.g. for exported plots. */
+:root,
+.theme-light {
   --bg: #ffffff;
   --bg-panel: #f6f7fb;
   --bg-control: #ffffff;
@@ -245,7 +247,31 @@ main { flex: 1 0 auto; padding: 8px 16px 16px; }
 .run-question-body p { margin: 0 0 8px; }
 .run-question-body ul { margin: 0 0 8px; padding-left: 20px; font-family: ui-monospace, monospace; }
 .run-question-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
-.run-question-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.modal button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.modal button.primary:disabled { opacity: 0.5; }
+/* As wide as the image it shows, which scrolls when larger than the window. */
+.modal.export-dialog { width: fit-content; min-width: 640px; max-width: 96vw; max-height: 92vh; }
+.export-dialog input[type="number"] { width: 6em; }
+.export-stage { overflow: auto; padding: 16px; background: var(--bg-panel); }
+/* The image: always on white, with the light theme colors, resizable from its corner. */
+.export-frame {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 300px;
+  min-height: 200px;
+  overflow: hidden;
+  resize: both;
+  background: #ffffff;
+  color: var(--fg);
+  margin: 0 auto;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+}
+.export-title { padding: 10px 14px 4px; font-size: 15px; font-weight: 600; }
+.export-chart { flex: none; }
+.export-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 4px 14px 10px; font-size: 12px; }
+.export-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.export-legend-item .swatch { display: inline-block; width: 14px; height: 3px; }
 .event-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; border-radius: 10px; padding: 1px 8px; }
 .event-chip.off { opacity: 0.45; }
 .event-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; background: currentColor; }

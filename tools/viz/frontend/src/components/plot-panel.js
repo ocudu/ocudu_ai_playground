@@ -3,13 +3,12 @@
 
 import uPlot from "uplot";
 import { getJSON } from "../api.js";
+import ExportDialog from "./export-dialog.js";
 import { displayUnit, formatStat } from "../units.js";
-import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, fmtFull, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
+import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, fmtFull, formatTime, selectToZoom, seriesColor, seriesData, timeTicks, utcDate } from "./chart-utils.js";
 
 // Distance in pixels within which the cursor is on an event marker.
 const EVENT_HIT_PX = 5;
-// Number of series colors defined by the theme, as CSS variables --s0 to --s9.
-const NOF_SERIES_COLORS = 10;
 const CHART_HEIGHT = 260;
 const steppedPath = uPlot.paths.stepped({ align: 1 });
 // Delay before fetching after the view changes, to coalesce pan events.
@@ -20,10 +19,6 @@ const MAX_LISTED_SPLITS = 300;
 const DEFAULT_DATASET = "sched";
 const DEFAULT_FIELD = "total_dl_brate";
 
-/** @param {number} i */
-function seriesColor(i) {
-  return cssVar(`--s${i % NOF_SERIES_COLORS}`);
-}
 
 /**
  * Index of the nearest non-null entry of arr to idx, or -1.
@@ -54,6 +49,7 @@ export default {
     // Events drawn as markers on time series, in display time, each with t, source, record, category, type and text.
     events: { type: Array, default: () => [] },
   },
+  components: { ExportDialog },
   emits: ["zoom", "remove", "select-record"],
   data() {
     return {
@@ -73,6 +69,7 @@ export default {
       cursorText: "",
       // Event under the cursor, shown with the cursor readout.
       cursorEvent: null,
+      exporting: false,
     };
   },
   computed: {
@@ -237,11 +234,8 @@ export default {
       this.fetchTimer = setTimeout(() => this.fetch(), FETCH_DELAY_MS);
     },
 
-    async fetch() {
-      if (!this.plot.dataset || !this.plot.field) return;
-      this.abort?.abort();
-      this.abort = new AbortController();
-      const width = Math.max(100, Math.round(this.$refs.chart.clientWidth));
+    /** Query of the series, histogram and statistics of the plot in the visible window, without the width. */
+    queryParams() {
       const params = {
         source: this.plot.source,
         dataset: this.plot.dataset,
@@ -255,6 +249,21 @@ export default {
         params.t0 = this.view.min - this.shift;
         params.t1 = this.view.max - this.shift;
       }
+      return params;
+    },
+
+    /** Title of the plot in exported images: its dataset, instance and field, with its unit. */
+    exportTitle() {
+      const parts = [this.dataset?.label ?? this.plot.dataset, this.plot.instance, this.plot.field].filter(Boolean);
+      return parts.join(" › ") + (this.unit.label ? ` [${this.unit.label}]` : "");
+    },
+
+    async fetch() {
+      if (!this.plot.dataset || !this.plot.field) return;
+      this.abort?.abort();
+      this.abort = new AbortController();
+      const width = Math.max(100, Math.round(this.$refs.chart.clientWidth));
+      const params = this.queryParams();
       this.loading = true;
       try {
         const signal = this.abort.signal;
@@ -280,23 +289,8 @@ export default {
       this.downsampled = res.downsampled;
       this.totalSplits = res.total_splits;
       this.nofSeries = res.series.length;
-      const shift = this.shift;
-      const tables = res.series.map((s) => [s.t.map((t) => t + shift), s.v, s.record]);
-      // Series have their own timestamps, so they are aligned on the union of them.
-      const joined = tables.length ? uPlot.join(tables) : [[]];
-      const values = [];
-      this.records = [];
-      for (let i = 0; i < tables.length; i++) {
-        values.push(joined[1 + 2 * i]);
-        this.records.push(joined[2 + 2 * i]);
-      }
-
-      let maxAbs = 0;
-      for (const s of res.series) for (const v of s.v) maxAbs = Math.max(maxAbs, Math.abs(v));
-      const unit = displayUnit(res.unit, maxAbs);
-      const scaled = values.map((col) => col.map((v) => (v == null ? v : v / unit.divisor)));
-      const data = [joined[0], ...scaled];
-      const labels = res.series.map((s) => s.label);
+      const { data, labels, unit, records } = seriesData(res, this.shift);
+      this.records = records;
       this.unit = unit;
       this.labels = labels;
 
@@ -542,6 +536,7 @@ export default {
           <span v-else-if="downsampled" class="muted" title="min/max per pixel; zoom in for full resolution">downsampled</span>
           <span v-if="error" class="error">{{ error }}</span>
         </span>
+        <button class="icon" :disabled="plot.mode === 'histogram' || !labels.length" title="Save the plot as an image" @click="exporting = true">💾</button>
         <button class="icon" title="Remove plot" @click="$emit('remove')">✕</button>
       </header>
       <div class="chart-wrap">
@@ -565,6 +560,9 @@ export default {
           </tbody>
         </table>
       </details>
+      <export-dialog v-if="exporting" :params="queryParams()" :shift="shift" :view="view" :time-mode="timeMode"
+                     :title="exportTitle()" :name-parts="[source?.file?.replace(/\\.[^.]*$/, ''), plot.dataset, plot.instance, plot.field]"
+                     :events="events" @close="exporting = false" />
     </section>
   `,
 };
