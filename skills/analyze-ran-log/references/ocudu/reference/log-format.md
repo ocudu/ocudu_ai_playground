@@ -46,8 +46,10 @@ YYYY-MM-DDTHH:MM:SS.uuuuuu [LAYER   ] [LVL] MESSAGE
   (local time of the host).
 - **Layer tag**: 8 chars, space-padded, in square brackets. Common tags listed
   below.
-- **Level**: `D` (debug), `I` (info), `W` (warning), `E` (error), `C` (critical).
-  In the typical info-level run only `I` (and a few `D` from CONFIG) appear.
+- **Level**: `D` (debug), `I` (info), `W` (warning), `E` (error). There is no
+  critical level. In the typical info-level run only `I` (and a few `D` from
+  CONFIG) appear. Some messages change form with the level of their layer,
+  e.g. PRACH detections in `[SCHED]` (see Procedure markers).
 - **Message**: free-form, often with structured fields like `ue=0`,
   `c-rnti=0x4601`, `pci=1`, `[    33.1]` (slot indicator: SFN.subframe).
 
@@ -106,7 +108,8 @@ state transitions:
 | `SIB1 cell=N: { ... }` | Cell broadcast config dumped (one big JSON block per cell) |
 | `==== gNB started ===` *(in stdout.log only)* | Service ready to accept UEs |
 | `Cell creation idx=N` *(in `[SCHED]`)* | First slot tick for that cell |
-| `prach(ra-rnti=0xN preamble=N tc-rnti=0xN)` *(in `[SCHED]`)* | RA preamble detected → MSG2 scheduled (4-step) |
+| `Processed slot events pci=N: prach(ra-rnti=0xN preamble=N ssb=N tc-rnti=0xN)` *(in `[SCHED]`, info level; `ssb=` optional, `msgb-rnti=` for 2-step)* | RA preamble detected → MSG2 scheduled (4-step) |
+| `Processed slot events pci=N:` then continuation line `- PRACH: slot=S preamble=N ra-rnti=0xN temp_crnti=0xN ta_cmd=N` *(in `[SCHED]`, debug level)* | Same event at debug level: the header line ends with `:` and each event is a `- ` line below it, without preamble, so grep the continuation line, not the header |
 | `MsgB: msgb-rnti=0xN ... tbs=T` *(in `[SCHED]`)* | 2-step RA MsgB scheduled. `tbs=12` = successRAR-only (`S=0`, spec-legal — see `../../common/procedures/random-access.md` § 2-step RA type); a following separate PDSCH under the new `c-rnti` then carries the RRC response |
 | `Rx PDU du=N tid=N du_ue=N: InitialULRRCMessageTransfer` *(in `[CU-CP-F1]`)* | UE's first RRC msg crossed F1 |
 | `UE created` *(in `[CU-CP]`)* | UE context entered CU-CP |
@@ -290,8 +293,8 @@ grep -nE "reconfigurationWithSync|HandoverRequired|HandoverCommand|HandoverReque
 # RRC reestablishment
 grep -nE "reestablishmentRequest|rrcReestablishment(Complete)?" gnb.log
 
-# PRACH attempts (scheduler-level)
-grep -nE "\[SCHED   \].*prach\(" gnb.log
+# PRACH attempts (scheduler-level; info form, then debug continuation lines)
+grep -nE "\[SCHED   \].*prach\(|^- PRACH: " gnb.log
 
 # PHY CRC failures
 grep -n "crc=KO" gnb.log
@@ -299,8 +302,8 @@ grep -n "crc=KO" gnb.log
 # Scheduler metrics rows (one per period per cell)
 grep -nE "\[METRICS \] Scheduler cell" gnb.log
 
-# Warnings / errors / critical (no `[W]` in healthy runs; check anyway)
-grep -nE "\[(W|E|C)\] " gnb.log | head -50
+# Warnings / errors (no `[W]` in healthy runs; check anyway)
+grep -nE "\[(W|E)\] " gnb.log | head -50
 
 # Run boundaries
 grep -nE "Built in .* commit|Workers stopped successfully|Closing PCAP files" gnb.log

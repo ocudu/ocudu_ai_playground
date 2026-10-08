@@ -292,8 +292,8 @@ def parse_gnb_log(gnb_log: Path) -> dict:
                 result["first_ts"] = ts
             result["last_ts"] = ts
 
-            # Warnings / errors / critical
-            if lvl in ("E", "C"):
+            # Warnings / errors
+            if lvl == "E":
                 if len(result["errors"]) < 50:
                     result["errors"].append((ts, layer, msg.strip()))
             elif lvl == "W":

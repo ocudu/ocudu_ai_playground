@@ -33,7 +33,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py <gnb.log> \
   [--after <HH:MM:SS.mmm>] \
   [--before <HH:MM:SS.mmm>] \
   [--pattern <regex>] \
-  [--level <regex over D|I|W|E|C>] \
+  [--level <regex over D|I|W|E>] \
   [--count] \
   [--max-lines 200]
 ```

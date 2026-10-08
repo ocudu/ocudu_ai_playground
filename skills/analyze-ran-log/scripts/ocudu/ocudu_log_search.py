@@ -100,7 +100,7 @@ def parse_args(argv=None):
     )
     ap.add_argument("path", help="gnb.log file or containing directory")
     ap.add_argument("--layer", help="Layer filter (e.g. RRC, NGAP, CU-CP)")
-    ap.add_argument("--level", help="Log-level regex (D|I|W|E|C)")
+    ap.add_argument("--level", help="Log-level regex (D|I|W|E)")
     ap.add_argument("--ue", help="Match `ue=N` in the message")
     ap.add_argument("--rnti", help="Match `c-rnti=0x<HEX>` (hex without 0x)")
     ap.add_argument("--pci", help="Match `pci=N` in the message")

@@ -34,9 +34,9 @@ missing.
    ```bash
    tail -n 30 gnb.log
    ```
-2. Look for `[E]` / `[C]` log lines just before the end:
+2. Look for `[E]` log lines just before the end:
    ```bash
-   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --level "E|C" --max-lines 20
+   python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py gnb.log --level E --max-lines 20
    ```
 3. Check `agent-log-*.log` in the parent of the run dir — Retina records
    the SUT lifecycle:
