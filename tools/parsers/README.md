@@ -150,7 +150,10 @@ events = timeline.run_events(tshark, "run_dir", ["ngap", "f1ap"], ue="0")
 `tshark` reads pcaps through a link or copy in the work directory, since the AppArmor profile of `tshark` on Ubuntu
 only lets it read under `/tmp`, and dissects the MAC and RLC PDUs of `mac.pcap` and `rlc.pcap` through the
 `mac_nr_udp` and `rlc_nr_udp` heuristics. Field extractions are cached in the work directory by pcap and fields.
-`run.check_pcap()` checks that a pcap has a frame that one of the known dissectors binds.
+`run.check_pcap()` checks that a pcap has a frame that one of the known dissectors binds. `messages.messages()` lists
+the NGAP, F1AP or E1AP messages of a pcap with their procedure, outcome, UE identifiers and cause, `frames.summaries()`
+the one-line tshark summary of each frame and `frames.decode()` decodes one frame. `frames.time_span()` reads the time
+span of a pcap from its packet headers, without `tshark`.
 
 ## Tests
 

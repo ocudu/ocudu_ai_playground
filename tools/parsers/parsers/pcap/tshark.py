@@ -46,12 +46,21 @@ def split_fields(line: str, expected: int, sep: str = "\t") -> list[str]:
 class Tshark:
     """Runs tshark, staging pcaps and caching field extractions in a work directory.
 
-    on_cache, if given, is called with the cache file and whether it was a hit, for each cached extraction.
+    on_cache, if given, is called with the cache file and whether it was a hit, for each cached extraction. Without
+    cache, extractions always run tshark.
     """
 
-    def __init__(self, work_dir: str | os.PathLike[str] | None = None, on_cache: Callable[[Path, bool], None] | None = None):
+    def __init__(
+        self,
+        work_dir: str | os.PathLike[str] | None = None,
+        on_cache: Callable[[Path, bool], None] | None = None,
+        cache: bool = True,
+    ):
         self.work_dir = Path(work_dir) if work_dir is not None else default_work_dir()
         self.on_cache = on_cache
+        self.cache = cache
+        # Whether tshark reads each pcap in place, by resolved path.
+        self._readable: dict[Path, bool] = {}
 
     def run(self, args: Sequence[str], *, check: bool = True) -> list[str]:
         """Runs tshark with args, returning its non-empty stdout lines. Raises TsharkError if it fails and check."""
@@ -71,12 +80,12 @@ class Tshark:
         return lines[0] if lines else "unknown"
 
     def stage(self, pcap: str | os.PathLike[str]) -> Path:
-        """Returns a path to the pcap that tshark can read: the pcap itself under /tmp, else a link or copy in the
-        work directory.
+        """Returns a path to the pcap that tshark can read: the pcap itself when tshark reads it, else a link or copy in
+        the work directory.
         """
         src = Path(pcap).resolve()
         # The AppArmor profile of tshark on Ubuntu only lets it read under /tmp and a few system paths.
-        if str(src).startswith("/tmp/"):
+        if str(src).startswith("/tmp/") or self._reads_in_place(src):
             return src
         digest = hashlib.sha256(str(src).encode()).hexdigest()[:16]
         stage_dir = self.work_dir / "pcap-stage"
@@ -94,6 +103,15 @@ class Tshark:
         except OSError:
             shutil.copy2(src, staged)
         return staged
+
+    def _reads_in_place(self, src: Path) -> bool:
+        if src not in self._readable:
+            try:
+                self.run(["-r", str(src), "-c", "1", "-T", "fields", "-e", "frame.number"])
+                self._readable[src] = True
+            except TsharkError:
+                self._readable[src] = False
+        return self._readable[src]
 
     def valid_fields(self, pcap: str | os.PathLike[str], fields: Iterable[str]) -> list[str]:
         """The fields that this tshark build knows, in order."""
@@ -137,9 +155,9 @@ class Tshark:
         """
         fields_list = list(fields)
         tag_str = tag or "+".join(fields_list) + ("|" + display_filter if display_filter else "")
-        cf = self.cache_path(pcap, tag_str)
-        hit = cf.exists() and not force
-        if self.on_cache is not None:
+        cf = self.cache_path(pcap, tag_str) if self.cache else None
+        hit = cf is not None and cf.exists() and not force
+        if cf is not None and self.on_cache is not None:
             self.on_cache(cf, hit)
         if hit:
             with cf.open() as fh:
@@ -154,8 +172,9 @@ class Tshark:
         if display_filter:
             args += ["-Y", display_filter]
         lines = self.run(args)
-        cf.parent.mkdir(parents=True, exist_ok=True)
-        cf.write_text("\n".join(lines) + ("\n" if lines else ""))
+        if cf is not None:
+            cf.parent.mkdir(parents=True, exist_ok=True)
+            cf.write_text("\n".join(lines) + ("\n" if lines else ""))
         for line in lines:
             yield split_fields(line, len(fields_list))
 

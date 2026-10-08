@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from parsers.pcap import e1ap, f1ap, ngap, overview, run, timeline, values
+from parsers.pcap import e1ap, f1ap, frames, messages, ngap, overview, run, timeline, values
 from parsers.pcap.tshark import Tshark, _filter_stderr, split_fields
 
 # A single-UE F1AP capture: F1Setup, RRC and NAS attach, and UEContextRelease.
@@ -86,6 +86,19 @@ class UeIdsTest(unittest.TestCase):
         self.assertEqual(ues[0]["message"], "bearerContextSetup")
 
 
+class FramesWithoutTsharkTest(unittest.TestCase):
+    def test_pcap_magic_and_time_span(self):
+        self.assertTrue(frames.is_pcap(F1AP_PCAP))
+        first, last = frames.time_span(F1AP_PCAP)
+        self.assertLess(first, last)
+        self.assertEqual(values.epoch_to_iso(first)[:10], "2026-07-15")
+        with tempfile.NamedTemporaryFile(suffix=".log") as f:
+            f.write(b"2026-07-15T17:07:49.786 [GNB     ] [I] Built in Release mode\n")
+            f.flush()
+            self.assertFalse(frames.is_pcap(f.name))
+            self.assertIsNone(frames.time_span(f.name))
+
+
 class RunDirTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -152,6 +165,31 @@ class F1apPcapTest(unittest.TestCase):
         self.assertEqual(summary["distinct_ues_by_label"]["cu"], ["0"])
         counts = overview.proc_code_counts(self.tshark, F1AP_PCAP, "f1ap", initiating_only=True)
         self.assertEqual(counts["1"], 1)
+
+    def test_summaries_and_decode(self):
+        summaries = frames.summaries(self.tshark, F1AP_PCAP)
+        self.assertEqual(len(summaries), 32)
+        self.assertEqual((summaries[2]["frame"], summaries[2]["protocol"]), (3, "F1AP/NR RRC"))
+        self.assertIn("RRC Setup Request", summaries[2]["info"])
+        self.assertEqual((summaries[0]["epoch"], summaries[-1]["epoch"]), frames.time_span(F1AP_PCAP))
+        decoded = frames.decode(self.tshark, F1AP_PCAP, 3)
+        self.assertIn("F1 Application Protocol (InitialULRRCMessageTransfer)", decoded)
+        self.assertNotIn("Frame 4:", decoded)
+
+    def test_messages(self):
+        msgs = messages.messages(self.tshark, F1AP_PCAP, "f1ap")
+        self.assertEqual(len(msgs), 32)
+        setup = msgs[0]
+        self.assertEqual((setup["procedure"], setup["outcome"], setup["du_ue_f1ap_id"]), ("F1Setup", "initiating", None))
+        self.assertEqual(msgs[1]["outcome"], "successful")
+        release = [m for m in msgs if m["procedure"] == "UEContextRelease"]
+        self.assertEqual([m["outcome"] for m in release], ["initiating", "successful"])
+        self.assertEqual((release[0]["du_ue_f1ap_id"], release[0]["cu_ue_f1ap_id"]), ("0", "0"))
+
+    def test_without_cache(self):
+        tshark = Tshark(self.tmp.name, cache=False)
+        self.assertEqual(len(f1ap.ue_ids(tshark, F1AP_PCAP)), 1)
+        self.assertEqual(list(Path(self.tmp.name).glob("pcap-cache-*")), [])
 
     def test_events(self):
         events = timeline.events(self.tshark, F1AP_PCAP, "f1ap")
