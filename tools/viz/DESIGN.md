@@ -13,6 +13,8 @@ updated as they are agreed.
 ## Data model
 
 - **Source:** one input file (e.g. `du.log`, `cu.log`, a pcap). A view can hold several sources.
+- **Run:** the sources shown together in one tab, on one time axis: the gNB artifacts of one directory, or a single
+  file (D16).
 - **Dataset:** what a source type extracts from a source. Three kinds:
   - **Time series:** numeric fields over time, split by context (e.g. METRICS layers, trace latencies).
   - **Events:** timestamped points or intervals with a label (e.g. RRC procedures, errors, PRACH, handovers).
@@ -101,8 +103,8 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 ### D3. Multiple sources
 
 - Multiple sources from the first version (F12). Each source has its own cache database.
-- Each source has its own tab, with its plots, zoom range and log line drill-down. Only the selected tab is
-  shown, so sources are not compared side by side; plots do not select their source, their tab does.
+- Each run has its own tab, with its plots, zoom range and drill-down (D16). Only the selected tab is shown, so
+  runs are not compared side by side.
 - Absolute time by default, relative time as an option (F13).
 - The time range of a source spans its first to last log timestamp, widened by its dataset timestamps if
   needed, since log lines are not strictly time ordered. It is the default view of its tab.
@@ -257,6 +259,31 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - The server process takes the results in file order, merges the units as a single pass would, and inserts each
   group of rows at once while later chunks are still parsed, leaving it mostly waiting for the workers. The cache has
   the same contents as with a single pass.
+
+### D16. Runs
+
+- A tab shows a run: one or more sources on one time axis. A run is either a single file, opened on its own, or the
+  gNB artifacts of one directory: the gNB, DU or CU logs and the `mac`, `rlc`, `f1ap`, `e1ap` and `ngap` pcaps, and
+  later `metrics.json`. Files of other nodes (5GC, UE simulator) and of other directories are not part of a run.
+- Opening a directory opens a run with the supported files in it. Opening a file opens a run with that file only,
+  since files in e.g. `~/Downloads` or `/tmp` are often unrelated to each other. A run can add or remove files of
+  its directory from its tab.
+- Each source keeps its own parse, cache database, status and id. A run lists its sources, and the page polls them as
+  today.
+- Plots name their source: the dataset picker groups datasets by source, e.g. `du.log › sched_ue`, so one tab can
+  plot metrics of several sources. The URL view state lists the files of each run.
+- Events and the trace merge the events of all the sources of a run. Pcaps give the protocol messages, i.e. F1AP,
+  NGAP and E1AP messages, the RRC and NAS messages that F1AP carries, and failures, independently of log levels and
+  log wording. Logs give what pcaps do not show, e.g. PRACH, contention resolution timeouts, RLF, warnings and errors.
+  When a log line and a packet show the same message, the packet is the event, linked to the log line.
+- UE contexts are joined across the sources of a run: F1AP DU and CU UE IDs and C-RNTIs, log UE indexes and RNTIs,
+  NGAP RAN and AMF UE IDs and E1AP CU-CP and CU-UP UE IDs, with RNTIs normalized by `parsers.ran` and bounded by the
+  lifetime of their UE context. A trace row shows all the identifiers of its UE.
+- Drill-down follows the source of the clicked item: log lines for logs, and the frame and its one-line tshark summary
+  for pcaps, with the decoded frame on demand. An event with both shows both.
+- Sources of one run share the gNB clock, so they have no time offset.
+- Steps: runs of several log sources; a pcap source type on `parsers.pcap`, with its events in the trace; the UE join
+  and UE filter. The container image adds `tshark`.
 
 ## Open questions
 
