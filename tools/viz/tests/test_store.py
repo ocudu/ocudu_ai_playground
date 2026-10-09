@@ -3,9 +3,11 @@
 
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from viz.sources.log_metrics import LogMetricsSource
+from viz import store as store_module
 from viz.store import QueryError, StoreCache
 
 from .helpers import _ts, write_log
@@ -186,6 +188,24 @@ class StoreTest(unittest.TestCase):
         rlf = res["events"][4]
         self.assertEqual((rlf["category"], rlf["layer"], rlf["ue"], rlf["cause"]), ("failure", "MAC", 1, "100 consecutive HARQ-ACK KOs"))
         self.assertIn("RLF detected", store.records(around=rlf["record"], count=1)[0]["text"])
+
+    def test_search_across_blocks(self):
+        log = write_log(self.dir / "long.log", nof_seconds=400, nof_ues=10)
+        store = self.cache.open(log, LogMetricsSource())
+        want = [i for i, line in enumerate(log.read_text().splitlines(), start=1) if "ue=7 " in line]
+        # Blocks of one record offset each, so that matches span many blocks.
+        with mock.patch.object(store_module, "_SEARCH_BLOCK_SIZE", 1):
+            found, after = [], 0
+            for _ in want:
+                after = store.search("ue=7 ", after=after)["record"]
+                found.append(after)
+            self.assertEqual(found, want)
+            self.assertEqual(store.search("ue=7 ", after=want[-1]), {"record": want[0], "wrapped": True})
+            back, after = [], want[-1] + 1
+            for _ in want:
+                after = store.search("ue=7 ", after=after, backward=True)["record"]
+                back.append(after)
+            self.assertEqual(back, want[::-1])
 
     def test_repeated_warnings(self):
         late = "[OFH     ] [W] Real-time timing worker woke up late, skipped '{}' symbols."

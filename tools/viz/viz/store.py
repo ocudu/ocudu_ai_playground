@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import re
 import os
 import sqlite3
 import tempfile
@@ -693,6 +694,62 @@ class Store:
                 record += 1
         return out
 
+    def search(self, pattern: str, regex: bool = False, after: int = 0, backward: bool = False) -> dict[str, Any]:
+        """Returns the first record after the record after, or with backward the last before it, whose text matches
+        pattern, as "record", or None. The search wraps around the end of the records, which "wrapped" tells.
+
+        pattern is a case-insensitive regular expression with regex, else plain text. Raises QueryError for an invalid
+        expression.
+        """
+        try:
+            compiled = re.compile(pattern if regex else re.escape(pattern), re.IGNORECASE | re.MULTILINE)
+        except re.error as e:
+            raise QueryError(f"Search: {e}") from None
+        first = self._search(compiled, after, backward)
+        if first is not None:
+            return {"record": first, "wrapped": False}
+        # From the other end, up to where the search started, that record included.
+        again = self._search(compiled, 2**62 if backward else 0, backward, after - 1 if backward else after + 1)
+        return {"record": again, "wrapped": again is not None}
+
+    def _search(self, compiled: re.Pattern, after: int, backward: bool, stop: int | None = None) -> int | None:
+        """The first record after after, or the last before it with backward, matching compiled, short of stop."""
+        def wanted(record: int) -> bool:
+            if backward:
+                return record < after and (stop is None or record > stop)
+            return record > after and (stop is None or record < stop)
+
+        with self._connect() as conn:
+            if conn.execute("SELECT 1 FROM record_texts LIMIT 1").fetchone():
+                op, order = ("<", "DESC") if backward else (">", "ASC")
+                rows = conn.execute(f"SELECT record, text FROM record_texts WHERE record {op} ? ORDER BY record {order}", (after,))
+                return next((r for r, text in rows if wanted(r) and compiled.search(text)), None)
+            index = conn.execute("SELECT record, offset FROM record_offsets ORDER BY record").fetchall() or [(1, 0)]
+        blocks = _search_blocks(index, self.path.stat().st_size)
+        # Logs are searched as bytes, one block of lines at a time, the line of a match from the newlines before it.
+        pattern = re.compile(compiled.pattern.encode(), compiled.flags & ~re.UNICODE)
+        with self.path.open("rb") as f:
+            for first, last, start, end in reversed(blocks) if backward else blocks:
+                if (backward and first >= after) or (not backward and last <= after):
+                    continue
+                f.seek(start)
+                data = f.read(end - start)
+                found, line, pos = None, first, 0
+                for m in pattern.finditer(data):
+                    line += data.count(b"\n", pos, m.start())
+                    pos = m.start()
+                    if wanted(line):
+                        if not backward:
+                            return line
+                        found = line
+                    elif backward and line >= after:
+                        break
+                if found is not None:
+                    return found
+                if stop is not None and ((backward and first <= stop) or (not backward and last >= stop)):
+                    return None
+        return None
+
     def _window(
         self,
         conn: sqlite3.Connection,
@@ -937,3 +994,21 @@ class StoreCache:
         except sqlite3.Error:
             return False
         return bool(row and json.loads(row[0]))
+
+
+# Bytes a log search reads at once, joined from the record offsets of the store.
+_SEARCH_BLOCK_SIZE = 8 << 20
+
+
+def _search_blocks(index: list[tuple[int, int]], size: int) -> list[tuple[int, int, int, int]]:
+    """Blocks of a file to search, as (first record, last record, start offset, end offset), at the record offsets of
+    index. The last block ends at the end of the file, with no last record known.
+    """
+    blocks = []
+    record, start = index[0]
+    for next_record, offset in index[1:]:
+        if offset - start >= _SEARCH_BLOCK_SIZE:
+            blocks.append((record, next_record - 1, start, offset))
+            record, start = next_record, offset
+    blocks.append((record, 2**62, start, size))
+    return blocks

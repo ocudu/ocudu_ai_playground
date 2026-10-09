@@ -41,7 +41,11 @@ export default {
   emits: ["close"],
   data() {
     // current is the highlighted record, the selected one until another record is clicked, and detail its decoding.
-    return { records: [], center: 0, error: "", height: loadHeight(), current: null, detail: "", detailError: "" };
+    return {
+      records: [], center: 0, error: "", height: loadHeight(), current: null, detail: "", detailError: "",
+      // Search of the records: its text, whether it is a regular expression, and its outcome, e.g. "no match".
+      query: "", regex: false, searchNote: "", searching: false,
+    };
   },
   computed: {
     source() {
@@ -49,6 +53,16 @@ export default {
     },
     sourceName() {
       return this.source?.name ?? "";
+    },
+    /** Matcher of the search in the shown lines, to highlight its matches, or null. JavaScript regular expressions
+     * mostly agree with the Python ones of the server; a pattern only the server takes is not highlighted. */
+    hitPattern() {
+      if (!this.query) return null;
+      try {
+        return new RegExp(this.regex ? this.query : this.query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi");
+      } catch {
+        return null;
+      }
     },
     /** Whether records decode, e.g. pcap frames, which are then shown beside the records. */
     hasDetail() {
@@ -114,13 +128,52 @@ export default {
     segments(r) {
       const parts = [];
       let pos = 0;
-      for (const [start, end] of r.marks ?? []) {
+      for (const [start, end] of this.spans(r)) {
         if (start > pos) parts.push({ text: r.text.slice(pos, start), mark: false });
         parts.push({ text: r.text.slice(start, end), mark: true });
         pos = end;
       }
       if (pos < r.text.length || !parts.length) parts.push({ text: r.text.slice(pos), mark: false });
       return parts;
+    },
+
+    /** Marks of a record: the spans of its field, and the matches of the search, sorted and without overlaps. */
+    spans(r) {
+      const spans = [...(r.marks ?? [])];
+      const hit = this.hitPattern;
+      if (hit) {
+        for (const m of r.text.matchAll(hit)) {
+          if (m[0].length) spans.push([m.index, m.index + m[0].length]);
+        }
+      }
+      spans.sort((a, b) => a[0] - b[0]);
+      const out = [];
+      for (const s of spans) {
+        if (out.length && s[0] < out[out.length - 1][1]) out[out.length - 1][1] = Math.max(out[out.length - 1][1], s[1]);
+        else out.push([...s]);
+      }
+      return out;
+    },
+
+    /** Goes to the next record matching the search after the highlighted one, or the previous one with backward. */
+    async search(backward = false) {
+      if (!this.query || this.searching) return;
+      this.searching = true;
+      try {
+        const res = await getJSON("/api/records/search", {
+          source: this.selection.source, q: this.query, regex: this.regex, after: this.current ?? this.center, backward,
+        });
+        this.searchNote = res.record == null ? "no match" : res.wrapped ? (backward ? "wrapped to the end" : "wrapped to the start") : "";
+        if (res.record != null) {
+          this.current = res.record;
+          await this.load(res.record);
+          this.loadDetail();
+        }
+      } catch (e) {
+        this.searchNote = e.message;
+      } finally {
+        this.searching = false;
+      }
     },
 
     resetHeight() {
@@ -160,6 +213,17 @@ export default {
         <span class="muted">{{ hasDetail ? "frame" : "line" }} {{ current }}</span>
         <button @click="load(center - WINDOW)">earlier</button>
         <button @click="load(center + WINDOW)">later</button>
+        <form class="filter record-search" @submit.prevent="search(false)">
+          <input v-model="query" placeholder="search" title="Enter: next match, Shift+Enter: previous. Case-insensitive."
+                 @keydown.enter.shift.prevent="search(true)" @input="searchNote = ''" />
+        </form>
+        <label class="inline" title="Search with a regular expression (Python syntax), e.g. ue=\d+ .*RLF">
+          <input type="checkbox" v-model="regex" @change="searchNote = ''" /> regex
+        </label>
+        <button class="icon" title="Previous match (Shift+Enter)" :disabled="!query" @click="search(true)">↑</button>
+        <button class="icon" title="Next match (Enter)" :disabled="!query" @click="search(false)">↓</button>
+        <span v-if="searching" class="muted">searching</span>
+        <span v-else-if="searchNote" :class="searchNote === 'no match' || searchNote.startsWith('wrapped') ? 'muted' : 'error'">{{ searchNote }}</span>
         <span class="status"><span v-if="error" class="error">{{ error }}</span></span>
         <button class="icon" title="Close" @click="$emit('close')">✕</button>
       </header>

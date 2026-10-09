@@ -559,6 +559,22 @@ def create_app(
                     r["marks"] = [list(span)]
         return out
 
+    @app.get("/api/records/search")
+    def search_records(
+        source: int,
+        q: str = Query(..., min_length=1),
+        regex: bool = False,
+        after: int = Query(0, ge=0),
+        backward: bool = False,
+    ) -> dict[str, Any]:
+        """Returns the next record after after, or the previous one with backward, whose text matches q, as "record",
+        or None, wrapping around the records, see Store.search().
+        """
+        try:
+            return get_store(source).search(q, regex, after, backward)
+        except QueryError as e:
+            raise HTTPException(400, str(e)) from None
+
     @app.get("/api/records/detail")
     def record_detail(source: int, record: int = Query(..., ge=1)) -> dict[str, Any]:
         """Returns a record decoded as text, for sources whose type decodes records, e.g. pcap frames."""

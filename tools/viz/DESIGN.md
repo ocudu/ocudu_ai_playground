@@ -379,6 +379,16 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   cap applies per field. `/api/series.csv?field2` merges the samples of both in time order, with field, value and unit
   columns.
 
+### D19. Search in the record pane
+
+- `GET /api/records/search?source&q&regex&after&backward` returns the next record after a record, or the previous one,
+  whose text matches, wrapping around the file (`Store.search()`). Matching is case-insensitive; `regex` takes a Python
+  regular expression, else the text is matched literally.
+- Logs are searched as bytes in blocks of about 8 MB that start at the record offsets of the store, so that the line
+  of a match is the first line of its block plus the newlines before it, without reading the file from its start. A
+  search that finds nothing reads the whole file: about 2 s for 485 MB. Pcaps search the frame summaries they store.
+- The pane highlights the matches in its lines with a JavaScript regular expression, which mostly agrees with Python's.
+
 ## Open questions
 
 None yet.

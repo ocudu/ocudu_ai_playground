@@ -160,6 +160,18 @@ class ServerTest(unittest.TestCase):
         res = self.client.get("/api/records", params={"source": 0, "around": 2, "count": 1})
         self.assertEqual(res.json()[0]["record"], 2)
 
+    def test_records_search(self):
+        lines = self.client.get("/api/records", params={"source": 0, "around": 1, "count": 1000}).json()
+        want = [r["record"] for r in lines if "ue=1 " in r["text"]]
+        search = lambda **params: self.client.get("/api/records/search", params={"source": 0, **params})
+        self.assertEqual(search(q="UE=1 ").json(), {"record": want[0], "wrapped": False})
+        self.assertEqual(search(q="ue=1 ", after=want[0]).json()["record"], want[1])
+        self.assertEqual(search(q="ue=1 ", after=want[-1]).json(), {"record": want[0], "wrapped": True})
+        self.assertEqual(search(q="ue=1 ", after=want[1], backward=True).json()["record"], want[0])
+        self.assertEqual(search(q=r"ue=\d pci=1 rnti=0x4601", regex=True).json()["record"], want[0])
+        self.assertEqual(search(q="no such text").json(), {"record": None, "wrapped": False})
+        self.assertEqual(search(q="(", regex=True).status_code, 400)
+
     def test_records_marks(self):
         from fastapi.testclient import TestClient
 
