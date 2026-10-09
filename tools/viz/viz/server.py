@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import csv
+import heapq
 import io
 import itertools
 from collections.abc import AsyncIterator, Callable, Iterator
@@ -413,31 +414,46 @@ def create_app(
         split_values: list[str] | None = Query(None),
         filter_expr: str | None = Query(None, alias="filter"),
         instance: str | None = None,
+        field2: str | None = None,
     ) -> StreamingResponse:
-        """Streams the samples of the series of a plot at full resolution, one row per sample."""
+        """Streams the samples of the series of a plot at full resolution, one row per sample. With field2, the second
+        metric of the plot, the samples of both, in time order, with their field and unit in columns.
+        """
         store = get_store(source)
-        rows = store.series_rows(dataset, field, t0, t1, split_by, split_values, filter_expr, instance)
+        fields = [field, *([field2] if field2 else [])]
+        units = store.datasets[dataset]["units"] if dataset in store.datasets else {}
+        def samples(f: str) -> Iterator[tuple[Any, ...]]:
+            for t, _, split, value in store.series_rows(dataset, f, t0, t1, split_by, split_values, filter_expr, instance):
+                yield t, f, split, value
+
+        streams = [samples(f) for f in fields]
+        rows = heapq.merge(*streams, key=lambda r: r[0]) if field2 else streams[0]
         try:
             # Runs the query before the response starts, so errors get a proper status.
             first = next(rows, None)
         except QueryError as e:
             raise HTTPException(400, str(e)) from None
-        unit = store.datasets[dataset]["units"].get(field)
-        header = ["time_utc", *([split_by] if split_by else []), f"{field}_{unit.replace('%', 'pct')}" if unit else field]
+        unit = units.get(field)
+        split_col = [split_by] if split_by else []
+        if field2:
+            header = ["time_utc", *split_col, "field", "value", "unit"]
+        else:
+            header = ["time_utc", *split_col, f"{field}_{unit.replace('%', 'pct')}" if unit else field]
 
         def generate() -> Iterator[str]:
             buf = io.StringIO()
             writer = csv.writer(buf)
             writer.writerow(header)
-            for i, (t, _, split, value) in enumerate(itertools.chain([first] if first else [], rows), start=1):
-                writer.writerow([_utc_iso(t), *([split] if split_by else []), value])
+            for i, (t, f, split, value) in enumerate(itertools.chain([first] if first else [], rows), start=1):
+                extra = [f, value, units.get(f) or ""] if field2 else [value]
+                writer.writerow([_utc_iso(t), *([split] if split_by else []), *extra])
                 if i % _CSV_CHUNK_ROWS == 0:
                     yield buf.getvalue()
                     buf.seek(0)
                     buf.truncate()
             yield buf.getvalue()
 
-        name_parts = [store.path.stem, dataset] + ([instance] if instance else []) + [field]
+        name_parts = [store.path.stem, dataset] + ([instance] if instance else []) + fields
         filename = _csv_name("_".join(name_parts)) + ".csv"
         return StreamingResponse(
             generate(), media_type="text/csv", headers={"Content-Disposition": f'attachment; filename="{filename}"'}

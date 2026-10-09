@@ -115,6 +115,18 @@ class ServerTest(unittest.TestCase):
         unsplit = self.client.get("/api/series.csv", params={"source": 0, "dataset": "mac", "field": "nof_slots"}).text
         self.assertEqual(unsplit.splitlines()[0], "time_utc,nof_slots")
 
+    def test_series_csv_of_two_fields(self):
+        params = {"source": 0, "dataset": "sched_ue", "field": "dl_brate", "field2": "cqi", "split_by": "ue", "split_values": ["1"]}
+        res = self.client.get("/api/series.csv", params=params)
+        self.assertIn('filename="gnb_sched_ue_dl_brate_cqi.csv"', res.headers["content-disposition"])
+        lines = res.text.splitlines()
+        self.assertEqual(lines[0], "time_utc,ue,field,value,unit")
+        # The samples of both, in time order, with the unit of each.
+        self.assertEqual(len(lines), 1 + 20)
+        self.assertEqual([line.split(",")[2] for line in lines[1:3]], ["dl_brate", "cqi"])
+        self.assertEqual({line.split(",")[4] for line in lines[1:]}, {"bps", ""})
+        self.assertEqual(self.client.get("/api/series.csv", params={**params, "field2": "nope"}).status_code, 400)
+
     def test_series_csv_errors(self):
         base = {"source": 0, "dataset": "sched_ue", "field": "dl_brate"}
         self.assertEqual(self.client.get("/api/series.csv", params={**base, "filter": "nope > 1"}).status_code, 400)

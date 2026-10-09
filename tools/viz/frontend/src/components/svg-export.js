@@ -38,7 +38,7 @@ export function chartSvg(u, ox, oy, style, clipId) {
 
   u.axes.forEach((axis, i) => {
     if (!axis.show || !axis._show || !axis._splits) return;
-    const scale = i === 0 ? "x" : "y";
+    const scale = i === 0 ? "x" : axis.scale ?? "y";
     const horizontal = axis.side % 2 === 0;
     const tickSize = axis.ticks?.show ? axis.ticks.size : 0;
     const pos = (horizontal ? oy : ox) + axis._pos;
@@ -94,11 +94,12 @@ export function chartSvg(u, ox, oy, style, clipId) {
     for (let k = 0; k < xs.length; k++) {
       if (ys[k] == null) continue;
       const x = left + u.valToPos(xs[k], "x");
-      const y = top + u.valToPos(ys[k], "y");
+      const y = top + u.valToPos(ys[k], s.scale ?? "y");
       d += `${d ? "L" : "M"}${num(x)} ${num(y)}`;
       points.push([x, y]);
     }
-    if (d) series.push(`<path d="${d}" stroke="${color}" stroke-width="${style.lineWidth}" fill="none" stroke-linejoin="round"/>`);
+    const dash = s.dash?.length ? ` stroke-dasharray="${s.dash.join(" ")}"` : "";
+    if (d) series.push(`<path d="${d}" stroke="${color}" stroke-width="${style.lineWidth}" fill="none" stroke-linejoin="round"${dash}/>`);
     // uPlot draws the points of a series when they are spaced enough, with its own test and sizes.
     const p = s.points;
     const shown = typeof p?.show === "function" ? p.show(u, i) : p?.show;

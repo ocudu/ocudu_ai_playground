@@ -5,7 +5,7 @@ import uPlot from "uplot";
 import { buildQuery, getJSON } from "../api.js";
 import ExportDialog from "./export-dialog.js";
 import { displayUnit, formatStat } from "../units.js";
-import { CURSOR_SYNC_KEY, MAX_LEGEND_SERIES, TIME_TICK_SPACE, attachZoomPan, capLegend, cssVar, eventText, fmtFull, formatTime, selectToZoom, seriesColor, seriesData, timeTicks, utcDate } from "./chart-utils.js";
+import { CURSOR_SYNC_KEY, MAX_LEGEND_SERIES, TIME_TICK_SPACE, attachZoomPan, capLegend, chartSeries, cssVar, eventText, fmtFull, formatTime, plotData, selectToZoom, seriesColor, timeTicks, utcDate, valueAxes } from "./chart-utils.js";
 
 // Distance in pixels within which the cursor is on an event marker.
 const EVENT_HIT_PX = 5;
@@ -68,6 +68,8 @@ export default {
       stats: [],
       statsSampled: false,
       unit: { divisor: 1, label: "" },
+      // Unit of the second metric when it has an axis of its own, else null.
+      unit2: null,
       labels: [],
       cursorText: "",
       // Event under the cursor, shown with the cursor readout.
@@ -88,6 +90,10 @@ export default {
     numericFields() {
       return this.dataset ? this.dataset.fields.filter((f) => f.type === "number" && !this.dataset.context.includes(f.name)) : [];
     },
+    /** Field of the second metric when it is shown, which only time series do, else null. */
+    field2() {
+      return this.plot.second && this.plot.mode !== "histogram" && this.plot.field2 && this.plot.field2 !== this.plot.field ? this.plot.field2 : null;
+    },
     splitFields() {
       return this.dataset ? this.dataset.context : [];
     },
@@ -101,17 +107,19 @@ export default {
     },
     statsRows() {
       return this.stats.map((s) => {
-        const idx = this.labels.indexOf(s.label);
+        const info = this.seriesInfo.find((i) => i.label === s.label);
         // Read after a theme change, which changes the series colors.
         void this.themeVersion;
-        const color = idx >= 0 ? seriesColor(idx) : "transparent";
-        const scale = (v) => formatStat(v == null ? v : v / this.unit.divisor);
-        return { label: s.label, color, count: s.count.toLocaleString(), min: scale(s.min), mean: scale(s.mean), p50: scale(s.p50), p95: scale(s.p95), p99: scale(s.p99), max: scale(s.max) };
+        const color = info ? seriesColor(info.color) : "transparent";
+        const divisor = (info?.scale === "y2" ? this.unit2 : this.unit).divisor;
+        const scale = (v) => formatStat(v == null ? v : v / divisor);
+        const unit = info?.scale === "y2" ? this.unit2.label : this.unit.label;
+        return { label: s.label, unit, color, count: s.count.toLocaleString(), min: scale(s.min), mean: scale(s.mean), p50: scale(s.p50), p95: scale(s.p95), p99: scale(s.p99), max: scale(s.max) };
       });
     },
     /** CSV of the samples of the plot in the visible window, at full resolution. */
     csvHref() {
-      return `/api/series.csv?${buildQuery(this.queryParams())}`;
+      return `/api/series.csv?${buildQuery({ ...this.queryParams(), field2: this.field2 })}`;
     },
     filterDirty() {
       return this.filterDraft.trim() !== this.plot.filter;
@@ -131,9 +139,14 @@ export default {
     },
     "plot.dataset"() {
       this.plot.field = this.defaultField();
+      this.plot.field2 = this.defaultField2();
       const split = DEFAULT_SPLITS[this.plot.dataset];
       this.plot.splitBy = split && this.splitFields.includes(split) ? split : null;
       this.loadInstanceOptions(true);
+    },
+    "plot.field"() {
+      // Until the second metric is shown, its field follows the first, e.g. ul_brate for dl_brate.
+      if (!this.plot.second) this.plot.field2 = this.defaultField2();
     },
     "plot.splitBy"() {
       this.plot.splitValues = [];
@@ -150,13 +163,15 @@ export default {
       if (!this.lastRes) return;
       this.rebuildPending = true;
       if (this.lastRes.edges) this.renderHistogram(this.lastRes);
-      else this.render(this.lastRes);
+      else this.render(this.lastRes, this.lastRes2, this.lastField2);
     },
   },
   created() {
     // Not reactive: chart state is owned by uPlot.
     this.chart = null;
     this.records = [];
+    // How each value series is drawn, see plotData().
+    this.seriesInfo = [];
     this.focusedSeries = -1;
     this.lastRes = null;
     this.hovering = false;
@@ -164,7 +179,7 @@ export default {
     this.abort = null;
     // Any change of the query inputs refetches and rebuilds the chart.
     this.$watch(
-      () => [this.plot.source, this.plot.dataset, this.plot.field, this.plot.splitBy, [...this.plot.splitValues], this.plot.filter, this.plot.instance, this.plot.mode, this.shift, this.timeMode],
+      () => [this.plot.source, this.plot.dataset, this.plot.field, this.field2, this.plot.splitBy, [...this.plot.splitValues], this.plot.filter, this.plot.instance, this.plot.mode, this.shift, this.timeMode],
       () => this.scheduleFetch(true),
     );
   },
@@ -175,6 +190,7 @@ export default {
     this.resizeObserver.observe(this.$refs.chart);
     if (!this.plot.dataset) this.plot.dataset = this.defaultDataset();
     if (!this.plot.field) this.plot.field = this.defaultField();
+    if (!this.plot.field2) this.plot.field2 = this.defaultField2();
     this.loadInstanceOptions(this.plot.instance == null);
     this.scheduleFetch(true);
   },
@@ -195,6 +211,23 @@ export default {
     /** DEFAULT_FIELD if the dataset has it, else its first numeric field. */
     defaultField() {
       return (this.numericFields.find((f) => f.name === DEFAULT_FIELD) ?? this.numericFields[0])?.name ?? null;
+    },
+
+    /** Field of the second metric when first enabled: the uplink one of a downlink field and the other way round, e.g.
+     * ul_brate for dl_brate, else the next numeric field. */
+    defaultField2() {
+      const names = this.numericFields.map((f) => f.name).filter((n) => n !== this.plot.field);
+      const field = this.plot.field ?? "";
+      const swapped = /(^|_)dl(_|$)/.test(field) ? field.replace(/(^|_)dl(_|$)/, "$1ul$2") : field.replace(/(^|_)ul(_|$)/, "$1dl$2");
+      if (swapped !== field && names.includes(swapped)) return swapped;
+      const next = this.numericFields.findIndex((f) => f.name === field) + 1;
+      return this.numericFields[next]?.name ?? names[0] ?? null;
+    },
+
+    /** Enables the second metric, picking a field for it unless one is picked already. */
+    toggleSecond(on) {
+      if (on && (!this.plot.field2 || this.plot.field2 === this.plot.field)) this.plot.field2 = this.defaultField2();
+      this.plot.second = on;
     },
 
     async loadSplitOptions() {
@@ -264,8 +297,11 @@ export default {
 
     /** Title of the plot in exported images: its dataset, instance and field, with its unit. */
     exportTitle() {
-      const parts = [this.dataset?.label ?? this.plot.dataset, this.plot.instance, this.plot.field].filter(Boolean);
-      return parts.join(" › ") + (this.unit.label ? ` [${this.unit.label}]` : "");
+      const parts = [this.dataset?.label ?? this.plot.dataset, this.plot.instance].filter(Boolean);
+      const unit = (label) => (label ? ` [${label}]` : "");
+      let fields = this.plot.field + (this.unit2 ? unit(this.unit.label) : "");
+      if (this.field2) fields += ` + ${this.field2}${this.unit2 ? unit(this.unit2.label) : ""}`;
+      return [...parts, fields].join(" › ") + (this.unit2 ? "" : unit(this.unit.label));
     },
 
     async fetch() {
@@ -278,15 +314,21 @@ export default {
       try {
         const signal = this.abort.signal;
         const histogram = this.plot.mode === "histogram";
-        const [res, stats] = await Promise.all([
+        const field2 = this.field2;
+        const params2 = { ...params, field: field2 };
+        const [res, stats, res2, stats2] = await Promise.all([
           histogram ? getJSON("/api/histogram", params, signal) : getJSON("/api/series", { ...params, width }, signal),
           getJSON("/api/stats", params, signal),
+          field2 ? getJSON("/api/series", { ...params2, width }, signal) : null,
+          field2 ? getJSON("/api/stats", params2, signal) : null,
         ]);
         this.error = "";
         if (histogram) this.renderHistogram(res);
-        else this.render(res);
-        this.stats = stats.series;
-        this.statsSampled = stats.sampled;
+        else this.render(res, res2, field2);
+        // Labelled like their series, see plotData().
+        const named = (f, s) => ({ ...s, label: field2 == null || s.label === f ? s.label : `${f} ${s.label}` });
+        this.stats = [...stats.series.map((s) => named(this.plot.field, s)), ...(stats2?.series ?? []).map((s) => named(field2, s))];
+        this.statsSampled = stats.sampled || Boolean(stats2?.sampled);
       } catch (e) {
         if (e.name !== "AbortError") this.error = e.message;
       } finally {
@@ -294,23 +336,27 @@ export default {
       }
     },
 
-    render(res) {
+    render(res, res2 = null, field2 = null) {
       this.lastRes = res;
-      this.downsampled = res.downsampled;
+      this.lastRes2 = res2;
+      this.lastField2 = field2;
+      this.downsampled = res.downsampled || Boolean(res2?.downsampled);
       this.totalSplits = res.total_splits;
-      this.nofSeries = res.series.length;
-      const { data, labels, unit, records } = seriesData(res, this.shift);
+      const { data, series, labels, unit, unit2, records } = plotData(res, res2, this.shift, this.plot.field, field2);
+      this.nofSeries = series.length;
       this.records = records;
+      this.seriesInfo = series;
       this.unit = unit;
+      this.unit2 = unit2;
       this.labels = labels;
 
-      const key = JSON.stringify(["time", labels, unit.label]);
+      const key = JSON.stringify(["time", series, unit.label, unit2?.label]);
       if (this.chart && !this.rebuildPending && this.chartKey === key) {
         this.chart.setData(data, false);
       } else {
         this.chart?.destroy();
         this.chartKey = key;
-        this.chart = this.createChart(data, labels, unit.label);
+        this.chart = this.createChart(data, series, unit, unit2);
       }
       this.rebuildPending = false;
       this.applyView();
@@ -328,6 +374,8 @@ export default {
       const labels = res.series.map((s) => s.label);
       this.unit = unit;
       this.labels = labels;
+      this.unit2 = null;
+      this.seriesInfo = labels.map((label, i) => ({ label, color: i, dash: false, scale: "y", field: this.plot.field }));
       // A stepped path draws bin i from edge i to edge i+1, so the last count is repeated at the last edge.
       const data = [
         res.edges.map((e) => e / unit.divisor),
@@ -361,6 +409,8 @@ export default {
       if (this.hovering && top != null && top >= 0) {
         const y = u.posToVal(top, "y");
         text += histogram ? ` \u00b7 count ${formatStat(Math.max(0, y))}` : ` \u00b7 ${formatStat(y)}${unit}`;
+        // The value of the right axis of the second metric too.
+        if (!histogram && this.unit2) text += ` \u00b7 ${formatStat(u.posToVal(top, "y2"))}${this.unit2.label ? ` ${this.unit2.label}` : ""}`;
       }
       this.cursorText = text;
     },
@@ -407,7 +457,7 @@ export default {
       return chart;
     },
 
-    createChart(data, labels, unitLabel) {
+    createChart(data, series, unit, unit2) {
       const axisColor = cssVar("--fg-muted");
       const gridColor = cssVar("--grid");
       const axis = { stroke: axisColor, grid: { stroke: gridColor, width: 1 }, ticks: { stroke: gridColor, width: 1 } };
@@ -422,9 +472,9 @@ export default {
           absolute
             ? { label: "time (UTC)", value: (u, ts) => (ts == null ? "--" : fmtFull(utcDate(ts))) }
             : { label: "time (s)", value: (u, t) => (t == null ? "--" : t.toFixed(3)) },
-          ...labels.map((label, i) => ({ label, stroke: seriesColor(i), width: 1.25, spanGaps: true })),
+          ...chartSeries(series, 1.25),
         ],
-        axes: [xAxis, { ...axis, label: unitLabel, size: 60 }],
+        axes: [xAxis, ...valueAxes(axis, unit, unit2, this.plot.field, this.lastField2)],
         cursor: { drag: { x: true, y: false, setScale: false }, sync: { key: CURSOR_SYNC_KEY }, focus: { prox: 16 } },
         focus: { alpha: 0.35 },
         hooks: {
@@ -496,7 +546,7 @@ export default {
       let si = this.focusedSeries > 0 ? this.focusedSeries - 1 : this.records.findIndex((r) => r[idx] != null);
       if (si < 0) si = 0;
       const j = nearestDefined(this.records[si], idx);
-      if (j >= 0) this.$emit("select-record", { source: this.plot.source, record: this.records[si][j], field: this.plot.field });
+      if (j >= 0) this.$emit("select-record", { source: this.plot.source, record: this.records[si][j], field: this.seriesInfo[si]?.field ?? this.plot.field });
     },
   },
   template: `
@@ -516,6 +566,12 @@ export default {
         </select>
         <select v-model="plot.field" title="Field" class="field-select">
           <option v-for="f in numericFields" :key="f.name" :value="f.name">{{ f.name }}</option>
+        </select>
+        <label v-if="plot.mode !== 'histogram'" class="inline" title="A second field of the dataset, dashed, on its own axis on the right when its unit differs">
+          <input type="checkbox" :checked="plot.second" @change="toggleSecond($event.target.checked)" /> 2nd
+        </label>
+        <select v-if="plot.second && plot.mode !== 'histogram'" v-model="plot.field2" title="Second field" class="field-select">
+          <option v-for="f in numericFields" :key="f.name" :value="f.name" :disabled="f.name === plot.field">{{ f.name }}</option>
         </select>
         <select v-model="plot.mode" title="View">
           <option value="time">time series</option>
@@ -564,19 +620,19 @@ export default {
       </div>
       <p v-if="nofSeries > maxLegendSeries" class="muted legend-note">legend and statistics list the first {{ maxLegendSeries }} of {{ nofSeries }} series</p>
       <details v-if="statsRows.length" class="stats" open>
-        <summary class="muted">statistics of the visible window{{ unit.label ? " [" + unit.label + "]" : "" }}{{ statsSampled ? ", percentiles sampled" : "" }}</summary>
+        <summary class="muted">statistics of the visible window{{ !unit2 && unit.label ? " [" + unit.label + "]" : "" }}{{ statsSampled ? ", percentiles sampled" : "" }}</summary>
         <table>
           <thead><tr><th></th><th>count</th><th>min</th><th>mean</th><th>p50</th><th>p95</th><th>p99</th><th>max</th></tr></thead>
           <tbody>
             <tr v-for="r in statsRows" :key="r.label">
-              <td><span class="swatch" :style="{ background: r.color }"></span>{{ r.label }}</td>
+              <td><span class="swatch" :style="{ background: r.color }"></span>{{ r.label }}{{ unit2 && r.unit ? " [" + r.unit + "]" : "" }}</td>
               <td>{{ r.count }}</td><td>{{ r.min }}</td><td>{{ r.mean }}</td><td>{{ r.p50 }}</td><td>{{ r.p95 }}</td><td>{{ r.p99 }}</td><td>{{ r.max }}</td>
             </tr>
           </tbody>
         </table>
       </details>
-      <export-dialog v-if="exporting" :params="queryParams()" :shift="shift" :view="view" :time-mode="timeMode"
-                     :title="exportTitle()" :name-parts="[source?.file?.replace(/\\.[^.]*$/, ''), plot.dataset, plot.instance, plot.field]"
+      <export-dialog v-if="exporting" :params="queryParams()" :field2="field2" :shift="shift" :view="view" :time-mode="timeMode"
+                     :title="exportTitle()" :name-parts="[source?.file?.replace(/\\.[^.]*$/, ''), plot.dataset, plot.instance, plot.field, field2]"
                      :events="events" @close="exporting = false" />
     </section>
   `,

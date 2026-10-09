@@ -366,6 +366,19 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   under the AppArmor profile of tshark on Ubuntu. `--clear-cache` removes them. The container image installs
   `tshark`.
 
+### D18. Second metric of a plot
+
+- A time plot can draw a second field of its dataset (`second`, `field2` in the view state), queried with the same
+  split, filter and instance, since it is mostly the counterpart of the first (UL of DL, BLER of MCS). Fields of other
+  datasets or sources would need their own split and filter.
+- `chart-utils.plotData()` joins both into one chart: the second's series follow the first's, dashed, colored like the
+  series of the first of the same split value. The same unit shares the "y" scale and display unit; different units,
+  or both without, get a "y2" scale and a right axis, both axes then labelled with their field. A unit and no unit
+  count as different. Histograms, which bin one value, show the first field only.
+- Labels, statistics and the image legend name the field once there are two, e.g. `ul_brate rnti=0x4601`; the series
+  cap applies per field. `/api/series.csv?field2` merges the samples of both in time order, with field, value and unit
+  columns.
+
 ## Open questions
 
 None yet.

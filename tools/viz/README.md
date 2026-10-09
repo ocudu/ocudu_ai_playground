@@ -54,6 +54,10 @@ In the page:
 - Pick source, dataset (METRICS layer), field and optionally a context field to split by, giving one
   series per value (e.g. one per `ue`), by default `pci` for `sched` and `rnti` for `sched_ue`. Without a selection of
   values, the first 256 are drawn, and the legend and statistics list the first 16 of them.
+- `2nd` adds a second field of the same dataset to a time plot, e.g. `ul_brate` with `dl_brate`, with the same split,
+  filter and instance. Its lines are dashed, in the color of the line of the first field of the same split value. Two
+  fields of the same unit share the axis and scale; otherwise the second has its own axis on the right, and both axes
+  are labelled with their field. Histograms show the first field only.
 - Drag to zoom, Shift+drag to pan, double-click to reset. `W`/`S` zoom in and out around the middle of the view and
   `A`/`D` pan, within the time range of the files. The mouse wheel scrolls the page. The plots of a tab share the time
   axis.
@@ -107,7 +111,8 @@ In the page:
   filter like in plots. Click a row to see its log line. `export CSV` downloads all rows of the visible
   window with the shown columns, values in the canonical unit.
 - `CSV` on a plot downloads the samples of its series in the visible window, at full resolution, one row per sample
-  with its time and split value, in the canonical unit (e.g. bps).
+  with its time and split value, in the canonical unit (e.g. bps). With a second field, one row per sample of either,
+  with its field, value and unit.
 - 💾 on a time plot opens it in a dialog to save as a PNG or SVG image, or copy it to the clipboard: on white with
   the light theme colors, at the size typed or dragged from its corner, with its title, legend and event markers. Its
   series are fetched again for a wider image. The SVG has vector lines and text, laid out like the plot.

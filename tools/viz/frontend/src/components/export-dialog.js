@@ -3,7 +3,7 @@
 
 import uPlot from "uplot";
 import { getJSON } from "../api.js";
-import { MAX_LEGEND_SERIES, TIME_TICK_SPACE, cssVar, seriesColor, seriesData, timeTicks, utcDate } from "./chart-utils.js";
+import { MAX_LEGEND_SERIES, TIME_TICK_SPACE, chartSeries, cssVar, plotData, seriesColor, timeTicks, utcDate, valueAxes } from "./chart-utils.js";
 import { chartSvg, escapeXml } from "./svg-export.js";
 
 // Size of the image, in CSS pixels, when the dialog opens.
@@ -46,6 +46,8 @@ export default {
   props: {
     // Query of /api/series of the plot, without its width.
     params: { type: Object, required: true },
+    // Field of the second metric of the plot, or null.
+    field2: { type: String, default: null },
     // Shift from source time to display time, and the time range shown, in display time.
     shift: { type: Number, default: 0 },
     view: { type: Object, default: null },
@@ -62,7 +64,8 @@ export default {
       maxLegendSeries: MAX_LEGEND_SERIES,
       width: DEFAULT_WIDTH,
       height: DEFAULT_HEIGHT,
-      labels: [],
+      // Value series of the chart, see plotData().
+      series: [],
       error: "",
       loading: false,
       ready: false,
@@ -113,10 +116,13 @@ export default {
       this.loading = true;
       const width = Math.max(100, Math.round(this.$refs.chart.clientWidth));
       try {
-        const res = await getJSON("/api/series", { ...this.params, width });
+        const [res, res2] = await Promise.all([
+          getJSON("/api/series", { ...this.params, width }),
+          this.field2 ? getJSON("/api/series", { ...this.params, field: this.field2, width }) : null,
+        ]);
         this.error = "";
         this.fetchedWidth = width;
-        this.render(res);
+        this.render(res, res2);
       } catch (e) {
         this.error = e.message;
       } finally {
@@ -124,18 +130,18 @@ export default {
       }
     },
 
-    async render(res) {
-      const { data, labels, unit } = seriesData(res, this.shift);
-      this.labels = labels;
+    async render(res, res2) {
+      const { data, series, unit, unit2 } = plotData(res, res2, this.shift, this.params.field, this.field2);
+      this.series = series;
       // The legend takes its height first, which the chart leaves to it.
       await this.$nextTick();
       this.chart?.destroy();
-      this.chart = this.createChart(data, labels, unit.label);
+      this.chart = this.createChart(data, series, unit, unit2);
       this.ready = true;
     },
 
     /** Chart of the plot in the light theme of the frame, without interactions or legend, which the frame shows. */
-    createChart(data, labels, unitLabel) {
+    createChart(data, series, unit, unit2) {
       const el = this.$refs.frame;
       const axisColor = cssVar("--fg-muted", el);
       const gridColor = cssVar("--grid", el);
@@ -149,8 +155,8 @@ export default {
         tzDate: utcDate,
         legend: { show: false },
         cursor: { show: false },
-        series: [{}, ...labels.map((label, i) => ({ label, stroke: seriesColor(i, el), width: 1.5, spanGaps: true }))],
-        axes: [xAxis, { ...axis, label: unitLabel, size: 60 }],
+        series: [{}, ...chartSeries(series, 1.5, el)],
+        axes: [xAxis, ...valueAxes(axis, unit, unit2, this.params.field, this.field2)],
         hooks: { draw: [(u) => this.drawEvents(u)] },
       };
       return new uPlot(opts, data, this.$refs.chart);
@@ -224,7 +230,7 @@ export default {
       const style = {
         axis: cssVar("--fg-muted", frame),
         grid: cssVar("--grid", frame),
-        series: this.labels.map((_, i) => seriesColor(i, frame)),
+        series: this.series.map((s) => seriesColor(s.color, frame)),
         lineWidth: 1.5,
         events: this.events.map((ev) => ({ t: ev.t, color: cssVar(`--ev-${ev.category}`, frame) })),
       };
@@ -326,11 +332,11 @@ export default {
             <div ref="title" class="export-title"><span ref="titleText">{{ title }}</span></div>
             <div ref="chart" class="export-chart"></div>
             <div ref="legend" class="export-legend">
-              <span v-for="(label, i) in labels.slice(0, maxLegendSeries)" :key="i" class="export-legend-item">
-                <span class="swatch" :style="{ background: seriesColor(i) }"></span><span class="label">{{ label }}</span>
+              <span v-for="(s, i) in series.slice(0, maxLegendSeries)" :key="i" class="export-legend-item">
+                <span class="swatch" :style="{ background: seriesColor(s.color) }"></span><span class="label">{{ s.label }}</span>
               </span>
-              <span v-if="labels.length > maxLegendSeries" class="export-legend-item">
-                <span class="swatch" style="width: 0"></span><span class="label">+{{ labels.length - maxLegendSeries }} more</span>
+              <span v-if="series.length > maxLegendSeries" class="export-legend-item">
+                <span class="swatch" style="width: 0"></span><span class="label">+{{ series.length - maxLegendSeries }} more</span>
               </span>
             </div>
           </div>

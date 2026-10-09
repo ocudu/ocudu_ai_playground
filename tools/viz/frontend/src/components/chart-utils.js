@@ -75,26 +75,77 @@ export function seriesColor(i, el) {
 }
 
 /**
- * Chart data of a /api/series response: the series aligned on the union of their times, shifted to display time and
- * scaled to a display unit, with their labels and records.
- * @param {{unit: string | null, series: Array<{label: string, t: number[], v: number[], record: number[]}>}} res
- * @param {number} shift
+ * @typedef {{unit: string | null, series: Array<{label: string, split: any, t: number[], v: number[], record: number[]}>}} SeriesResponse
+ * @typedef {{label: string, color: number, dash: boolean, scale: string, field: string}} SeriesInfo
  */
-export function seriesData(res, shift) {
-  const tables = res.series.map((s) => [s.t.map((t) => t + shift), s.v, s.record]);
+
+/**
+ * Chart data of the /api/series responses of one metric, or of two: the series aligned on the union of their times,
+ * shifted to display time and scaled to a display unit, with their records and how to draw each.
+ *
+ * With a second metric, its series follow those of the first, dashed, in the color of the series of the first of the
+ * same split value. They share the scale ("y") and unit of the first when both have the same unit, and else have
+ * their own ("y2", unit2). Labels then name the field, e.g. "ul_brate rnti=0x4601".
+ * @param {SeriesResponse} res
+ * @param {SeriesResponse | null} res2
+ * @param {number} shift
+ * @param {string} field
+ * @param {string | null} field2
+ */
+export function plotData(res, res2, shift, field, field2 = null) {
+  const both = [...res.series, ...(res2?.series ?? [])];
+  const tables = both.map((s) => [s.t.map((t) => t + shift), s.v, s.record]);
   // Series have their own timestamps, so they are aligned on the union of them.
   const joined = tables.length ? uPlot.join(tables) : [[]];
-  const values = [];
+  const shared = res2 == null || (res.unit != null && res.unit === res2.unit);
+  const maxAbs = (series) => series.reduce((m, s) => s.v.reduce((a, v) => Math.max(a, Math.abs(v)), m), 0);
+  const unit = displayUnit(res.unit, maxAbs(shared ? both : res.series));
+  const unit2 = res2 == null || shared ? null : displayUnit(res2.unit, maxAbs(res2.series));
+  const named = (f, s) => (res2 == null || s.label === f ? s.label : `${f} ${s.label}`);
+  /** @type {SeriesInfo[]} */
+  const series = [
+    ...res.series.map((s, i) => ({ label: named(field, s), color: i, dash: false, scale: "y", field })),
+    ...(res2?.series ?? []).map((s, j) => {
+      const same = res.series.findIndex((f) => f.split === s.split);
+      return { label: named(field2, s), color: same >= 0 ? same : res.series.length + j, dash: true, scale: unit2 ? "y2" : "y", field: field2 };
+    }),
+  ];
+  const data = [joined[0]];
   const records = [];
   for (let i = 0; i < tables.length; i++) {
-    values.push(joined[1 + 2 * i]);
+    const divisor = (series[i].scale === "y2" ? unit2 : unit).divisor;
+    data.push(joined[1 + 2 * i].map((v) => (v == null ? v : v / divisor)));
     records.push(joined[2 + 2 * i]);
   }
-  let maxAbs = 0;
-  for (const s of res.series) for (const v of s.v) maxAbs = Math.max(maxAbs, Math.abs(v));
-  const unit = displayUnit(res.unit, maxAbs);
-  const scaled = values.map((col) => col.map((v) => (v == null ? v : v / unit.divisor)));
-  return { data: [joined[0], ...scaled], labels: res.series.map((s) => s.label), unit, records };
+  return { data, series, labels: series.map((s) => s.label), unit, unit2, records };
+}
+
+/**
+ * uPlot options of the value series of plotData().
+ * @param {SeriesInfo[]} series
+ * @param {number} width Line width.
+ * @param {Element} [el] Element whose theme gives the colors.
+ */
+export function chartSeries(series, width, el) {
+  return series.map((s) => ({ label: s.label, stroke: seriesColor(s.color, el), width, spanGaps: true, scale: s.scale, dash: s.dash ? [6, 4] : undefined }));
+}
+
+/**
+ * uPlot axes of the values of plotData(): the left one of the unit of the first metric, and a right one for the
+ * second metric when it has a unit of its own. Two axes are labelled with their field too, e.g. "dl_brate [Mbps]".
+ * @param {Record<string, any>} axis Common axis options.
+ * @param {{label: string}} unit
+ * @param {{label: string} | null} unit2
+ * @param {string} field
+ * @param {string | null} field2
+ */
+export function valueAxes(axis, unit, unit2, field, field2) {
+  if (!unit2) return [{ ...axis, label: unit.label, size: 60 }];
+  const label = (f, u) => f + (u.label ? ` [${u.label}]` : "");
+  return [
+    { ...axis, label: label(field, unit), size: 60 },
+    { ...axis, scale: "y2", side: 1, label: label(field2, unit2), size: 60, grid: { show: false } },
+  ];
 }
 
 /**

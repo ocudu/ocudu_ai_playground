@@ -50,6 +50,9 @@ function newPlot(init) {
     kind: "plot",
     columnFilter: "",
     field: null,
+    // Second field drawn with the first when second is set, see the plot panel.
+    second: false,
+    field2: null,
     splitBy: null,
     splitValues: [],
     filter: "",

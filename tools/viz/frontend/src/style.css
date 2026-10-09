@@ -411,6 +411,9 @@ a.button {
 .swatch { display: inline-block; width: 10px; height: 10px; margin-right: 6px; border-radius: 2px; vertical-align: middle; }
 
 .u-legend { font-size: 12px; }
+/* The legend shows the time under the cursor, but not the value of each series, which the readout gives. */
+.u-legend.u-inline .u-series:not(:first-child) th::after { content: none; }
+.u-legend.u-inline .u-series:not(:first-child) .u-value { display: none; }
 .u-legend, .u-legend th { color: var(--fg); }
 .u-hz .u-cursor-x, .u-hz .u-cursor-y { border-color: var(--fg-muted); }
 .u-select { background: color-mix(in srgb, var(--accent) 20%, transparent); }

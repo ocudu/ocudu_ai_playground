@@ -5,7 +5,7 @@
 const VERSION = 3;
 const PREFIX = "#v=";
 // Plot properties saved in the view state, besides the file of its source.
-const PLOT_KEYS = ["kind", "dataset", "instance", "field", "splitBy", "splitValues", "filter", "mode", "columnFilter", "joined", "groupBy"];
+const PLOT_KEYS = ["kind", "dataset", "instance", "field", "second", "field2", "splitBy", "splitValues", "filter", "mode", "columnFilter", "joined", "groupBy"];
 
 /** @param {string} text */
 function toBase64Url(text) {
