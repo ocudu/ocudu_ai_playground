@@ -356,7 +356,8 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   unsuccessful outcomes, else `ngap`, `f1ap` or `e1ap`. Each UE context is a trace lane, from the first message with
   its identifiers until the response that releases it (UEContextRelease for NGAP and F1AP, bearerContextRelease for
   E1AP), since later UEs reuse the identifiers. Lanes are labelled with their identifiers, and F1AP lanes with their
-  C-RNTI in hex, as logs print it. MAC and RLC pcaps have no events.
+  C-RNTI in hex, as logs print it. MAC and RLC pcaps have no events, so the trace does not offer them. Their UE id (`ueid`, the DU UE index + 1 in
+  RLC, with the RNTI in MAC) could give them UE lanes, joined to the UE contexts of the run by time.
 - MAC and RLC pcaps (`PcapSource.on_request()`, by name) are opened "deferred" with the other files of a run, from the
   command line or the page, since tshark decodes some 40k MAC frames/s and they can be GBs, while they give only a
   `pdus` dataset: no events, no part in the trace or the UE join. `POST /api/sources/{id}/parse` parses one. A file

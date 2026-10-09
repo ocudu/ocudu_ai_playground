@@ -211,6 +211,10 @@ export default {
       const own = ordered.filter((name) => this.ownIdNames.includes(name));
       return [...own, ...ordered.filter((name) => !own.includes(name))];
     },
+    /** Sources of the tab that a trace can show: not the MAC and RLC pcaps, which have no UE events. */
+    traceChoices() {
+      return (this.choices ?? []).filter((s) => !(s.type === "pcap" && (s.status === "deferred" || s.datasets.some((d) => d.name === "pdus"))));
+    },
     /** F1AP pcap of the tab, whose UE contexts identify the UEs of its logs. */
     f1apSource() {
       if (this.runId == null) return null;
@@ -577,8 +581,8 @@ export default {
     <section class="panel trace">
       <header class="panel-bar">
         <strong>Trace</strong>
-        <select v-if="choices && choices.length > 1" v-model.number="panel.source" :title="source ? source.path : 'Source'">
-          <option v-for="s in choices" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">{{ s.file ?? s.name }}</option>
+        <select v-if="traceChoices.length > 1" v-model.number="panel.source" :title="source ? source.path : 'Source'">
+          <option v-for="s in traceChoices" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">{{ s.file ?? s.name }}</option>
         </select>
         <label class="inline" title="One row per value of an identifier, merging the UE contexts that share it">rows by
           <select :value="groupBy" @change="panel.groupBy = $event.target.value">
