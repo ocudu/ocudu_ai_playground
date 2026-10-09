@@ -7,6 +7,7 @@ context, with its UE identifiers.
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,6 +25,12 @@ ID_NAMES = {
     "cu_cp_ue_e1ap_id": "cu_cp_e1ap",
     "cu_up_ue_e1ap_id": "cu_up_e1ap",
 }
+# Messages whose GTP TEIDs are the UL ones of the UPF, which NGAP and E1AP share, by protocol: NGAP
+# HandoverResourceAllocation, InitialContextSetup and PDUSessionResourceSetup requests, E1AP BearerContextSetup requests. The TEIDs that the gNB allocates repeat across
+# UEs.
+_UPF_TEID_CODES = {"ngap": {"13", "14", "29"}, "e1ap": {"8"}}
+# InitialULRRCMessageTransfer, whose RRC reestablishment request holds the old C-RNTI of the UE.
+_INITIAL_UL_RRC_CODE = "11"
 
 
 @dataclass
@@ -38,6 +45,10 @@ class UeContext:
     # C-RNTI, as logs print it, for F1AP.
     rnti: str | None = None
     released: bool = False
+    # Values that link it to other contexts, with the time of their first message, see ContextTracker: "ho_rnti"
+    # (target C-RNTIs of its handovers), "reest_rnti" (C-RNTI of the context it reestablishes), "nas" (hashes of its
+    # NAS PDUs) and "teid" (UPF TEIDs).
+    links: dict[str, dict[str, float]] = field(default_factory=dict)
 
     def label(self) -> str:
         """Its identifiers, e.g. "du_f1ap=0 cu_f1ap=0"."""
@@ -72,11 +83,28 @@ class ContextTracker:
             ctx.ids.setdefault(ID_NAMES[k], v)
         if msg.get("crnti") and ctx.rnti is None:
             ctx.rnti = normalize_rnti(msg["crnti"])
+        for label, values in (msg.get("links") or {}).items():
+            for value in self._link_values(label, values, msg):
+                ctx.links.setdefault(label, {}).setdefault(value, msg["epoch"])
         if msg["code"] == RELEASE_CODES[self.proto] and msg["outcome"] == "successful":
             ctx.released = True
             for k, v in ids.items():
                 self._in_use.pop((k, v), None)
         return ctx
+
+
+    def _link_values(self, label: str, values: list[str], msg: dict[str, Any]) -> list[str]:
+        if label in ("ho_rnti", "reest_rnti"):
+            if label == "reest_rnti" and msg["code"] != _INITIAL_UL_RRC_CODE:
+                return []
+            return [r for v in values if (r := normalize_rnti(v))]
+        if label == "nas":
+            return [hashlib.sha1(v.lower().encode()).hexdigest()[:16] for v in values]
+        if label == "teid":
+            if msg["outcome"] != "initiating" or msg["code"] not in _UPF_TEID_CODES.get(self.proto, ()):
+                return []
+            return [v.lower() for v in values]
+        return values
 
 
 def ue_contexts(proto: str, msgs: list[dict[str, Any]]) -> list[UeContext]:

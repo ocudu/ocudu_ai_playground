@@ -101,4 +101,4 @@ Notes and caveats:
 | `align_clocks.py` | Verify the same-process log↔pcap relationship (sanity/display-TZ guard, not an offset measurement) + UE↔gNB PHY slot alignment + `slot_rx=` availability. Does **not** check off-host sources |
 | `correlate_radio.py` | Join UE↔gNB PHY events on `(SFN.slot, RNTI)`; flag rx-ko/missing/contention; DTX vs degradation |
 | `map_ue_ids.py` | Per-pcap UE-identifier lifecycle (f1ap/ngap/e1ap); feeds `ue-identity-map.md` |
-| `ue_table.py` | One row per UE context of a run: F1AP pcap joined with the gNB log (rnti, DU `ue`, du_f1ap, cu_f1ap, lifetime) |
+| `ue_table.py` | One row per UE context, or per UE trace (`--traces`), of a run: F1AP pcap joined with the gNB log and the NGAP/E1AP pcaps (rnti, du_ue, cu_ue, F1AP, NGAP and E1AP ids, lifetime) |

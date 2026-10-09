@@ -195,8 +195,10 @@ class F1apPcapTest(unittest.TestCase):
             {**m, "rrc": detail[m["frame"]]["rrc"], "nas": detail[m["frame"]]["nas"], "crnti": detail[m["frame"]]["crnti"]}
             for m in messages.messages(self.tshark, F1AP_PCAP, "f1ap")
         ]
-        self.assertEqual(cap.messages, expected)
+        self.assertEqual([{k: v for k, v in m.items() if k != "links"} for m in cap.messages], expected)
         self.assertEqual(cap.pdus, [])
+        # The NAS PDUs of the attach, which NGAP carries too, link the context to its NGAP one.
+        self.assertTrue(any("nas" in m["links"] for m in cap.messages))
 
     def test_without_cache(self):
         tshark = Tshark(self.tmp.name, cache=False)

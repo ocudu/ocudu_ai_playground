@@ -25,7 +25,11 @@ const FETCH_DELAY_MS = 120;
 // Glyph of each event category, also shown in the legend.
 const GLYPHS = { ra: "▲", lifecycle: "■", rrc: "●", f1ap: "●", ngap: "●", e1ap: "●", mobility: "◆", failure: "✖", warning: "●", error: "●" };
 // Identifiers of the UE contexts of pcaps, by the event category of their protocol, that rows can be grouped by.
-const PROTOCOL_IDS = { f1ap: ["du_f1ap", "cu_f1ap"], ngap: ["ran_ngap", "amf_ngap"], e1ap: ["cu_cp_e1ap", "cu_up_e1ap"] };
+// Identifiers the rows of the trace of an F1AP pcap can be grouped by and its hover shows: those of its UE contexts and
+// the UE trace, not the NGAP and E1AP ones of the UE.
+const F1AP_ROW_IDS = ["rnti", "du_ue", "du_f1ap", "cu_f1ap", "ue_trace"];
+// Order of the identifiers in the options and the hover. The UE trace comes last, since it is never the default.
+const ID_ORDER = ["rnti", "du_ue", "cu_ue", "du_f1ap", "cu_f1ap", "ran_ngap", "amf_ngap", "cu_cp_e1ap", "cu_up_e1ap", "ue_trace"];
 // Categories of the legend, in order, shown when the source has events of them.
 const LEGEND = [
   ["ra", "random access"],
@@ -74,25 +78,41 @@ function drawGlyph(ctx, category, x, y, r) {
 }
 
 /**
- * All the UE identifiers of a row, shown when hovering it: the one it is grouped by first, then the others, with the
- * values of all its UE contexts, e.g. "rnti=0x4602 ue=1 du_f1ap=1 cu_f1ap=1".
+ * The UE identifiers of a row, shown when hovering it: the one it is grouped by first, then the others, with the
+ * values of all its UE contexts, e.g. "rnti=0x4602 du_ue=1 du_f1ap=1 cu_f1ap=1", only those of keep when given.
  * @param {{ids?: Record<string, string[]>, ue: number | null, rnti: string | null, label: string | null}} lane
  * @param {string} by
+ * @param {string[] | null} keep
  */
-function laneLabel(lane, by) {
-  if (lane.ids && Object.keys(lane.ids).length) return idsLabel(lane.ids, by);
-  const ids = [lane.ue != null ? `ue=${lane.ue}` : null, lane.rnti ? `rnti=${lane.rnti}` : null, lane.label];
+function laneLabel(lane, by, keep = null) {
+  if (lane.ids && Object.keys(lane.ids).length) return idsLabel(lane.ids, by, keep);
+  const ids = [lane.ue != null ? `du_ue=${lane.ue}` : null, lane.rnti ? `rnti=${lane.rnti}` : null, lane.label];
   return ids.filter(Boolean).join(" ") || "UE";
 }
 
 /**
- * UE identifiers with their values, the one the rows are grouped by first, e.g. "ue=0 rnti=0x4601,0x4603".
+ * Names of the identifiers of a lane: those of its label, e.g. "du_f1ap", the DU and CU-CP UE indexes, the RNTI and
+ * its "ids", as the server groups rows by.
+ * @param {{ids?: Record<string, string[]>, ue?: number | null, cu_ue?: number | null, rnti?: string | null, label?: string | null}} lane
+ */
+function idNames(lane) {
+  const names = (lane.label ?? "").split(" ").filter((tok) => tok.includes("=")).map((tok) => tok.split("=")[0]);
+  if (lane.ue != null) names.push("du_ue");
+  if (lane.cu_ue != null) names.push("cu_ue");
+  if (lane.rnti) names.push("rnti");
+  return [...names, ...Object.keys(lane.ids ?? {})];
+}
+
+/**
+ * UE identifiers with their values, the one the rows are grouped by first, e.g. "du_ue=0 rnti=0x4601,0x4603", only
+ * those of keep when given.
  * @param {Record<string, string[]>} ids
  * @param {string} by
+ * @param {string[] | null} keep
  */
-function idsLabel(ids, by) {
-  const rank = (name) => (name === by ? 0 : name === "rnti" ? 1 : name === "ue" ? 2 : 3);
-  const names = Object.keys(ids).sort((a, b) => rank(a) - rank(b));
+function idsLabel(ids, by, keep = null) {
+  const rank = (name) => (name === by ? -1 : ID_ORDER.includes(name) ? ID_ORDER.indexOf(name) : ID_ORDER.length);
+  const names = Object.keys(ids).filter((name) => !keep || keep.includes(name)).sort((a, b) => rank(a) - rank(b));
   return names.map((name) => `${name}=${ids[name].join(",")}`).join(" ");
 }
 
@@ -148,6 +168,8 @@ export default {
       cursorEvent: null,
       cursorLane: "",
       filterDraft: this.panel.filter ?? "",
+      // Names of the identifiers of the rows of the last trace, see idNames().
+      idNames: [],
     };
   },
   computed: {
@@ -166,16 +188,22 @@ export default {
     filterDirty() {
       return this.filterDraft.trim() !== (this.panel.filter ?? "");
     },
-    /** Identifier the rows are grouped by: the chosen one when the source has it, else the RNTI. */
-    groupBy() {
-      return this.groupOptions.includes(this.panel.groupBy) ? this.panel.groupBy : "rnti";
+    /** Identifiers the rows can be grouped by and their hover shows, or null for all those the rows have. */
+    rowIds() {
+      return this.source?.type === "pcap" && this.source.event_counts?.f1ap ? F1AP_ROW_IDS : null;
     },
-    /** Identifiers that rows can be grouped by: the RNTI, the default, the DU UE index of logs, and the UE identifiers of a pcap. */
+    /** Identifier the rows are grouped by: the chosen one when the rows have it, else the first they have. */
+    groupBy() {
+      return this.groupOptions.includes(this.panel.groupBy) ? this.panel.groupBy : (this.groupOptions[0] ?? "rnti");
+    },
+    /** Identifiers that rows can be grouped by: the ones the rows of the trace have, e.g. no RNTI for NGAP. */
     groupOptions() {
-      const counts = this.source?.event_counts ?? {};
-      const isPcap = this.source?.type === "pcap";
-      const protocolIds = isPcap ? Object.keys(PROTOCOL_IDS).filter((p) => counts[p]).flatMap((p) => PROTOCOL_IDS[p]) : [];
-      return ["rnti", ...(!isPcap || this.onRunUes ? ["ue"] : []), ...protocolIds];
+      const names = new Set(this.idNames);
+      if (this.rowIds) {
+        for (const name of names) if (!this.rowIds.includes(name)) names.delete(name);
+      }
+      const known = ID_ORDER.filter((name) => names.has(name));
+      return [...known, ...[...names].filter((name) => !ID_ORDER.includes(name)).sort()];
     },
     /** F1AP pcap of the tab, whose UE contexts identify the UEs of its logs. */
     f1apSource() {
@@ -195,9 +223,15 @@ export default {
     logOnF1ap() {
       return this.joinableLogs.includes(this.source);
     },
+    /** NGAP and E1AP pcaps of the tab, which follow the UEs of the F1AP pcap through their contexts. */
+    coreSources() {
+      if (!this.f1apSource) return [];
+      return (this.choices ?? []).filter((s) => s.type === "pcap" && s.status === "ready" && (s.event_counts?.ngap || s.event_counts?.e1ap));
+    },
     /** Whether the rows are the UEs of the run, with the identifiers of all its sources, rather than of the source. */
     onRunUes() {
-      return this.logOnF1ap || (this.source === this.f1apSource && this.joinableLogs.length > 0);
+      if (this.logOnF1ap || this.coreSources.includes(this.source)) return true;
+      return this.source === this.f1apSource && (this.joinableLogs.length > 0 || this.coreSources.length > 0);
     },
     legend() {
       const counts = { ...(this.source?.event_counts ?? {}) };
@@ -219,12 +253,14 @@ export default {
       this.scheduleFetch();
     },
     "panel.source"() {
+      // The identifiers of the rows of the previous source do not apply.
+      this.idNames = [];
       this.scheduleFetch();
     },
     "panel.filter"() {
       this.scheduleFetch();
     },
-    "panel.groupBy"() {
+    groupBy() {
       this.scheduleFetch();
     },
     joined() {
@@ -319,8 +355,9 @@ export default {
         const t0 = lane.t_start + shift;
         const t1 = lane.open ? Math.max(end, lane.t_end + shift) : lane.t_end + shift;
         const contexts = lane.contexts?.map((c) => ({ ...c, t0: c.t_start + shift, t1: c.open ? Math.max(end, c.t_end + shift) : c.t_end + shift }));
-        return { ...lane, t0, t1, row, contexts, label: laneLabel(lane, this.groupBy), axisLabel: axisLabel(lane, this.groupBy) };
+        return { ...lane, t0, t1, row, contexts, label: laneLabel(lane, this.groupBy, this.rowIds), axisLabel: axisLabel(lane, this.groupBy) };
       });
+      this.idNames = [...new Set(res.lanes.flatMap(idNames))];
       this.hasCellRow = res.events.some((e) => e.lane == null);
       this.events = res.events.map((e) => ({ ...e, t: e.t + shift, row: e.lane == null ? -1 : rowOfLane.get(e.lane) ?? -2 }));
       this.nofLanes = res.lanes.length;
@@ -507,7 +544,7 @@ export default {
         const context = contextAt(lane, event, u.posToVal(left, "x"));
         const shown = context ?? lane;
         const span = shown.open ? "until the end" : `${(shown.t1 - shown.t0).toFixed(3)} s`;
-        this.cursorLane = `${context ? idsLabel(context.ids, this.groupBy) : lane.label}, ${span}`;
+        this.cursorLane = `${context ? idsLabel(context.ids, this.groupBy, this.rowIds) : lane.label}, ${span}`;
       } else {
         this.cursorLane = event && event.lane == null ? "common" : "";
       }

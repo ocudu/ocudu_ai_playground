@@ -214,7 +214,7 @@ class LogMetricsSource:
     """
 
     name = "log_metrics"
-    version = f"6+parsers-{_parsers_version()}"
+    version = f"7+parsers-{_parsers_version()}"
 
     def accepts(self, path: Path) -> bool:
         try:
@@ -288,4 +288,4 @@ class LogMetricsSource:
                     out.append((*row[:10], lane, count, span))
             writer.add_event_rows(out)
         for lane in tracker.lanes:
-            writer.add_lane(lane.id, lane.du_ue, lane.rnti)
+            writer.add_lane(lane.id, lane.du_ue, lane.rnti, cu_ue=lane.cu_ue)

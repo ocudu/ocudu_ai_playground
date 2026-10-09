@@ -102,8 +102,11 @@ class EventWriter(Protocol):
         span, see store.EVENT_COLUMNS.
         """
 
-    def add_lane(self, lane: int, ue: int | None, rnti: str | None, label: str | None = None) -> None:
-        """Sets the DU UE index and RNTI of a UE lane, or the label shown for it instead."""
+    def add_lane(self, lane: int, ue: int | None, rnti: str | None, label: str | None = None, cu_ue: int | None = None,
+                 links: dict[str, Any] | None = None) -> None:
+        """Sets the DU UE index, RNTI and CU-CP UE index of a UE lane, or the label shown for it instead, and the values
+        that link it to the lanes of other sources, see parsers.correlate.ues.Context.
+        """
 
 
 class SourceType(Protocol):

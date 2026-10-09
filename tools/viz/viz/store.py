@@ -21,7 +21,7 @@ from .filters import FilterError, compile_filter
 from .sources.base import ProgressFn, SourceType, column_type, column_value
 
 # Bumped when the database layout changes, part of the cache key.
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 # Time series windows up to this many points are returned at full resolution.
 MAX_FULL_RES_POINTS = 50_000
 # Split values returned when none are selected.
@@ -220,7 +220,7 @@ class EventStoreWriter:
             f"""
             CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
             CREATE TABLE events ({_TS} REAL, {_REC} INTEGER, {cols});
-            CREATE TABLE lane_info (lane INTEGER PRIMARY KEY, ue INTEGER, rnti TEXT, label TEXT);
+            CREATE TABLE lane_info (lane INTEGER PRIMARY KEY, ue INTEGER, rnti TEXT, label TEXT, cu_ue INTEGER, links TEXT);
             """
         )
 
@@ -234,8 +234,12 @@ class EventStoreWriter:
         if len(self._events) >= _BATCH_SIZE:
             self._flush()
 
-    def add_lane(self, lane: int, ue: int | None, rnti: str | None, label: str | None = None) -> None:
-        self._conn.execute("INSERT OR REPLACE INTO lane_info VALUES (?, ?, ?, ?)", (lane, ue, rnti, label))
+    def add_lane(self, lane: int, ue: int | None, rnti: str | None, label: str | None = None, cu_ue: int | None = None,
+                 links: dict[str, Any] | None = None) -> None:
+        self._conn.execute(
+            "INSERT OR REPLACE INTO lane_info VALUES (?, ?, ?, ?, ?, ?)",
+            (lane, ue, rnti, label, cu_ue, json.dumps(links) if links else None),
+        )
 
     def finish(self) -> None:
         """Flushes pending events, writes the UE lanes and the indexes."""
@@ -251,6 +255,7 @@ class EventStoreWriter:
                 i.ue,
                 i.rnti,
                 i.label,
+                i.cu_ue,
                 MAX(e.type = 'ue_create') AND NOT MAX(e.type = 'ue_delete') AS open
             FROM events e LEFT JOIN lane_info i ON i.lane = e.lane WHERE e.lane IS NOT NULL GROUP BY e.lane
             """
@@ -619,9 +624,9 @@ class Store:
             where = "t_start <= ? AND (t_end >= ? OR open)"
             total_lanes = conn.execute(f"SELECT COUNT(*) FROM lanes WHERE {where}", (hi, lo)).fetchone()[0]
             lanes = [
-                {"lane": r[0], "t_start": r[1], "t_end": r[2], "ue": r[3], "rnti": r[4], "label": r[5], "open": bool(r[6])}
+                {"lane": r[0], "t_start": r[1], "t_end": r[2], "ue": r[3], "rnti": r[4], "label": r[5], "cu_ue": r[6], "open": bool(r[7])}
                 for r in conn.execute(
-                    f"SELECT lane, t_start, t_end, ue, rnti, label, open FROM lanes WHERE {where} ORDER BY t_start, lane LIMIT ?",
+                    f"SELECT lane, t_start, t_end, ue, rnti, label, cu_ue, open FROM lanes WHERE {where} ORDER BY t_start, lane LIMIT ?",
                     (hi, lo, max_lanes),
                 )
             ]
@@ -642,6 +647,14 @@ class Store:
             "total_events": total_events,
             "truncated": total_events > len(events),
         }
+
+    def lane_links(self) -> dict[int, dict[str, Any]]:
+        """The values that link each UE lane to the lanes of other sources, by lane, see parsers.correlate.ues.Context."""
+        if self._events_uri is None:
+            return {}
+        with closing(sqlite3.connect(self._events_uri, uri=True, check_same_thread=False)) as conn:
+            rows = conn.execute("SELECT lane, links FROM lane_info WHERE links IS NOT NULL").fetchall()
+        return {lane: json.loads(links) for lane, links in rows}
 
     def context_values(self, dataset: str, field: str, limit: int = 1000) -> list[Any]:
         """Returns the distinct values of a field."""

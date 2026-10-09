@@ -7,6 +7,8 @@ messages or PDUs, as the other modules give them one pass each.
 
 from __future__ import annotations
 
+import hashlib
+
 import os
 from dataclasses import dataclass, field
 from typing import Any
@@ -24,8 +26,8 @@ class Capture:
     have only frames.
 
     frames are the summaries of frames.summaries(). messages are the messages of messages.messages() for NGAP, F1AP and
-    E1AP, with the "rrc", "nas" and "crnti" of f1ap.carried() for F1AP. pdus are the PDUs of frames.pdus() for MAC and
-    RLC.
+    E1AP, with the "rrc", "nas" and "crnti" of f1ap.carried() for F1AP, and their "links", see messages.links(). pdus
+    are the PDUs of frames.pdus() for MAC and RLC.
     """
 
     proto: str | None
@@ -52,9 +54,13 @@ def read(tshark: Tshark, pcap: str | os.PathLike[str]) -> Capture:
         proto_fields = messages.fields(proto)
     else:
         proto_fields = []
+    if proto in messages.LINK_FIELDS:
+        proto_fields += tshark.valid_fields(pcap, messages.link_fields(proto))
     names = list(dict.fromkeys([*frames.SUMMARY_FIELDS, *proto_fields]))
     cap = Capture(proto, frame_protocols)
-    for values in tshark.iter_fields(pcap, names, tag=f"capture-{proto}-v1"):
+    # The fields are part of the tag, since they depend on the protocol, the tshark build and this code.
+    tag = f"capture-{proto}-" + hashlib.sha256("\0".join(names).encode()).hexdigest()[:16]
+    for values in tshark.iter_fields(pcap, names, tag=tag):
         row = dict(zip(names, values))
         if (summary := frames.summary(row)) is not None:
             cap.frames.append(summary)
@@ -64,5 +70,6 @@ def read(tshark: Tshark, pcap: str | os.PathLike[str]) -> Capture:
         elif proto is not None and (msg := messages.message(proto, row)) is not None:
             if proto == "f1ap":
                 msg.update(f1ap.carried(row, rrc_types))
+            msg["links"] = messages.links(proto, row)
             cap.messages.append(msg)
     return cap

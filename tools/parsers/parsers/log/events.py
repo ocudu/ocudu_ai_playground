@@ -209,6 +209,8 @@ class UeLane:
     t_end: datetime | float | None = None
     created: bool = False
     deleted: bool = False
+    # CU-CP UE index, from the CU events of its RNTI, which differs from the DU one.
+    cu_ue: int | None = None
 
 
 class UeTracker:
@@ -272,6 +274,8 @@ class UeTracker:
             if du and ue is not None and lane.du_ue is None:
                 lane.du_ue = ue
                 self._by_du_ue[ue] = lane
+            if not du and ue is not None and lane.cu_ue is None:
+                lane.cu_ue = ue
             return lane
         if ue is None:
             return None

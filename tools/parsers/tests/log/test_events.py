@@ -172,6 +172,8 @@ class EventsTest(unittest.TestCase):
         first, retry, created, target = tracker.lanes
         self.assertEqual((target.du_ue, target.rnti), (2, "0x4605"))
         self.assertEqual((first.du_ue, first.rnti, first.created, first.deleted), (0, "0x4601", True, True))
+        # The CU-CP UE index of its RRC event, which differs from the DU one.
+        self.assertEqual(first.cu_ue, 5)
         self.assertEqual((first.t_end - first.t_start).seconds, 5)
         self.assertEqual((retry.du_ue, retry.created, retry.t_end), (None, False, None))
         self.assertEqual((created.du_ue, created.rnti), (1, "0x4602"))

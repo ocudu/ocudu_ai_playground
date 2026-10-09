@@ -75,8 +75,12 @@ In the page:
   filter, over `type`, `category`, `layer`, `level`, `ue`, `rnti`, `cause` and `text`, and the UEs with such events,
   e.g. `rnti == 0x4602` for one UE or `type == prach or type == rlf`. Events without a UE index or RNTI take the
   ones of their UE. `rows by` shows a row per value of an identifier, labelled with both, e.g. `rnti=0x4601`,
-  merging the UE contexts that share it: `rnti` by default, `ue` (the DU UE index of logs, reused by later UEs, for an F1AP pcap only in a tab with logs), or the
-  identifiers of a pcap, e.g. `du_f1ap` and `cu_f1ap`. Rows of UE contexts without the identifier are labelled `–`.
+  merging the UE contexts that share it: any identifier the rows have, `rnti` by default where they have one: `du_ue`
+  and `cu_ue` (the DU and CU-CP UE indexes of logs, reused by later UEs), the identifiers of a pcap, e.g. `du_f1ap`,
+  `cu_f1ap`, `ran_ngap` or `cu_cp_e1ap`, and, in a tab with an F1AP pcap, `ue_trace`: one row per UE followed through
+  its handovers and reestablishments, across the F1AP, NGAP and E1AP pcaps and the logs. The F1AP pcap offers and hovers
+  only `rnti` (the default), `du_ue`, `du_f1ap`, `cu_f1ap` and `ue_trace`; a log, those and the NGAP and E1AP ids of
+  its UE. Rows of UE contexts without the identifier are labelled `–`.
   Hovering a row shows the UE identifiers of the context it merges that the hovered event is of, or that is alive at
   the cursor.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,

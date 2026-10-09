@@ -27,11 +27,11 @@ class LogContextsTest(unittest.TestCase):
             path.write_text(LOG)
             contexts = log_contexts(path)
         self.assertEqual([(c.source, c.lane, c.ids, c.open) for c in contexts], [
-            ("gnb.log", 0, {"ue": 0, "rnti": "0x4601"}, False),
-            ("gnb.log", 1, {"ue": 1, "rnti": "0x4602"}, True),
+            ("gnb.log", 0, {"du_ue": 0, "cu_ue": None, "rnti": "0x4601"}, False),
+            ("gnb.log", 1, {"du_ue": 1, "cu_ue": None, "rnti": "0x4602"}, True),
         ])
         # Log timestamps are UTC.
         self.assertEqual(contexts[0].t_start, 1785444794.4)
         f1ap = [Context("f1ap.pcap", 0, 1785444800.15, 1785444810.0, {"rnti": "17922", "du_f1ap": "1"})]
         joined = combine(f1ap, contexts)
-        self.assertEqual([ue.ids for ue in joined if ue.key == "f1ap.pcap:0"], [{"rnti": ["0x4602"], "du_f1ap": ["1"], "ue": ["1"]}])
+        self.assertEqual([ue.ids for ue in joined if ue.key == "f1ap.pcap:0"], [{"rnti": ["0x4602"], "du_f1ap": ["1"], "du_ue": ["1"]}])

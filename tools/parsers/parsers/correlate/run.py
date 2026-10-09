@@ -13,11 +13,12 @@ from ..log import events
 from ..pcap import capture
 from ..pcap.contexts import ContextTracker
 from ..pcap.tshark import Tshark
-from .ues import Context, Ue, combine
+from .ues import Context, Ue, UeTrace, combine, ue_traces
 
 
 def log_contexts(path: str | os.PathLike[str], source: str | None = None) -> list[Context]:
-    """The UE contexts of an OCUDU log, as events.UeTracker assigns its events, with their DU UE index and RNTI.
+    """The UE contexts of an OCUDU log, as events.UeTracker assigns its events, with their DU and CU-CP UE indexes and
+    RNTI.
 
     source names the log in the contexts, by default its file name.
     """
@@ -28,13 +29,14 @@ def log_contexts(path: str | os.PathLike[str], source: str | None = None) -> lis
             tracker.assign(ev)
     return [
         Context(source, lane.id, _epoch(lane.t_start), _epoch(lane.t_end or lane.t_start),
-                {"ue": lane.du_ue, "rnti": lane.rnti}, lane.created and not lane.deleted)
+                {"du_ue": lane.du_ue, "cu_ue": lane.cu_ue, "rnti": lane.rnti}, lane.created and not lane.deleted)
         for lane in tracker.lanes
     ]
 
 
 def pcap_contexts(tshark: Tshark, path: str | os.PathLike[str], source: str | None = None) -> list[Context]:
-    """The UE contexts of an NGAP, F1AP or E1AP pcap, with their protocol UE identifiers and, for F1AP, C-RNTI.
+    """The UE contexts of an NGAP, F1AP or E1AP pcap, with their protocol UE identifiers, for F1AP their C-RNTI, and
+    their links, see pcap.contexts.UeContext.
 
     source names the pcap in the contexts, by default its file name. Other pcaps have none.
     """
@@ -46,7 +48,7 @@ def pcap_contexts(tshark: Tshark, path: str | os.PathLike[str], source: str | No
     for msg in cap.messages:
         tracker.assign(msg)
     return [
-        Context(source, ctx.id, ctx.t_start, ctx.t_end, {**ctx.ids, "rnti": ctx.rnti}, not ctx.released)
+        Context(source, ctx.id, ctx.t_start, ctx.t_end, {**ctx.ids, "rnti": ctx.rnti}, not ctx.released, ctx.links)
         for ctx in tracker.contexts
     ]
 
@@ -57,6 +59,16 @@ def run_ues(tshark: Tshark, f1ap: str | os.PathLike[str] | None = None,
     sources = [pcap_contexts(tshark, f1ap)] if f1ap else []
     sources += [log_contexts(log) for log in logs]
     return combine(*sources)
+
+
+def run_traces(tshark: Tshark, f1ap: str | os.PathLike[str] | None = None,
+               logs: list[str | os.PathLike[str]] | tuple = (),
+               cores: list[str | os.PathLike[str]] | tuple = ()) -> tuple[list[Ue], list[UeTrace]]:
+    """The UE contexts of a run, see run_ues(), and their traces with the NGAP and E1AP pcaps of cores, see
+    ues.ue_traces().
+    """
+    ues = run_ues(tshark, f1ap, logs)
+    return ues, ue_traces(ues, [ctx for core in cores for ctx in pcap_contexts(tshark, core)])
 
 
 def _epoch(t: datetime) -> float:

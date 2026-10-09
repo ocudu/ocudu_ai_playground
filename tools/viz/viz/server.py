@@ -479,10 +479,13 @@ def create_app(
         if anchor is None:
             raise HTTPException(400, f"Run {run_id} has no parsed F1AP pcap.")
         logs = [e for e in entries if e.source_type and e.source_type.name != "pcap"]
-        key = (anchor.id, tuple(e.id for e in logs))
+        # NGAP and E1AP pcaps, which follow the UEs through their F1AP contexts, see RunTrace.
+        cores = [e for e in entries if e is not anchor and {"ngap", "e1ap"} & set(e.store.event_counts)]
+        key = (anchor.id, tuple(e.id for e in logs), tuple(e.id for e in cores))
         cached = run_traces.get(run_id)
         if cached is None or cached[0] != key:
-            cached = run_traces[run_id] = (key, RunTrace((anchor.id, anchor.store), [(e.id, e.store) for e in logs]))
+            run_trace = RunTrace((anchor.id, anchor.store), [(e.id, e.store) for e in logs], [(e.id, e.store) for e in cores])
+            cached = run_traces[run_id] = (key, run_trace)
         try:
             return cached[1].trace(t0, t1, max_lanes, limit, set(sources) if sources else None, filter_expr, group_by)
         except FilterError as e:

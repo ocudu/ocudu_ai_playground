@@ -31,7 +31,7 @@ class PcapSource:
     """
 
     name = "pcap"
-    version = f"4+parsers-{_parsers_version()}"
+    version = f"5+parsers-{_parsers_version()}"
 
     def __init__(self, work_dir: str | os.PathLike[str] | None = None):
         """work_dir holds the pcaps staged for tshark, see parsers.pcap.tshark."""
@@ -110,7 +110,7 @@ class PcapSource:
             }
             writer.add_event(msg["frame"], msg["epoch"], event)
         for ctx in tracker.contexts:
-            writer.add_lane(ctx.id, None, ctx.rnti, ctx.label())
+            writer.add_lane(ctx.id, None, ctx.rnti, ctx.label(), links=ctx.links)
 
     def run_identity(self, path: Path) -> RunIdentity | None:
         span = frames.time_span(path)

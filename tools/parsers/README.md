@@ -179,15 +179,20 @@ creation time, e.g. the target of a handover, which a log creates before it know
 `parsers.ran.rnti` normalizes them.
 
 `parsers.correlate.run` reads the contexts from the files: `log_contexts()` from an OCUDU log (`events.UeTracker`),
-`pcap_contexts()` from an NGAP, F1AP or E1AP pcap (`parsers.pcap.contexts`), and `run_ues()` combines the F1AP pcap
-and the logs of a run:
+`pcap_contexts()` from an NGAP, F1AP or E1AP pcap (`parsers.pcap.contexts`), `run_ues()` combines the F1AP pcap
+and the logs of a run, and `run_traces()` also follows each UE through its contexts and its NGAP and E1AP contexts
+(`ues.ue_traces()`): handovers by target C-RNTI, reestablishments by old C-RNTI, NGAP by NAS PDU or handover C-RNTI, E1AP
+by UPF TEID:
 
 ```python
-from parsers.correlate.run import run_ues
+from parsers.correlate.run import run_traces
 from parsers.pcap.tshark import Tshark
 
-for ue in run_ues(Tshark(), "run_dir/f1ap.pcap", ["run_dir/gnb.log"]):
-    print(ue.t_start, ue.first("rnti"), ue.first("ue"), ue.first("du_f1ap"), ue.first("cu_f1ap"))
+ues, traces = run_traces(Tshark(), "run_dir/f1ap.pcap", ["run_dir/gnb.log"], ["run_dir/ngap.pcap", "run_dir/e1ap.pcap"])
+for ue in ues:
+    print(ue.t_start, ue.first("ue_trace"), ue.first("rnti"), ue.first("du_ue"), ue.first("cu_ue"), ue.first("ran_ngap"))
+for trace in traces:
+    print(trace.id, len(trace.ues), trace.ids.get("rnti"), trace.ids.get("amf_ngap"))
 ```
 
 ## Tests

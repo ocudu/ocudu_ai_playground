@@ -99,19 +99,26 @@ identifier chain above.
   to the gNB C-RNTI via that UE's preceding `Random Access Complete` TC-RNTI to
   read the network-side cause in `gnb.log`.
 
-## One table per run (gNB log + F1AP pcap)
+## One table per run (gNB log + F1AP, NGAP and E1AP pcaps)
 
 ```bash
-python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir>                     # all UE contexts
-python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir> --where rnti=0x4607  # one RNTI
-python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir> --where ue=3 --after 12:24:30 --before 12:24:40
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir>                       # all UE contexts
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir> --traces              # one row per UE
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir> --where rnti=0x4607    # one RNTI
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir> --where amf_ngap=109 --traces
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir> --where du_ue=3 --after 12:24:30 --before 12:24:40
 ```
 
-One row per UE context with its lifetime, `rnti`, DU-local `ue=`, `du_f1ap` and `cu_f1ap`. A log context joins the F1AP
-context of the same C-RNTI with overlapping lifetime; a handover target, created in the log before its RNTI, takes it
-from its first `UE Configuration` line. Each handover or reestablishment is a new row. The DU-local `ue=` is reused
-soon after a release, so filter it with a time window or prefer the RNTI and F1AP ids. Random accesses of no UE
-(PRACH only) are counted and hidden unless `--with-ra`. NGAP/E1AP ids are not joined yet: use `map_ue_ids.py` below.
+One row per UE context (one cell of a UE) with its lifetime, `rnti`, DU UE index `du_ue`, CU-CP UE index `cu_ue` (when
+the CU logs at info), `du_f1ap`, `cu_f1ap`, and the `ue_trace` it belongs to with the NGAP (`ran_ngap`, `amf_ngap`) and
+E1AP (`cu_cp_e1ap`, `cu_up_e1ap`) ids of that UE. A log context joins the F1AP context of the same C-RNTI with
+overlapping lifetime; a handover target, created in the log before its RNTI, takes it from its first `UE
+Configuration` line. A trace chains the contexts of a UE by the target C-RNTI of its handovers and the old C-RNTI of
+its reestablishments, and joins its NGAP context by NAS PDU (or by the C-RNTI of the NGAP handover, on a target gNB)
+and its E1AP context by UPF TEID. `--traces` prints one row per trace, with long id lists shortened to
+`first,…,last (n)`. The DU and CU-CP UE indexes are different ids, both reused soon after a release, so filter them
+with a time window or prefer the RNTI and protocol ids. Random accesses of no UE (PRACH only) are counted and hidden
+unless `--with-ra`.
 
 ## Joining via pcaps
 

@@ -250,8 +250,10 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - The trace has a filter like the plots (D6), over the event fields type, category, layer, level, ue, rnti, cause and
   text, evaluated by SQLite over the events of the window, with the UE index and RNTI of their lane for events
   without them. It keeps the matching events and the lanes they are in, and applies to joined traces too.
-- Trace rows are the values of one identifier (`group_by`), the RNTI by default: the RNTI, the DU UE index (of logs, so for a pcap only on the UEs of its run), or the UE
-  identifiers of a pcap (from its lane labels, e.g. `du_f1ap`). Lanes sharing the value merge into one row, labelled
+- Trace rows are the values of one identifier (`group_by`), the RNTI by default, among the ones of the lanes
+  (`trace.lane_ids()`): the protocol ones of their labels, e.g. `du_f1ap`, the DU and CU-CP UE indexes of logs
+  (`du_ue`, `cu_ue`), the RNTI, and the ids of the UEs of a run, e.g. `ue_trace` and `ran_ngap`; the page offers the
+  ones the rows of the last trace have. Lanes sharing the value merge into one row, labelled
   with the identifier and value (e.g. `rnti=0x4601`), after the join and the filter; lanes without it keep their own
   row, labelled `–`. Each row lists the values of all the identifiers of the lanes it merges (`ids`)
   and the span and identifiers of each (`contexts`), which its events point to (`context`), so that hovering shows
@@ -317,8 +319,17 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   takes n log n. Log lanes of a random access of no UE, i.e. a PRACH only, are expected to have no context. Log lanes of no context keep their own row. A trace of a log of a run with an F1AP pcap also shows
   its events on these UE contexts, the ones it has events in. RNTIs are compared as logs print them
   (`parsers.ran.rnti`). The F1AP gNB-DU-UE-F1AP-ID is not the DU UE index of the logs, so they are not compared. A
-  trace row shows the DU UE index, RNTI and protocol identifiers of its UE. Joining NGAP and E1AP contexts, which
-  carry no RNTI, is open.
+  trace row shows the DU UE index, RNTI and protocol identifiers of its UE.
+- UEs are followed through their contexts and their NGAP and E1AP contexts (`parsers.correlate.ues.ue_traces()`), as
+  `ue_trace` on each lane with the NGAP/E1AP ids of its UE trace, and on the lanes of the NGAP and E1AP pcaps, whose
+  traces the run trace serves too (`/api/runs/{id}/trace?sources=<NGAP or E1AP pcap>`). NGAP and E1AP contexts carry no RNTI and span the F1AP
+  contexts of a UE (24 in a run of intra-CU handovers), so they join by values both sides carry, which the pcaps
+  give as "links" (`parsers.pcap.messages.LINK_FIELDS`, kept per lane in `lane_info.links`): an F1AP context the one
+  whose RRC reconfiguration named its C-RNTI as handover target (newUE-Identity), created within 1 s of it, or whose
+  C-RNTI its reestablishment request carries, and the ones of the same CU-CP UE index (`cu_ue`) overlapping it; an NGAP
+  context the F1AP ones of the same NAS PDUs, or of the C-RNTI of its handover acknowledge (a target gNB has no NAS),
+  else the one created nearest within 1 s; an E1AP context the NGAP one of the same UPF TEID within 1 s, since test
+  cores reuse TEIDs. The gNB's own TEIDs repeat across UEs, so they are not compared.
 - Drill-down follows the source of the clicked item: log lines for logs, and the frame and its one-line tshark summary
   for pcaps, with the decoded frame on demand (D17).
 - Sources of one run share the gNB clock, so they have no time offset.
