@@ -275,8 +275,8 @@ class ExtractMetricFieldsTest(unittest.TestCase):
         self.assertIsInstance(fields["b"], float)
 
     def test_bitrates_to_bps(self):
-        fields = metrics.extract_metric_fields("a=996kbps b=2.60Mbps c=1.4Gbps d=0bps")
-        self.assertEqual(fields, {"a": 996_000, "b": 2_600_000.0, "c": 1_400_000_000.0, "d": 0})
+        fields = metrics.extract_metric_fields("a=996kbps b=2.60Mbps c=1.4Gbps d=0bps e=4.29Tbps")
+        self.assertEqual(fields, {"a": 996_000, "b": 2_600_000.0, "c": 1_400_000_000.0, "d": 0, "e": 4_290_000_000_000.0})
 
     def test_bare_si_prefix(self):
         self.assertEqual(metrics.extract_metric_fields("dl_bs=5.74k bsr=3M x=303"), {"dl_bs": 5740.0, "bsr": 3_000_000, "x": 303})

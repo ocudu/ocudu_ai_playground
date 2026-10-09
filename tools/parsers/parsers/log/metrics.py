@@ -70,7 +70,7 @@ IMPLIED_UNITS = {
 }
 
 # Powers of ten of the SI prefixes.
-_SI_PREFIX = {"": 0, "p": -12, "n": -9, "u": -6, "\u00b5": -6, "m": -3, "k": 3, "M": 6, "G": 9}
+_SI_PREFIX = {"": 0, "p": -12, "n": -9, "u": -6, "\u00b5": -6, "m": -3, "k": 3, "M": 6, "G": 9, "T": 12, "P": 15}
 # Power of ten from seconds to the canonical "us".
 _SECONDS_TO_US = 6
 # Units printed apart from the value, mapped to their canonical name.

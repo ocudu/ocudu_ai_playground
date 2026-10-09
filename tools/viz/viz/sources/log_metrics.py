@@ -214,7 +214,7 @@ class LogMetricsSource:
     """
 
     name = "log_metrics"
-    version = f"5+parsers-{_parsers_version()}"
+    version = f"6+parsers-{_parsers_version()}"
 
     def accepts(self, path: Path) -> bool:
         try:
