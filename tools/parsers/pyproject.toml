@@ -17,3 +17,7 @@ pandas = ["pandas"]
 
 [tool.setuptools.packages.find]
 include = ["parsers*"]
+
+[tool.setuptools.package-data]
+# The FlatBuffers schemas that decoding schedtrace files needs.
+parsers = ["schedtrace/fbs/*.fbs"]

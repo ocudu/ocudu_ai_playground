@@ -1,0 +1,8 @@
+{"timestamp_us": 1700000000000000, "value_type": "CellStartEvent", "value": {
+  "pci": 1,
+  "init_ul_bwp": {"cp": "Normal", "scs": "Khz30", "crb_start": 0, "crb_length": 51},
+  "init_dl_bwp": {"cp": "Extended", "scs": "Khz15", "crb_start": 2, "crb_length": 52},
+  "pucch_resources": [
+    {"format_type": "PucchF1", "format": {"initial_cyclic_shift": 3, "time_domain_occ": 1}, "prb_start": 10, "sym_start": 0, "sym_length": 14, "rep_factor": 1},
+    {"format_type": "PucchF2", "format": {"nof_prbs": 2}, "prb_start": 40, "prb_second_hop_start": 7, "sym_start": 12, "sym_length": 2, "rep_factor": 1}
+  ]}}

@@ -11,6 +11,7 @@ Standard-library only, so it can be imported by visualization or analysis tools 
 | `parsers.log` | OCUDU text logs: line preamble, `METRICS` lines, events and the configuration echo. |
 | `parsers.pcap` | The pcaps of a run (`mac`, `rlc`, `f1ap`, `e1ap`, `ngap`), through `tshark`: UE identifiers, F1AP messages with their RRC and NAS messages, NGAP procedures, overviews and a merged timeline. |
 | `parsers.ran` | 3GPP knowledge shared by the artifacts: NGAP, F1AP and E1AP procedure codes, NAS and RRC message types. |
+| `parsers.schedtrace` | Scheduler event traces (`schedtrace_cell<N>.bin`): the FlatBuffers cell events of the OCUDU scheduler, per slot its inputs and decisions. |
 | `parsers.correlate` | Correlation of the artifacts of a run: the UEs that its logs and pcaps see, each with the identifiers of all of them. |
 
 ## Installation
@@ -159,6 +160,29 @@ span of a pcap from its packet headers, without `tshark`. `capture.read()` gives
 the messages or PDUs of a pcap in one pass over its frames, after reading its first frame for the protocol.
 `contexts.ContextTracker` assigns the NGAP, F1AP or E1AP messages to UE contexts, by their UE identifiers until the
 release of the context, with the C-RNTI of the F1AP ones.
+
+### Scheduler event traces
+
+```python
+from parsers import schedtrace
+
+for ev in schedtrace.read("schedtrace_cell0.bin"):
+    if ev["type"] == "CellSlotEvent":
+        harq = [i for i in ev["inputs"] or [] if i["type"] == "HarqAckEvent"]
+        print(ev["timestamp_us"], ev["slot_tx"], ev["latency_us"], len(ev["decision"]["ue_pdschs"] or []), harq)
+```
+
+OCUDU writes one `schedtrace_cell<N>.bin` per cell when the `trace.schedtrace` option is enabled: a series of
+size-prefixed FlatBuffers `CellEvent` buffers. `read()` and `events()` yield each as a dict with `timestamp_us`,
+`type` (`CellStartEvent`, `CellSlotEvent` or `CellStopEvent`) and its fields: tables as dicts, vectors as lists, enums
+by name, unions with their member as `type`, absent optional fields as `None`. An incomplete last event, e.g. of a
+trace being written, is left out.
+
+The decoder is standard-library only: `schedtrace.schema` reads the FlatBuffers schemas of `schedtrace/fbs/`, copies of
+`lib/scheduler/trace/fbs` of OCUDU, and `schedtrace.flatbuf` decodes buffers with them. FlatBuffers' Python code
+generator does not support the vectors of unions of the schemas (`CellSlotEvent.inputs`). Copy the schemas again when
+OCUDU changes them; fields that newer traces append are ignored. The tests compare the decoder with flatc on a trace
+that `tests/schedtrace/data/make_fixtures.sh` builds. It decodes about 16k slots per second of busy slots.
 
 ### UEs of a run
 
