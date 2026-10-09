@@ -111,6 +111,8 @@ def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
     info["event_counts"] = s.event_counts
     info["event_type_counts"] = s.event_type_counts
     info["notes"] = s.meta.get("notes") or []
+    if grid := s.meta.get("grid"):
+        info["grid"] = {k: v for k, v in grid.items() if k != "pucch_resources"}
     info["datasets"] = [
         {
             "name": ds["name"],
@@ -558,6 +560,22 @@ def create_app(
                 if r["record"] == mark and (span := spans_fn(r["text"]).get(field)) is not None:
                     r["marks"] = [list(span)]
         return out
+
+    @app.get("/api/grid")
+    def resource_grid(
+        source: int,
+        t0: float | None = None,
+        t1: float | None = None,
+        width: int = Query(1000, ge=1, le=10_000),
+    ) -> dict[str, Any]:
+        """Returns the resource grid of a scheduler event trace in a time window, for a chart width in pixels: its
+        allocations when zoomed in, else its occupancy, see SchedtraceSource.grid().
+        """
+        store = get_store(source)
+        grid_fn = getattr(registry.source_type(source), "grid", None)
+        if grid_fn is None or "grid" not in store.meta:
+            raise HTTPException(400, f"Source {source} has no resource grid.")
+        return grid_fn(store.path, store, t0, t1, width)
 
     @app.get("/api/records/search")
     def search_records(

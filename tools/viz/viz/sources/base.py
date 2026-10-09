@@ -87,6 +87,20 @@ class DatasetWriter(Protocol):
     def add_record_offset(self, record: int, offset: int) -> None:
         """Registers the byte offset where a raw record starts. Not every record needs one."""
 
+    def add_record_texts(self, rows: list[tuple[int, str]]) -> None:
+        """Adds the texts of records, as (record, text)."""
+
+    def set_meta(self, key: str, value: Any) -> None:
+        """Sets metadata of the source, e.g. the cell of a resource grid, served with its info."""
+
+    def add_grid_slots(self, rows: list[tuple]) -> None:
+        """Adds slots of a resource grid, as (record, time, file offset, size, slot_tx)."""
+
+    def add_grid_cells(self, rows: list[tuple]) -> None:
+        """Adds resource grid occupancy, as (level, bin, start, end, CRB group, channel, occupancy), level being the
+        slots of a bin.
+        """
+
     def set_notes(self, notes: list[str]) -> None:
         """Sets notes about the source shown with it, e.g. why some data is missing."""
 

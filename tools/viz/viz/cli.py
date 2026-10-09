@@ -22,13 +22,14 @@ from .registry import SourceRegistry
 from .sources.base import SourceType
 from .sources.log_metrics import LogMetricsSource
 from .sources.pcap import PcapSource
+from .sources.schedtrace import SchedtraceSource
 from .store import Store, StoreCache, default_cache_dir
 
 
 
 def source_types(work_dir: Path) -> list[SourceType]:
     """The source types, in the order they are tried. work_dir holds the pcaps staged for tshark."""
-    return [LogMetricsSource(), PcapSource(work_dir)]
+    return [LogMetricsSource(), PcapSource(work_dir), SchedtraceSource()]
 
 
 class _Progress:

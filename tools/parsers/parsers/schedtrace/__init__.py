@@ -50,6 +50,28 @@ def events(data: bytes | memoryview) -> Iterator[dict[str, Any]]:
         pos += 4 + size
 
 
+def offsets(data: bytes | memoryview, start: int = 0, end: int | None = None) -> list[int]:
+    """The offsets of the complete events of data from start, which must be the offset of an event, up to end."""
+    end = len(data) if end is None else end
+    out = []
+    pos = start
+    while pos + 4 <= end:
+        size = _U32.unpack_from(data, pos)[0]
+        if pos + 4 + size > end:
+            break
+        out.append(pos)
+        pos += 4 + size
+    return out
+
+
+def event_at(data: bytes | memoryview, offset: int) -> dict[str, Any]:
+    """The event at an offset of offsets(), as events() gives it."""
+    size = _U32.unpack_from(data, offset)[0]
+    event = decoder().root(memoryview(data)[offset + 4 : offset + 4 + size])
+    value = event.pop("value") or {"type": None}
+    return {**event, **value}
+
+
 def read(path: str | os.PathLike[str]) -> Iterator[dict[str, Any]]:
     """The events of a schedtrace file, see events()."""
     yield from events(Path(path).read_bytes())

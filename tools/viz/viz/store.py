@@ -84,6 +84,10 @@ class StoreWriter:
         self._info: dict[str, tuple[dict[str, str], list[str], str | None, str | None]] = {}
         self._time_range: tuple[float, float] | None = None
         self._notes: list[str] = []
+        # Source-specific metadata, e.g. the cell of a resource grid.
+        self._extra_meta: dict[str, Any] = {}
+        # Whether the resource grid tables were created.
+        self._grid = False
         self._conn.executescript(
             """
             CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
@@ -140,6 +144,31 @@ class StoreWriter:
     def add_record_text(self, record: int, text: str) -> None:
         self._conn.execute("INSERT OR REPLACE INTO record_texts VALUES (?, ?)", (record, text))
 
+    def add_record_texts(self, rows: list[tuple[int, str]]) -> None:
+        self._conn.executemany("INSERT OR REPLACE INTO record_texts VALUES (?, ?)", rows)
+
+    def set_meta(self, key: str, value: Any) -> None:
+        self._extra_meta[key] = value
+
+    def add_grid_slots(self, rows: list[tuple]) -> None:
+        if not self._grid:
+            self._create_grid()
+        self._conn.executemany("INSERT INTO grid_slots VALUES (?, ?, ?, ?, ?)", rows)
+
+    def add_grid_cells(self, rows: list[tuple]) -> None:
+        if not self._grid:
+            self._create_grid()
+        self._conn.executemany("INSERT INTO grid_cells VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+
+    def _create_grid(self) -> None:
+        self._grid = True
+        self._conn.executescript(
+            """
+            CREATE TABLE grid_slots (record INTEGER PRIMARY KEY, t REAL, offset INTEGER, size INTEGER, slot_tx INTEGER);
+            CREATE TABLE grid_cells (level INTEGER, bin INTEGER, t0 REAL, t1 REAL, grp INTEGER, channel TEXT, occ REAL);
+            """
+        )
+
     def finish(self, source_path: Path, source_type: str) -> None:
         """Flushes pending rows, writes the dataset metadata and indexes."""
         t_min = t_max = None
@@ -175,8 +204,12 @@ class StoreWriter:
             "t_min": t_min,
             "t_max": t_max,
             "notes": self._notes,
+            **self._extra_meta,
             "complete": True,
         }
+        if self._grid:
+            self._conn.execute("CREATE INDEX idx_grid_slots ON grid_slots (t)")
+            self._conn.execute("CREATE INDEX idx_grid_cells ON grid_cells (level, t0)")
         self._conn.executemany("INSERT INTO meta VALUES (?, ?)", [(k, json.dumps(v)) for k, v in meta.items()])
         self._conn.commit()
 
@@ -648,6 +681,41 @@ class Store:
             "total_events": total_events,
             "truncated": total_events > len(events),
         }
+
+    def grid_slots(self, t0: float | None, t1: float | None, limit: int) -> tuple[int, list[tuple[int, float, int, int, int]]]:
+        """The number of resource grid slots in a time window and the first limit of them, as (record, time, file
+        offset, size, slot_tx), in time order.
+        """
+        lo = -float("inf") if t0 is None else t0
+        hi = float("inf") if t1 is None else t1
+        with self._connect() as conn:
+            count = conn.execute("SELECT COUNT(*) FROM grid_slots WHERE t >= ? AND t <= ?", (lo, hi)).fetchone()[0]
+            rows = conn.execute(
+                "SELECT record, t, offset, size, slot_tx FROM grid_slots WHERE t >= ? AND t <= ? ORDER BY t LIMIT ?",
+                (lo, hi, limit),
+            ).fetchall()
+        return count, rows
+
+    def grid_anchors(self, t0: float | None, t1: float | None, every: int) -> list[tuple[float, int, int]]:
+        """Every every-th resource grid slot of a time window, as (time, record, slot_tx), in time order."""
+        lo = -float("inf") if t0 is None else t0
+        hi = float("inf") if t1 is None else t1
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT t, record, slot_tx FROM grid_slots WHERE t >= ? AND t <= ? AND record % ? = 0 ORDER BY t", (lo, hi, every)
+            ).fetchall()
+
+    def grid_cells(self, level: int, t0: float | None, t1: float | None) -> list[tuple[float, float, int, str, float]]:
+        """The resource grid occupancy of bins of level slots overlapping a time window, as (start, end, CRB group,
+        channel, occupancy).
+        """
+        lo = -float("inf") if t0 is None else t0
+        hi = float("inf") if t1 is None else t1
+        with self._connect() as conn:
+            return conn.execute(
+                "SELECT t0, t1, grp, channel, occ FROM grid_cells WHERE level = ? AND t0 <= ? AND t1 >= ? ORDER BY t0",
+                (level, hi, lo),
+            ).fetchall()
 
     def lane_links(self) -> dict[int, dict[str, Any]]:
         """The values that link each UE lane to the lanes of other sources, by lane, see parsers.correlate.ues.Context."""

@@ -389,6 +389,34 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   search that finds nothing reads the whole file: about 2 s for 485 MB. Pcaps search the frame summaries they store.
 - The pane highlights the matches in its lines with a JavaScript regular expression, which mostly agrees with Python's.
 
+### D20. Resource grid of scheduler event traces
+
+- `SchedtraceSource` reads the `schedtrace_cell<N>.bin` of OCUDU with `parsers.schedtrace`, on request like MAC and RLC
+  pcaps (traces of a few minutes are hundreds of MB). Its records are the events, the text a summary line and the
+  detail the decoded event, and it has no datasets: its view is the `grid` panel.
+- `parsers.schedtrace.grid` places the allocations of a slot as rectangles of symbols and CRBs. The trace has no
+  VRB-to-PRB interleaving, RBG configuration, CORESET#0 or PRACH and SRS frequency resources, so VRBs map to PRBs one
+  to one, RBGs have the configuration 1 size of the BWP, common PDSCHs are placed in the initial DL BWP, and PDCCH,
+  PRACH and SRS are left out. The UL allocations of a slot decision are transmitted in its slot.
+- The grid shares the time axis of the plots, at which allocations are sub-pixel, so it changes its level of detail
+  with the window (`/api/grid`): within 400 slots the allocations, decoded on demand from the file offsets of the
+  slots (`grid_slots`); within 4000 slots their occupancy per slot, decoded too; beyond, the occupancy stored at
+  parse time (`grid_cells`) per bins of 20, 100, 400 or 2000 slots, the finest with at most one bin per pixel. Cells
+  are groups of 4 CRBs, shown in the color of their dominant channel, shaded by their total occupancy, since TDD bins
+  mix DL and UL.
+- Parsing splits the trace at event boundaries, from the size prefixes, into chunks of 20000 events parsed in the
+  worker pool; bins split between chunks are summed. Two traces of 325 and 73 MB parse in 18 s.
+- Slots are placed on a grid of slot duration by their `slot_tx`, unwrapped across SFN wraps, at the median
+  difference between their timestamps and that grid, rather than at their timestamps: these are stamped when each event
+  is made and jitter by up to a few hundred µs, which made the allocations of consecutive slots overlap or leave gaps.
+  The median keeps the slots of a window at their times, so that the grid stays aligned with the plots.
+- The time axis of the grid is labelled in SFN.slot from the `slot_tx` of the slots, which `/api/grid` sends as
+  "anchors" (all of a window, or about one per pixel): ticks are placed at round slot counts (1, 2, 5, 10 slots, or
+  1 to 500 frames, short of the SFN wrap) from the nearest anchor, and labelled by the count they were placed at,
+  since mapping a time back to a slot can land on the next slot, slot times jittering around their nominal spacing.
+- Duplex is not in the trace: a cell is FDD when at least 5% of its slots with PDSCH, PUSCH or PUCCH have DL and UL
+  together, which TDD cells only have in special slots, without PDSCH and PUSCH together.
+
 ## Open questions
 
 None yet.

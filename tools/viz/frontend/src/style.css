@@ -40,6 +40,15 @@
   --ev-failure: #e0b000;
   --ev-warning: #f57c00;
   --ev-error: #e53935;
+  /* Resource grid colors, by channel. */
+  --ch-pdsch: #4e79a7;
+  --ch-sib: #59a14f;
+  --ch-rar: #edc948;
+  --ch-paging: #b07aa1;
+  --ch-ssb: #e15759;
+  --ch-csi-rs: #9c755f;
+  --ch-pusch: #f28e2b;
+  --ch-pucch: #76b7b2;
   color-scheme: light;
 }
 
@@ -77,6 +86,14 @@
   --ev-failure: #ffd84d;
   --ev-warning: #ff9a3c;
   --ev-error: #ff6b6b;
+  --ch-pdsch: #73a7ff;
+  --ch-sib: #73d07a;
+  --ch-rar: #f2d55c;
+  --ch-paging: #d49bd0;
+  --ch-ssb: #ff7b7b;
+  --ch-csi-rs: #c49a7e;
+  --ch-pusch: #ffa94d;
+  --ch-pucch: #5fd3cb;
   color-scheme: dark;
 }
 
@@ -417,3 +434,7 @@ a.button {
 .u-legend, .u-legend th { color: var(--fg); }
 .u-hz .u-cursor-x, .u-hz .u-cursor-y { border-color: var(--fg-muted); }
 .u-select { background: color-mix(in srgb, var(--accent) 20%, transparent); }
+
+.grid-legend { display: inline-flex; flex-wrap: wrap; gap: 10px; font-size: 12px; }
+.grid-legend .swatch { display: inline-block; width: 10px; height: 10px; margin-right: 4px; vertical-align: -1px; }
+.grid-panel .chart { min-height: 0; }

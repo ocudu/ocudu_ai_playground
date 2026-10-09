@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from parsers import schedtrace
+from parsers.schedtrace import grid
 
 # Trace built by data/make_fixtures.sh with flatc from the JSON events, and flatc's decoding of it.
 DATA = Path(__file__).parent / "data"
@@ -80,3 +81,36 @@ class SchedtraceTest(unittest.TestCase):
         self.assertEqual([(f.name, f.slot) for f in tables["CellSlotEvent"].fields],
                          [("slot_tx", 0), ("latency_us", 1), ("inputs", 3), ("decision", 4)])
         self.assertIsNone(next(f for f in tables["VrbAlloc"].fields if f.name == "vrb_second_hop_start").default)
+
+
+class GridTest(unittest.TestCase):
+    def setUp(self):
+        start, self.slot, _ = schedtrace.read(DATA / "schedtrace_cell0.bin")
+        self.cell = grid.cell_of(start)
+
+    def test_allocations(self):
+        rects = grid.allocations(self.slot, self.cell)
+        by_channel = {}
+        for r in rects:
+            by_channel.setdefault(r["channel"], []).append((r["dir"], r["sym_start"], r["sym_length"], r["crb_start"], r["crb_length"]))
+        # 9 RBGs of 4 PRBs in a 52-PRB BWP starting at CRB 2, the first RBG cut short at CRB 4, merged.
+        self.assertEqual(by_channel["PDSCH"], [("DL", 1, 13, 2, 34)])
+        self.assertEqual(by_channel["PUSCH"], [("UL", 0, 14, 5, 20)])
+        # The RAR PDSCH of the trace has no symbols, so no rectangle.
+        self.assertNotIn("RAR", by_channel)
+        self.assertEqual(by_channel["SSB"], [("DL", 2, 4, 10, 20)])
+        pdsch = next(r for r in rects if r["channel"] == "PDSCH")
+        self.assertEqual((pdsch["rnti"], pdsch["mcs"], pdsch["tbs"]), (17921, 27, 12345))
+
+    def test_pucch_hops(self):
+        slot = {"decision": {"pucchs": [{"rnti": 1, "res_idx": 1, "nof_bits_harq_ack": 2, "nof_bits_sr": 0, "nof_bits_csi1": 0}]}}
+        rects = grid.allocations(slot, self.cell)
+        # Resource 1: format 2 of 2 PRBs at PRB 40, hopping to PRB 7 for the second of its 2 symbols.
+        self.assertEqual([(r["sym_start"], r["sym_length"], r["crb_start"], r["crb_length"]) for r in rects], [(12, 1, 40, 2), (13, 1, 7, 2)])
+
+    def test_occupancy(self):
+        rects = [{"channel": "PDSCH", "crb_start": 2, "crb_length": 6, "sym_length": 7}]
+        self.assertEqual(grid.occupancy(rects, 4), {(0, "PDSCH"): 0.25, (1, "PDSCH"): 0.5})
+
+    def test_rbg_size(self):
+        self.assertEqual([grid.rbg_size(n) for n in (24, 52, 106, 273)], [2, 4, 8, 16])

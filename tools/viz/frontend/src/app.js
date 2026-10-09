@@ -10,6 +10,7 @@ import PlotPanel from "./components/plot-panel.js";
 import RecordView from "./components/record-view.js";
 import TablePanel from "./components/table-panel.js";
 import TracePanel from "./components/trace-panel.js";
+import GridPanel from "./components/grid-panel.js";
 import { applyTheme, loadThemePreference, onSystemThemeChange, saveThemePreference } from "./theme.js";
 import { addRecent, removeRecent } from "./recent.js";
 import { decodeView, encodeView } from "./view-state.js";
@@ -42,7 +43,8 @@ const URL_UPDATE_DELAY_MS = 300;
 let nextPlotId = 1;
 
 /**
- * Creates a widget: a plot, a table of a whole dataset with kind "table", or the trace with kind "trace".
+ * Creates a widget: a plot, a table of a whole dataset with kind "table", the trace with kind "trace", or the resource
+ * grid of a scheduler event trace with kind "grid".
  * @param {{source: number, dataset?: string | null, kind?: string} & Record<string, any>} init
  */
 function newPlot(init) {
@@ -74,7 +76,7 @@ function newTab() {
 }
 
 const App = {
-  components: { FileBrowser, PlotPanel, RecordView, TablePanel, TracePanel },
+  components: { FileBrowser, GridPanel, PlotPanel, RecordView, TablePanel, TracePanel },
   data() {
     return {
       // Open runs, each with the ids of its sources.
@@ -188,7 +190,7 @@ const App = {
         spans = plots.flatMap((p) => {
           const s = ready.get(p.source);
           if (!s) return [];
-          if (p.kind === "trace") return s.t_min != null ? [[s.t_min, s.t_max ?? s.t_min, s.id]] : [];
+          if (p.kind === "trace" || p.kind === "grid") return s.t_min != null ? [[s.t_min, s.t_max ?? s.t_min, s.id]] : [];
           const d = s.datasets.find((d) => d.name === p.dataset);
           return d?.t_min != null ? [[d.t_min, d.t_max, s.id]] : [];
         });
@@ -332,6 +334,11 @@ const App = {
      * the F1AP pcap, else the NGAP pcap, else the first source with events. Pcaps are told by their event categories.
      */
     defaultSource(run, kind = "plot") {
+      if (kind === "grid") {
+        // Scheduler event traces are parsed on request, so the grid also takes one that is not yet.
+        const traces = this.runSourcesOf([run]).filter((s) => s.type === "schedtrace");
+        return traces.find((s) => s.status === "ready") ?? traces[0] ?? null;
+      }
       const ready = this.runSourcesOf([run]).filter((s) => s.status === "ready");
       if (kind === "trace") {
         const pcapWith = (category) => ready.find((s) => s.type === "pcap" && s.event_counts?.[category]);
@@ -433,7 +440,7 @@ const App = {
       }
     },
 
-    /** @param {"plot" | "table" | "trace"} kind */
+    /** @param {"plot" | "table" | "trace" | "grid"} kind */
     async addPlot(kind) {
       const tab = this.activeTab;
       if (!tab) return;
@@ -673,6 +680,9 @@ const App = {
             <trace-panel v-if="p.kind === 'trace'" :panel="p" :sources="sources" :choices="runSources" :run-id="activeId" :view="view" :shifts="shifts"
                          :time-mode="timeMode" :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)"
                          @select-record="selection = $event" />
+            <grid-panel v-else-if="p.kind === 'grid'" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
+                        :time-mode="timeMode" :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)"
+                        @select-record="selection = $event" @parse-source="parseSource" />
             <table-panel v-else-if="p.kind === 'table'" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
                          :show-source="runSources.length > 1" @remove="removePlot(p.id)" @select-record="selection = $event" />
             <plot-panel v-else :plot="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts" :time-mode="timeMode"
@@ -683,6 +693,9 @@ const App = {
             <button class="add-plot" title="Plot of a metric over time, or its histogram" @click="addPlot('plot')">+ plot</button>
             <button class="add-plot" title="Table of all the metrics of a layer" @click="addPlot('table')">+ table</button>
             <button class="add-plot" title="Timeline of each UE, with its events" @click="addPlot('trace')">+ trace</button>
+            <button v-if="runSources.some((s) => s.type === 'schedtrace')" class="add-plot"
+                    title="Resource grid of the cell of a scheduler event trace: its occupancy, and its allocations when zoomed in"
+                    @click="addPlot('grid')">+ grid</button>
           </div>
         </template>
       </template>

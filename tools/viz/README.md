@@ -88,6 +88,13 @@ In the page:
   contexts without the identifier are labelled `–`.
   Hovering a row shows the UE identifiers of the context it merges that the hovered event is of, or that is alive at
   the cursor; between the contexts of a row, e.g. while its UE is in another CU, only the value it is grouped by.
+- `+ grid` shows the resource grid of the cell of a scheduler event trace (`schedtrace_cell<N>.bin`, written by OCUDU
+  with `trace.schedtrace.enabled`), on the time axis of the plots, labelled in SFN.slot: CRBs upwards, one grid for TDD, DL above UL for FDD
+  (told from the trace: FDD cells have PDSCH and PUSCH in the same slots). Zoomed out, it shows the occupancy of each
+  group of 4 CRBs per bin of slots, colored by its dominant channel; within 4000 slots, per slot; within 400 slots, the
+  allocations themselves with symbol resolution: PDSCH, SIB, RAR, paging, SSB, CSI-RS, PUSCH and PUCCH. Hover an
+  allocation for its RNTI, CRBs, symbols, MCS, TBS, HARQ and timing, click it to see its slot event decoded, and click
+  the occupancy to zoom to 40 slots around it. Traces are parsed on request, like MAC and RLC pcaps.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,
   double-click it to reset the height. Its search box finds text in the whole file, case-insensitive, from the
   highlighted line: Enter or `↓` goes to the next match, Shift+Enter or `↑` to the previous one, wrapping around the
