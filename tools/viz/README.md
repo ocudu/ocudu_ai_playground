@@ -77,12 +77,13 @@ In the page:
   ones of their UE. `rows by` shows a row per value of an identifier, labelled with both, e.g. `rnti=0x4601`,
   merging the UE contexts that share it: any identifier the rows have, `rnti` by default where they have one: `du_ue`
   and `cu_ue` (the DU and CU-CP UE indexes of logs, reused by later UEs), the identifiers of a pcap, e.g. `du_f1ap`,
-  `cu_f1ap`, `ran_ngap` or `cu_cp_e1ap`, and, in a tab with an F1AP pcap, `ue_trace`: one row per UE followed through
-  its handovers and reestablishments, across the F1AP, NGAP and E1AP pcaps and the logs. The F1AP pcap offers and hovers
-  only `rnti` (the default), `du_ue`, `du_f1ap`, `cu_f1ap` and `ue_trace`; a log, those and the NGAP and E1AP ids of
-  its UE. Rows of UE contexts without the identifier are labelled `–`.
+  `cu_f1ap`, `ran_ngap` or `cu_cp_e1ap`, and, in a tab with an F1AP pcap and an NGAP pcap, the NGAP ids of the UE
+  followed through its handovers and reestablishments: `amf_ngap`, which the AMF keeps across handovers, even between
+  CUs, gives one row per UE. The F1AP pcap offers and hovers only `rnti` (the default), `du_ue`, `du_f1ap`, `cu_f1ap`
+  and `amf_ngap`; an E1AP pcap its own ids, the default, and the NGAP ones of its UE; a log, all of them. Rows of UE
+  contexts without the identifier are labelled `–`.
   Hovering a row shows the UE identifiers of the context it merges that the hovered event is of, or that is alive at
-  the cursor.
+  the cursor; between the contexts of a row, e.g. while its UE is in another CU, only the value it is grouped by.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,
   double-click it to reset the height.
 - The top-right corner of a plot shows the time and value under the mouse. The legend below shows the

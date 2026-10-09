@@ -321,8 +321,11 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   (`parsers.ran.rnti`). The F1AP gNB-DU-UE-F1AP-ID is not the DU UE index of the logs, so they are not compared. A
   trace row shows the DU UE index, RNTI and protocol identifiers of its UE.
 - UEs are followed through their contexts and their NGAP and E1AP contexts (`parsers.correlate.ues.ue_traces()`), as
-  `ue_trace` on each lane with the NGAP/E1AP ids of its UE trace, and on the lanes of the NGAP and E1AP pcaps, whose
-  traces the run trace serves too (`/api/runs/{id}/trace?sources=<NGAP or E1AP pcap>`). NGAP and E1AP contexts carry no RNTI and span the F1AP
+  the NGAP/E1AP ids of its UE trace on each lane, and the NGAP ones on the lanes of the E1AP pcap, whose trace the run
+  trace serves too (`/api/runs/{id}/trace?sources=<NGAP or E1AP pcap>`). The UE trace number (`ue_trace`) is not
+  shown: `amf_ngap` is the UE-level id, which the AMF keeps across handovers, also between CUs, so that it joins the
+  visits of a UE to a gNB that the pcaps of the gNB cannot link. UEs without one (no NGAP pcap, or never registered)
+  have no UE-level row. `ue_table.py` of the analyze-ran-log skill keeps the UE trace number. NGAP and E1AP contexts carry no RNTI and span the F1AP
   contexts of a UE (24 in a run of intra-CU handovers), so they join by values both sides carry, which the pcaps
   give as "links" (`parsers.pcap.messages.LINK_FIELDS`, kept per lane in `lane_info.links`): an F1AP context the one
   whose RRC reconfiguration named its C-RNTI as handover target (newUE-Identity), created within 1 s of it, or whose

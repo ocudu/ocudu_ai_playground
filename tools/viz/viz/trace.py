@@ -16,6 +16,9 @@ from .store import Store
 
 # Lanes and events read from a store to join its lanes, without limit.
 _ALL = 10**9
+# Identifiers of the UE of a lane shown on the lanes of the other sources of its UE, e.g. on an E1AP lane: the NGAP
+# ones, which the AMF keeps for the UE across handovers. The UE trace number is not shown.
+UE_IDS = ("ran_ngap", "amf_ngap")
 # Fields of the events that trace filters compare, with the UE index and RNTI of its lane for events without them.
 FILTER_FIELDS = ("type", "category", "layer", "level", "ue", "rnti", "cause", "text")
 
@@ -126,8 +129,8 @@ class RunTrace:
         core_contexts = [ctx for source, store in cores for ctx in _contexts(source, _lanes(store), store.lane_links())]
         traces = ues_util.ue_traces(self._lanes, core_contexts)
         self._cores = dict(cores)
-        # UE trace of each NGAP and E1AP lane, as (source, lane).
-        self._core_trace = {part: tr.id for tr in traces for part in tr.cores}
+        # Identifiers of the UE of each NGAP and E1AP lane, as (source, lane), see UE_IDS.
+        self._core_ids = {part: {k: tr.ids[k] for k in UE_IDS if k in tr.ids} for tr in traces for part in tr.cores}
         self._lane_of = {part: lane.key for lane in self._lanes for part in lane.parts}
 
     def trace(
@@ -144,7 +147,7 @@ class RunTrace:
 
         With sources, only their events and the lanes they have events in, e.g. the events of a log on the UE contexts
         of the F1AP pcap. With the F1AP pcap, the RRC events of the logs are left out, since its packets carry them.
-        With an NGAP or E1AP pcap as the only source, its own lanes, with the "ue_trace" of each. With filter_expr, see
+        With an NGAP or E1AP pcap as the only source, its own lanes, with the UE_IDS of the UE of each. With filter_expr, see
         filter_trace(), and with group_by, see group_trace().
         """
         if sources and len(sources) == 1 and (core := next(iter(sources))) in self._cores:
@@ -179,7 +182,7 @@ class RunTrace:
         lanes = [
             {"lane": lane.key, "t_start": lane.t_start, "t_end": lane.t_end, "ue": _int(lane.first("du_ue")),
              "rnti": lane.first("rnti"), "label": self._labels.get(lane.parts[0]), "cu_ue": _int(lane.first("cu_ue")),
-             "open": lane.open, "ids": lane.ids}
+             "open": lane.open, "ids": {k: v for k, v in lane.ids.items() if k != "ue_trace"}}
             for lane in active[:max_lanes]
         ]
         return {
@@ -195,8 +198,8 @@ class RunTrace:
                        filter_expr: str | None, group_by: str | None) -> dict[str, Any]:
         trace = self._cores[source].trace(t0, t1, _ALL, _ALL)
         for lane in trace["lanes"]:
-            if (trace_id := self._core_trace.get((source, lane["lane"]))) is not None:
-                lane["ids"] = {"ue_trace": [str(trace_id)]}
+            if ids := self._core_ids.get((source, lane["lane"])):
+                lane["ids"] = ids
         trace["events"] = [{**ev, "source": source} for ev in trace["events"]]
         if filter_expr:
             trace = filter_trace(trace, filter_expr, _ALL, _ALL)

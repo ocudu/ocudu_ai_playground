@@ -26,10 +26,10 @@ const FETCH_DELAY_MS = 120;
 const GLYPHS = { ra: "▲", lifecycle: "■", rrc: "●", f1ap: "●", ngap: "●", e1ap: "●", mobility: "◆", failure: "✖", warning: "●", error: "●" };
 // Identifiers of the UE contexts of pcaps, by the event category of their protocol, that rows can be grouped by.
 // Identifiers the rows of the trace of an F1AP pcap can be grouped by and its hover shows: those of its UE contexts and
-// the UE trace, not the NGAP and E1AP ones of the UE.
-const F1AP_ROW_IDS = ["rnti", "du_ue", "du_f1ap", "cu_f1ap", "ue_trace"];
-// Order of the identifiers in the options and the hover. The UE trace comes last, since it is never the default.
-const ID_ORDER = ["rnti", "du_ue", "cu_ue", "du_f1ap", "cu_f1ap", "ran_ngap", "amf_ngap", "cu_cp_e1ap", "cu_up_e1ap", "ue_trace"];
+// the AMF UE NGAP id, which the UE keeps across handovers.
+const F1AP_ROW_IDS = ["rnti", "du_ue", "du_f1ap", "cu_f1ap", "amf_ngap"];
+// Order of the identifiers in the options and the hover.
+const ID_ORDER = ["rnti", "du_ue", "cu_ue", "du_f1ap", "cu_f1ap", "ran_ngap", "amf_ngap", "cu_cp_e1ap", "cu_up_e1ap"];
 // Categories of the legend, in order, shown when the source has events of them.
 const LEGEND = [
   ["ra", "random access"],
@@ -168,8 +168,9 @@ export default {
       cursorEvent: null,
       cursorLane: "",
       filterDraft: this.panel.filter ?? "",
-      // Names of the identifiers of the rows of the last trace, see idNames().
+      // Names of the identifiers of the rows of the last trace, see idNames(), and of those of their source.
       idNames: [],
+      ownIdNames: [],
     };
   },
   computed: {
@@ -192,9 +193,11 @@ export default {
     rowIds() {
       return this.source?.type === "pcap" && this.source.event_counts?.f1ap ? F1AP_ROW_IDS : null;
     },
-    /** Identifier the rows are grouped by: the chosen one when the rows have it, else the first they have. */
+    /** Identifier the rows are grouped by: the chosen one when the rows have it, else the first of their own, e.g. not
+     * the NGAP ones of the UE on an E1AP trace. */
     groupBy() {
-      return this.groupOptions.includes(this.panel.groupBy) ? this.panel.groupBy : (this.groupOptions[0] ?? "rnti");
+      if (this.groupOptions.includes(this.panel.groupBy)) return this.panel.groupBy;
+      return this.groupOptions.find((name) => this.ownIdNames.includes(name)) ?? this.groupOptions[0] ?? "rnti";
     },
     /** Identifiers that rows can be grouped by: the ones the rows of the trace have, e.g. no RNTI for NGAP. */
     groupOptions() {
@@ -203,7 +206,10 @@ export default {
         for (const name of names) if (!this.rowIds.includes(name)) names.delete(name);
       }
       const known = ID_ORDER.filter((name) => names.has(name));
-      return [...known, ...[...names].filter((name) => !ID_ORDER.includes(name)).sort()];
+      const ordered = [...known, ...[...names].filter((name) => !ID_ORDER.includes(name)).sort()];
+      // The identifiers of the source come first, then those of its UE from other sources, e.g. NGAP ones on E1AP.
+      const own = ordered.filter((name) => this.ownIdNames.includes(name));
+      return [...own, ...ordered.filter((name) => !own.includes(name))];
     },
     /** F1AP pcap of the tab, whose UE contexts identify the UEs of its logs. */
     f1apSource() {
@@ -255,6 +261,7 @@ export default {
     "panel.source"() {
       // The identifiers of the rows of the previous source do not apply.
       this.idNames = [];
+      this.ownIdNames = [];
       this.scheduleFetch();
     },
     "panel.filter"() {
@@ -358,6 +365,8 @@ export default {
         return { ...lane, t0, t1, row, contexts, label: laneLabel(lane, this.groupBy, this.rowIds), axisLabel: axisLabel(lane, this.groupBy) };
       });
       this.idNames = [...new Set(res.lanes.flatMap(idNames))];
+      // Kept across the traces of the source, since grouped rows only show the identifier they are grouped by.
+      this.ownIdNames = [...new Set([...this.ownIdNames, ...res.lanes.flatMap((lane) => idNames({ ...lane, ids: null }))])];
       this.hasCellRow = res.events.some((e) => e.lane == null);
       this.events = res.events.map((e) => ({ ...e, t: e.t + shift, row: e.lane == null ? -1 : rowOfLane.get(e.lane) ?? -2 }));
       this.nofLanes = res.lanes.length;
@@ -542,9 +551,16 @@ export default {
       if (lane) {
         // A row of merged UE contexts shows the one hovered rather than all.
         const context = contextAt(lane, event, u.posToVal(left, "x"));
-        const shown = context ?? lane;
-        const span = shown.open ? "until the end" : `${(shown.t1 - shown.t0).toFixed(3)} s`;
-        this.cursorLane = `${context ? idsLabel(context.ids, this.groupBy, this.rowIds) : lane.label}, ${span}`;
+        if (context) {
+          const span = context.open ? "until the end" : `${(context.t1 - context.t0).toFixed(3)} s`;
+          this.cursorLane = `${idsLabel(context.ids, this.groupBy, this.rowIds)}, ${span}`;
+        } else if (lane.contexts?.length > 1) {
+          // Between the contexts of a row, e.g. while a UE is in another CU, only the value the row is grouped by.
+          this.cursorLane = lane.axisLabel;
+        } else {
+          const span = lane.open ? "until the end" : `${(lane.t1 - lane.t0).toFixed(3)} s`;
+          this.cursorLane = `${lane.label}, ${span}`;
+        }
       } else {
         this.cursorLane = event && event.lane == null ? "common" : "";
       }
