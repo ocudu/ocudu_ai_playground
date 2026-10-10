@@ -97,8 +97,8 @@ class DatasetWriter(Protocol):
         """Adds slots of a resource grid, as (record, time, file offset, size, slot_tx)."""
 
     def add_grid_cells(self, rows: list[tuple]) -> None:
-        """Adds resource grid occupancy, as (level, bin, start, end, CRB group, channel, occupancy), level being the
-        slots of a bin.
+        """Adds resource grid occupancy, as (level, bin, start, end, cells) per bin, level being its slots and cells
+        the JSON list of its [CRB group, channel, occupancy].
         """
 
     def set_notes(self, notes: list[str]) -> None:

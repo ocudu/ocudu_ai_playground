@@ -158,14 +158,14 @@ class StoreWriter:
     def add_grid_cells(self, rows: list[tuple]) -> None:
         if not self._grid:
             self._create_grid()
-        self._conn.executemany("INSERT INTO grid_cells VALUES (?, ?, ?, ?, ?, ?, ?)", rows)
+        self._conn.executemany("INSERT INTO grid_cells VALUES (?, ?, ?, ?, ?)", rows)
 
     def _create_grid(self) -> None:
         self._grid = True
         self._conn.executescript(
             """
             CREATE TABLE grid_slots (record INTEGER PRIMARY KEY, t REAL, offset INTEGER, size INTEGER, slot_tx INTEGER);
-            CREATE TABLE grid_cells (level INTEGER, bin INTEGER, t0 REAL, t1 REAL, grp INTEGER, channel TEXT, occ REAL);
+            CREATE TABLE grid_cells (level INTEGER, bin INTEGER, t0 REAL, t1 REAL, cells TEXT);
             """
         )
 
@@ -712,10 +712,10 @@ class Store:
         lo = -float("inf") if t0 is None else t0
         hi = float("inf") if t1 is None else t1
         with self._connect() as conn:
-            return conn.execute(
-                "SELECT t0, t1, grp, channel, occ FROM grid_cells WHERE level = ? AND t0 <= ? AND t1 >= ? ORDER BY t0",
-                (level, hi, lo),
+            rows = conn.execute(
+                "SELECT t0, t1, cells FROM grid_cells WHERE level = ? AND t0 <= ? AND t1 >= ? ORDER BY t0", (level, hi, lo)
             ).fetchall()
+        return [(start, end, grp, channel, occ) for start, end, cells in rows for grp, channel, occ in json.loads(cells)]
 
     def lane_links(self) -> dict[int, dict[str, Any]]:
         """The values that link each UE lane to the lanes of other sources, by lane, see parsers.correlate.ues.Context."""

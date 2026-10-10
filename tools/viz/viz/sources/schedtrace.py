@@ -25,14 +25,16 @@ from .log_metrics import _parsers_version
 _NAME_RE = re.compile(r"schedtrace_cell\d+\.bin")
 # CRBs of a row of the occupancy grid.
 GROUP_SIZE = 4
-# Slots of the bins of the stored occupancy, from the finest.
+# Slots of the bins of the stored occupancy, from the finest, each a multiple of the one before.
 LEVELS = (20, 100, 400, 2000)
 # A window of at most this many slots shows its allocations, and of at most SLOT_HEAT_MAX slots its occupancy per slot,
 # both decoded from the trace; larger windows show the stored occupancy.
 RECTS_MAX = 400
 SLOT_HEAT_MAX = 4000
-# Events per chunk parsed in the worker pool.
-_CHUNK_EVENTS = 20000
+# Chunks per worker of a trace parsed in the pool, so that results arrive while the others are parsed, and the fewest
+# events per chunk.
+_CHUNKS_PER_WORKER = 4
+_MIN_CHUNK_EVENTS = 2000
 # Share of the slots with allocations that have both DL and UL shared or control channels from which the cell is
 # taken as FDD: TDD only mixes them in special slots, without PDSCH and PUSCH together.
 _FDD_MIN_SHARE = 0.05
@@ -48,7 +50,7 @@ class SchedtraceSource:
 
     name = "schedtrace"
     # The schema hash invalidates the parses of the trace when the schemas change.
-    version = f"4+parsers-{_parsers_version()}+schema-{schedtrace.schema_hash()[:12]}"
+    version = f"5+parsers-{_parsers_version()}+schema-{schedtrace.schema_hash()[:12]}"
 
     def accepts(self, path: Path) -> bool:
         if not _NAME_RE.fullmatch(path.name):
@@ -84,30 +86,30 @@ class SchedtraceSource:
             raise ValueError(f"{path.name}: the trace does not start with the start event of its cell.")
         size = path.stat().st_size
         # Chunks of whole events, each parsed in the pool with the record of its first event.
-        bounds = [*offsets[::_CHUNK_EVENTS], offsets[-1] + 4 + _event_size(path, offsets[-1])]
-        args = [(str(path), lo, hi, 1 + i * _CHUNK_EVENTS, _cell_dict(cell)) for i, (lo, hi) in enumerate(zip(bounds, bounds[1:]))]
+        workers = parallel.nof_workers()
+        chunk = len(offsets) if workers == 1 else max(_MIN_CHUNK_EVENTS, -(-len(offsets) // (workers * _CHUNKS_PER_WORKER)))
+        bounds = [*offsets[::chunk], offsets[-1] + 4 + _event_size(path, offsets[-1])]
+        args = [(str(path), lo, hi, 1 + i * chunk, _cell_dict(cell)) for i, (lo, hi) in enumerate(zip(bounds, bounds[1:]))]
+        # Bins that span chunks, merged from the parts of each.
         bins: dict[tuple[int, int], dict[str, Any]] = {}
         mixed = Counter()
         t_min = t_max = None
         for (_, _, hi, _, _), res in zip(args, parallel.map_chunks(_parse_chunk, args)):
             writer.add_record_texts(res["texts"])
             writer.add_grid_slots(res["slots"])
+            writer.add_grid_cells(res["cells"])
             mixed.update(res["mixed"])
-            for key, b in res["bins"].items():
-                into = bins.setdefault(key, {"t0": b["t0"], "t1": b["t1"], "n": 0, "occ": Counter()})
-                into["t0"], into["t1"] = min(into["t0"], b["t0"]), max(into["t1"], b["t1"])
-                into["n"] += b["n"]
-                into["occ"].update(b["occ"])
+            for key, b in res["partial_bins"].items():
+                if key in bins:
+                    _merge_bin(bins, key, b)
+                else:
+                    bins[key] = b
             if res["t_min"] is not None:
                 t_min = res["t_min"] if t_min is None else min(t_min, res["t_min"])
                 t_max = res["t_max"] if t_max is None else max(t_max, res["t_max"])
             if progress:
                 progress(hi, size)
-        writer.add_grid_cells([
-            (level, index, b["t0"], b["t1"], grp, channel, occ / b["n"])
-            for (level, index), b in bins.items()
-            for (grp, channel), occ in b["occ"].items()
-        ])
+        writer.add_grid_cells([_cells_row(key, b) for key, b in bins.items()])
         active = mixed["dl"] + mixed["ul"] + mixed["both"]
         duplex = "FDD" if active and mixed["both"] / active >= _FDD_MIN_SHARE else "TDD"
         writer.set_meta("grid", {**_cell_dict(cell), "nof_crbs": cell.nof_crbs, "slot_duration_s": cell.slot_duration_s,
@@ -218,18 +220,21 @@ def _summary(event: dict[str, Any], allocs: list[dict[str, Any]], slots_per_fram
 
 def _parse_chunk(path: str, start: int, end: int, first_record: int, cell_dict: dict[str, Any]) -> dict[str, Any]:
     """Parses the events of the byte range [start, end) of a trace, the first being record first_record: their texts,
-    the grid slots, the occupancy of the bins of LEVELS they fall in, and how many slots have DL, UL or both shared or
+    the grid slots, the occupancy of the bins of LEVELS they fall in, as rows of the bins within the range ("cells")
+    and parts of the bins that span other ranges ("partial_bins"), and how many slots have DL, UL or both shared or
     control channels.
     """
     cell = grid_util.Cell(**cell_dict)
     duration = cell.slot_duration_s
     spf = round(0.01 / duration)
     texts, slots = [], []
-    bins: dict[tuple[int, int], dict[str, Any]] = {}
+    # Bins of the finest level by index, from which the coarser levels are rolled up.
+    fine: dict[int, dict[str, Any]] = {}
     mixed: Counter = Counter()
     t_min = t_max = None
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-        for i, offset in enumerate(schedtrace.offsets(mm, start, end)):
+        offsets = schedtrace.offsets(mm, start, end)
+        for i, offset in enumerate(offsets):
             record = first_record + i
             event = schedtrace.event_at(mm, offset, grid_only=True)
             t = event["timestamp_us"] / 1e6
@@ -244,10 +249,48 @@ def _parse_chunk(path: str, start: int, end: int, first_record: int, cell_dict: 
             dirs = {a["dir"] for a in allocs if a["channel"] in ("PDSCH", "PUSCH", "PUCCH")}
             if dirs:
                 mixed["both" if len(dirs) == 2 else dirs.pop().lower()] += 1
-            occ = grid_util.occupancy(allocs, GROUP_SIZE)
-            for level in LEVELS:
-                b = bins.setdefault((level, record // level), {"t0": t, "t1": t + duration, "n": 0, "occ": Counter()})
-                b["t0"], b["t1"] = min(b["t0"], t), max(b["t1"], t + duration)
-                b["n"] += 1
-                b["occ"].update(occ)
-    return {"texts": texts, "slots": slots, "bins": bins, "mixed": mixed, "t_min": t_min, "t_max": t_max}
+            b = fine.get(record // LEVELS[0])
+            if b is None:
+                b = fine[record // LEVELS[0]] = {"t0": t, "t1": t + duration, "n": 0, "occ": {}}
+            b["t0"], b["t1"] = min(b["t0"], t), max(b["t1"], t + duration)
+            b["n"] += 1
+            occ = b["occ"]
+            for key, value in grid_util.occupancy(allocs, GROUP_SIZE).items():
+                occ[key] = occ.get(key, 0.0) + value
+    bins = {(LEVELS[0], index): b for index, b in fine.items()}
+    finer, prev = fine, LEVELS[0]
+    for level in LEVELS[1:]:
+        coarser: dict[int, dict[str, Any]] = {}
+        for index, b in finer.items():
+            _merge_bin(coarser, index * prev // level, b)
+        bins.update(((level, index), b) for index, b in coarser.items())
+        finer, prev = coarser, level
+    # Bins within the records of the chunk are complete, and encoded here rather than by the parent process.
+    last_record = first_record + len(offsets) - 1
+    cells, partial = [], {}
+    for (level, index), b in bins.items():
+        if index * level >= first_record and (index + 1) * level - 1 <= last_record:
+            cells.append(_cells_row((level, index), b))
+        else:
+            partial[(level, index)] = b
+    return {"texts": texts, "slots": slots, "cells": cells, "partial_bins": partial, "mixed": mixed, "t_min": t_min,
+            "t_max": t_max}
+
+
+def _cells_row(key: tuple[int, int], b: dict[str, Any]) -> tuple:
+    """The row of the grid cells of a bin of (level, index)."""
+    cells = [[grp, channel, occ / b["n"]] for (grp, channel), occ in b["occ"].items()]
+    return (*key, b["t0"], b["t1"], json.dumps(cells, separators=(",", ":")))
+
+
+def _merge_bin(bins: dict[Any, dict[str, Any]], key: Any, b: dict[str, Any]) -> None:
+    """Adds an occupancy bin into the bin of a key of bins."""
+    into = bins.get(key)
+    if into is None:
+        bins[key] = {"t0": b["t0"], "t1": b["t1"], "n": b["n"], "occ": dict(b["occ"])}
+        return
+    into["t0"], into["t1"] = min(into["t0"], b["t0"]), max(into["t1"], b["t1"])
+    into["n"] += b["n"]
+    occ = into["occ"]
+    for k, v in b["occ"].items():
+        occ[k] = occ.get(k, 0.0) + v
