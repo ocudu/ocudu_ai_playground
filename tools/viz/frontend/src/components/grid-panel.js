@@ -83,6 +83,13 @@ export default {
     },
   },
   watch: {
+    // A trace left to parse on request is parsed once a grid shows it.
+    "source.status": {
+      handler(status) {
+        if (status === "deferred") this.$emit("parse-source", this.source.id);
+      },
+      immediate: true,
+    },
     view: { handler() { this.scheduleFetch(); }, deep: true },
     shift() {
       this.scheduleFetch();
@@ -472,10 +479,7 @@ export default {
           <span v-for="c in legend" :key="c.name"><span class="swatch" :style="{ background: c.color }"></span>{{ c.name }}</span>
         </span>
         <span class="status">
-          <span v-if="source && source.status === 'deferred'">
-            <button title="Parse the trace, left out of the run since traces can be huge" @click="$emit('parse-source', source.id)">parse {{ source.file }}</button>
-          </span>
-          <span v-else-if="source && source.status === 'parsing'" class="muted">parsing {{ Math.floor(source.progress * 100) }}%</span>
+          <span v-if="source && (source.status === 'parsing' || source.status === 'deferred')" class="muted">parsing {{ Math.floor((source.progress ?? 0) * 100) }}%</span>
           <span v-else-if="loading" class="muted">loading</span>
           <span v-else class="muted">{{ status }}</span>
           <span v-if="error" class="error">{{ error }}</span>

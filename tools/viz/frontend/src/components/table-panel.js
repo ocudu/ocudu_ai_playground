@@ -31,11 +31,15 @@ export default {
     // Sources the panel may show, e.g. the sources of its tab, or all sources when null.
     choices: { type: Array, default: null },
   },
-  emits: ["remove", "select-record"],
+  emits: ["remove", "select-record", "parse-source"],
   data() {
     return { loading: false, error: "", fields: [], rows: [], total: 0, instanceOptions: [], filterDraft: this.panel.filter };
   },
   computed: {
+    /** Sources the panel offers: those with datasets, parsed or not, e.g. not scheduler event traces, which have none. */
+    sourceChoices() {
+      return (this.choices ?? this.sources).filter((s) => s.type !== "schedtrace");
+    },
     source() {
       return this.sources[this.panel.source];
     },
@@ -84,6 +88,16 @@ export default {
     },
   },
   watch: {
+    // A source left to parse on request, e.g. a MAC pcap, is parsed once picked; its datasets come once parsed.
+    "source.status": {
+      handler(status) {
+        if (status === "deferred") this.$emit("parse-source", this.source.id);
+      },
+      immediate: true,
+    },
+    datasets(datasets) {
+      if (datasets.length && !datasets.some((d) => d.name === this.panel.dataset)) this.panel.dataset = datasets[0].name;
+    },
     "panel.source"() {
       this.panel.dataset = this.datasets[0]?.name ?? null;
       this.loadInstanceOptions(true);
@@ -191,7 +205,7 @@ export default {
     <section class="panel">
       <header class="panel-bar">
         <select v-if="showSource" v-model.number="panel.source" :title="source ? source.path : 'Source'">
-          <option v-for="s in choices ?? sources" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">{{ s.file ?? s.name }}</option>
+          <option v-for="s in sourceChoices" :key="s.id" :value="s.id" :disabled="s.status === 'error'">{{ s.file ?? s.name }}</option>
         </select>
         <select v-model="panel.dataset" title="Dataset">
           <option v-for="d in datasets" :key="d.name" :value="d.name">{{ d.label }}</option>

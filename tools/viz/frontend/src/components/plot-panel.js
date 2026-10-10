@@ -52,7 +52,7 @@ export default {
     events: { type: Array, default: () => [] },
   },
   components: { ExportDialog },
-  emits: ["zoom", "remove", "select-record"],
+  emits: ["zoom", "remove", "select-record", "parse-source"],
   data() {
     return {
       maxLegendSeries: MAX_LEGEND_SERIES,
@@ -78,6 +78,10 @@ export default {
     };
   },
   computed: {
+    /** Sources the panel offers: those with datasets, parsed or not, e.g. not scheduler event traces, which have none. */
+    sourceChoices() {
+      return (this.choices ?? this.sources).filter((s) => s.type !== "schedtrace");
+    },
     source() {
       return this.sources[this.plot.source];
     },
@@ -131,6 +135,16 @@ export default {
     },
   },
   watch: {
+    // A source left to parse on request, e.g. a MAC pcap, is parsed once picked; its datasets come once parsed.
+    "source.status": {
+      handler(status) {
+        if (status === "deferred") this.$emit("parse-source", this.source.id);
+      },
+      immediate: true,
+    },
+    datasets(datasets) {
+      if (datasets.length && !datasets.some((d) => d.name === this.plot.dataset)) this.plot.dataset = this.defaultDataset();
+    },
     "plot.source"() {
       const dataset = this.defaultDataset();
       // An unchanged dataset name does not trigger its watcher, but the instances differ per source.
@@ -553,8 +567,8 @@ export default {
     <section class="panel">
       <header class="panel-bar">
         <select v-if="showSource" v-model.number="plot.source" :title="source ? source.path : 'Source'">
-          <option v-for="s in choices ?? sources" :key="s.id" :value="s.id" :disabled="s.status !== 'ready'">
-            {{ s.file ?? s.name }}{{ s.status === "parsing" ? " (parsing)" : s.status === "error" ? " (error)" : "" }}
+          <option v-for="s in sourceChoices" :key="s.id" :value="s.id" :disabled="s.status === 'error'">
+            {{ s.file ?? s.name }}{{ s.status === "parsing" ? " (parsing)" : s.status === "deferred" ? " (not parsed)" : s.status === "error" ? " (error)" : "" }}
           </option>
         </select>
         <select v-model="plot.dataset" title="Dataset">

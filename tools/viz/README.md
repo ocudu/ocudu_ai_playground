@@ -27,8 +27,9 @@ Pcaps need `tshark`, which the container image has. Their frames are the records
 with the tshark summary, and the decoded frame beside it. F1AP, NGAP and E1AP pcaps give a `messages` dataset (a
 table of their messages, with the RRC and NAS messages of F1AP) and events, with a trace row per UE context; MAC and
 RLC pcaps give a `pdus` dataset. The `files` bar of a tab lists them: `✕` removes one, `+ file` adds another file of the same directory.
-MAC and RLC pcaps of a run, which can be huge, are only parsed on request, with the `parse` button of their chip, or
-when opened on their own; once cached, they open with the run.
+MAC and RLC pcaps of a run, which can be huge, are only parsed on request: with the `parse` button of their chip, when
+a plot, table or grid picks them, which shows the progress, or when opened on their own; once cached, they open with
+the run.
 
 The `+` tab in the page browses the mounted directories (your home, the temp dir and any `--root`) and opens the
 chosen file in a new tab. Its `Recent` view lists the last
@@ -94,7 +95,8 @@ In the page:
   group of 4 CRBs per bin of slots, colored by its dominant channel; within 4000 slots, per slot; within 400 slots, the
   allocations themselves with symbol resolution: PDSCH, SIB, RAR, paging, SSB, CSI-RS, PUSCH and PUCCH. Hover an
   allocation for its RNTI, CRBs, symbols, MCS, TBS, HARQ and timing, click it to see its slot event decoded, and click
-  the occupancy to zoom to 40 slots around it. Traces are parsed on request, like MAC and RLC pcaps.
+  the occupancy to zoom to 40 slots around it. Traces are parsed on request, like MAC and RLC pcaps: a grid parses its
+  trace when it opens.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,
   double-click it to reset the height. Its search box finds text in the whole file, case-insensitive, from the
   highlighted line: Enter or `↓` goes to the next match, Shift+Enter or `↑` to the previous one, wrapping around the

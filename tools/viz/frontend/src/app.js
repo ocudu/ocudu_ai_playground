@@ -684,10 +684,11 @@ const App = {
                         :time-mode="timeMode" :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)"
                         @select-record="selection = $event" @parse-source="parseSource" />
             <table-panel v-else-if="p.kind === 'table'" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
-                         :show-source="runSources.length > 1" @remove="removePlot(p.id)" @select-record="selection = $event" />
+                         :show-source="runSources.length > 1" @remove="removePlot(p.id)" @select-record="selection = $event"
+                         @parse-source="parseSource" />
             <plot-panel v-else :plot="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts" :time-mode="timeMode"
                         :theme-version="themeVersion" :show-source="runSources.length > 1" :events="events"
-                        @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" />
+                        @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" @parse-source="parseSource" />
           </template>
           <div class="add-buttons">
             <button class="add-plot" title="Plot of a metric over time, or its histogram" @click="addPlot('plot')">+ plot</button>
