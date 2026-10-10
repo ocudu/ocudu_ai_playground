@@ -117,11 +117,15 @@ class SchedtraceSource:
 
     def record_detail(self, path: Path, record: int) -> str:
         """The decoding of an event, as JSON."""
+        return json.dumps(self.record_data(path, record), indent=1)
+
+    def record_data(self, path: Path, record: int) -> dict[str, Any]:
+        """The decoding of an event, as schedtrace.read() gives it."""
         offsets = _offsets(str(path), path.stat().st_mtime_ns)
         if not 1 <= record <= len(offsets):
             raise ValueError(f"No event {record}.")
         with path.open("rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-            return json.dumps(schedtrace.event_at(mm, offsets[record - 1]), indent=1)
+            return schedtrace.event_at(mm, offsets[record - 1])
 
     def grid(self, path: Path, store: Any, t0: float | None, t1: float | None, width: int) -> dict[str, Any]:
         """The resource grid of a time window for a chart width in pixels, with "anchors", slots as [time, slot_tx], to

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
 import { getJSON } from "../api.js";
+import EventTables from "./event-tables.js";
 
 // Records shown around the selected one.
 const WINDOW = 61;
@@ -38,11 +39,14 @@ export default {
     selection: { type: Object, required: true },
     sources: { type: Array, required: true },
   },
+  components: { EventTables },
   emits: ["close"],
   data() {
     // current is the highlighted record, the selected one until another record is clicked, and detail its decoding.
     return {
       records: [], center: 0, error: "", height: loadHeight(), current: null, detail: "", detailError: "",
+      // Decoded record as a structure, for sources that give one, and the view of it: "decisions", "events" or "raw".
+      detailData: null, detailTab: "decisions",
       // Search of the records: its text, whether it is a regular expression, and its outcome, e.g. "no match".
       query: "", regex: false, searchNote: "", searching: false,
     };
@@ -73,6 +77,8 @@ export default {
     selection: {
       handler() {
         this.current = this.selection.record;
+        // An allocation picked in the resource grid shows in the decisions of its slot.
+        if (this.selection.item) this.detailTab = "decisions";
         this.load(this.selection.record);
         this.loadDetail();
       },
@@ -90,12 +96,16 @@ export default {
 
     async loadDetail() {
       this.detail = "";
+      this.detailData = null;
       this.detailError = "";
       if (!this.hasDetail) return;
       const record = this.current;
       try {
         const res = await getJSON("/api/records/detail", { source: this.selection.source, record });
-        if (record === this.current) this.detail = res.text;
+        if (record === this.current) {
+          this.detail = res.text;
+          this.detailData = res.data ?? null;
+        }
       } catch (e) {
         this.detailError = e.message;
       }
@@ -234,7 +244,15 @@ export default {
             <span class="lineno">{{ r.record }}</span><span class="text"><template v-for="(part, i) in segments(r)" :key="i"><mark v-if="part.mark">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>
           </div>
         </div>
-        <pre v-if="hasDetail" class="record-detail" :style="height ? { height: height + 'px' } : null"><span v-if="detailError" class="error">{{ detailError }}</span>{{ detail || (detailError ? "" : "decoding…") }}</pre>
+        <div v-if="hasDetail && detailData" class="record-detail record-detail-tabs" :style="height ? { height: height + 'px' } : null">
+          <div class="detail-tabs">
+            <button v-for="tab in ['decisions', 'events', 'raw']" :key="tab" :class="{ active: detailTab === tab }" @click="detailTab = tab">{{ tab }}</button>
+          </div>
+          <pre v-if="detailTab === 'raw'">{{ detail }}</pre>
+          <event-tables v-else :event="detailData" :view="detailTab"
+                        :highlight="current === selection.record ? selection.item ?? null : null" />
+        </div>
+        <pre v-else-if="hasDetail" class="record-detail" :style="height ? { height: height + 'px' } : null"><span v-if="detailError" class="error">{{ detailError }}</span>{{ detail || (detailError ? "" : "decoding…") }}</pre>
       </div>
     </aside>
   `,

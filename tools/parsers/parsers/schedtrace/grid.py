@@ -55,8 +55,9 @@ def rbg_size(nof_prbs: int) -> int:
 
 def allocations(slot_event: dict[str, Any], cell: Cell) -> list[dict[str, Any]]:
     """The allocations of a CellSlotEvent of schedtrace.read() as rectangles: "dir" ("DL" or "UL"), "channel",
-    "sym_start", "sym_length", "crb_start", "crb_length", and "rnti" and the details of the grant when it has them.
-    A frequency-hopping allocation gives one rectangle per hop.
+    "sym_start", "sym_length", "crb_start", "crb_length", "item", the list of the decision and the index in it of the
+    allocation, e.g. ["ue_pdschs", 3], and "rnti" and the details of the grant when it has them. A frequency-hopping
+    allocation gives one rectangle per hop.
     """
     decision = slot_event.get("decision") or {}
     out: list[dict[str, Any]] = []
@@ -83,30 +84,30 @@ def allocations(slot_event: dict[str, Any], cell: Cell) -> list[dict[str, Any]]:
             add(direction, channel, sym_start, sym_length, _rbg_crbs(rbs["bitmap"], rbs["nof_rbgs"], bwp), info)
 
     dl, ul = cell.dl_bwp, cell.ul_bwp
-    for p in decision.get("ue_pdschs") or []:
+    for i, p in enumerate(decision.get("ue_pdschs") or []):
         cw = (p.get("codewords") or [{}])[0]
-        shared("DL", "PDSCH", p, dl, {"rnti": p["rnti"], "harq_id": p["harq_id"], "mcs": cw.get("mcs_index"),
+        shared("DL", "PDSCH", p, dl, {"item": ["ue_pdschs", i], "rnti": p["rnti"], "harq_id": p["harq_id"], "mcs": cw.get("mcs_index"),
                                       "tbs": cw.get("tb_size_bytes"), "new_data": cw.get("new_data"),
                                       "nof_retxs": p["nof_retxs"], "k1": p["k1"], "ue_index": p["ue_index"]})
-    for p in decision.get("sib_pdschs") or []:
-        shared("DL", "SIB", p, dl, {"sib1": p["is_sib1"]})
-    for p in decision.get("rar_pdschs") or []:
-        shared("DL", "RAR", p, dl, {"rnti": p["rnti"], "grants": len(p.get("grants") or [])})
-    for p in decision.get("paging_pdschs") or []:
-        shared("DL", "Paging", p, dl, {"paging_ues": len(p.get("paging_ues") or [])})
-    for s in decision.get("ssbs") or []:
-        add("DL", "SSB", s["sym_start"], s["sym_length"], [(s["crb_start"], s["crb_length"])], {"ssb_index": s["ssb_index"]})
-    for c in decision.get("csi_rs") or []:
-        add("DL", "CSI-RS", c["symbol0"], 1, [(c["crb_start"], c["crb_length"])], {"row": c["row"]})
-    for p in decision.get("puschs") or []:
-        shared("UL", "PUSCH", p, ul, {"rnti": p["rnti"], "harq_id": p["harq_id"], "tbs": p["tb_size_bytes"],
+    for i, p in enumerate(decision.get("sib_pdschs") or []):
+        shared("DL", "SIB", p, dl, {"item": ["sib_pdschs", i], "sib1": p["is_sib1"]})
+    for i, p in enumerate(decision.get("rar_pdschs") or []):
+        shared("DL", "RAR", p, dl, {"item": ["rar_pdschs", i], "rnti": p["rnti"], "grants": len(p.get("grants") or [])})
+    for i, p in enumerate(decision.get("paging_pdschs") or []):
+        shared("DL", "Paging", p, dl, {"item": ["paging_pdschs", i], "paging_ues": len(p.get("paging_ues") or [])})
+    for i, s in enumerate(decision.get("ssbs") or []):
+        add("DL", "SSB", s["sym_start"], s["sym_length"], [(s["crb_start"], s["crb_length"])], {"item": ["ssbs", i], "ssb_index": s["ssb_index"]})
+    for i, c in enumerate(decision.get("csi_rs") or []):
+        add("DL", "CSI-RS", c["symbol0"], 1, [(c["crb_start"], c["crb_length"])], {"item": ["csi_rs", i], "row": c["row"]})
+    for i, p in enumerate(decision.get("puschs") or []):
+        shared("UL", "PUSCH", p, ul, {"item": ["puschs", i], "rnti": p["rnti"], "harq_id": p["harq_id"], "tbs": p["tb_size_bytes"],
                                       "rv": p["rv_index"], "nof_retxs": p["nof_retxs"], "k2": p["k2"], "ue_index": p["ue_index"]})
-    for p in decision.get("pucchs") or []:
+    for i, p in enumerate(decision.get("pucchs") or []):
         res = cell.pucch_resources[p["res_idx"]] if p["res_idx"] < len(cell.pucch_resources) else None
         if res is None:
             continue
         nof_prbs = (res.get("format") or {}).get("nof_prbs") or 1
-        info = {"rnti": p["rnti"], "format": (res.get("format") or {}).get("type"), "harq_bits": p["nof_bits_harq_ack"],
+        info = {"item": ["pucchs", i], "rnti": p["rnti"], "format": (res.get("format") or {}).get("type"), "harq_bits": p["nof_bits_harq_ack"],
                 "sr_bits": p["nof_bits_sr"], "csi_bits": p["nof_bits_csi1"]}
         start = ul["crb_start"] + res["prb_start"]
         hop = res.get("prb_second_hop_start")

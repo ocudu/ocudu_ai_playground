@@ -59,6 +59,9 @@ class SchedtraceSourceTest(unittest.TestCase):
         self.assertTrue(texts[0].endswith("CellStartEvent"))
         self.assertIn("slot_tx=12345 latency=42us", texts[1])
         self.assertEqual(json.loads(self.source.record_detail(self.path, 3))["type"], "CellStopEvent")
+        # The structure of the event too, which the record pane shows as tables.
+        slot = self.source.record_data(self.path, 2)
+        self.assertEqual((slot["type"], len(slot["inputs"]), len(slot["decision"]["ue_pdschs"])), ("CellSlotEvent", 4, 1))
 
 
 class SlotTimesTest(unittest.TestCase):

@@ -456,7 +456,7 @@ export default {
       if (left == null || left < 0 || top == null || top < 0) return;
       const item = this.itemAt(chart, left, top);
       if (item && !item.cells) {
-        this.$emit("select-record", { source: this.panel.source, record: item.record });
+        this.$emit("select-record", { source: this.panel.source, record: item.record, item: item.item });
         return;
       }
       if (this.mode === "cells") {

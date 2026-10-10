@@ -109,7 +109,7 @@ class GridTest(unittest.TestCase):
         self.assertNotIn("RAR", by_channel)
         self.assertEqual(by_channel["SSB"], [("DL", 2, 4, 10, 20)])
         pdsch = next(r for r in rects if r["channel"] == "PDSCH")
-        self.assertEqual((pdsch["rnti"], pdsch["mcs"], pdsch["tbs"]), (17921, 27, 12345))
+        self.assertEqual((pdsch["rnti"], pdsch["mcs"], pdsch["tbs"], pdsch["item"]), (17921, 27, 12345, ["ue_pdschs", 0]))
 
     def test_pucch_hops(self):
         slot = {"decision": {"pucchs": [{"rnti": 1, "res_idx": 1, "nof_bits_harq_ack": 2, "nof_bits_sr": 0, "nof_bits_csi1": 0}]}}

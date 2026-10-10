@@ -94,7 +94,9 @@ In the page:
   (told from the trace: FDD cells have PDSCH and PUSCH in the same slots). Zoomed out, it shows the occupancy of each
   group of 4 CRBs per bin of slots, colored by its dominant channel; within 4000 slots, per slot; within 400 slots, the
   allocations themselves with symbol resolution: PDSCH, SIB, RAR, paging, SSB, CSI-RS, PUSCH and PUCCH. Hover an
-  allocation for its RNTI, CRBs, symbols, MCS, TBS, HARQ and timing, click it to see its slot event decoded, and click
+  allocation for its RNTI, CRBs, symbols, MCS, TBS, HARQ and timing, click it to see its slot event decoded, as tables
+  of its decisions (one per kind of allocation), the allocation clicked highlighted, and of its events (HARQ-ACK, SR,
+  CSI report, RACH), or as raw JSON, and click
   the occupancy to zoom to 40 slots around it. Traces are parsed on request, like MAC and RLC pcaps: a grid parses its
   trace when it opens.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,

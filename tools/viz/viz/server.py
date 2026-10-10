@@ -595,13 +595,19 @@ def create_app(
 
     @app.get("/api/records/detail")
     def record_detail(source: int, record: int = Query(..., ge=1)) -> dict[str, Any]:
-        """Returns a record decoded as text, for sources whose type decodes records, e.g. pcap frames."""
+        """Returns a record decoded as text, for sources whose type decodes records, e.g. pcap frames, and as "data",
+        a structure, for those that also give one, e.g. the events of a scheduler event trace.
+        """
         store = get_store(source)
-        detail_fn = getattr(registry.source_type(source), "record_detail", None)
+        source_type = registry.source_type(source)
+        detail_fn = getattr(source_type, "record_detail", None)
         if detail_fn is None:
             raise HTTPException(400, f"Source {source} has no record details.")
         try:
-            return {"record": record, "text": detail_fn(store.path, record)}
+            out: dict[str, Any] = {"record": record, "text": detail_fn(store.path, record)}
+            if (data_fn := getattr(source_type, "record_data", None)) is not None:
+                out["data"] = data_fn(store.path, record)
+            return out
         except Exception as e:
             # A tshark failure is reported on the record rather than crashing the request.
             raise HTTPException(400, f"Could not decode record {record}: {e}") from None
