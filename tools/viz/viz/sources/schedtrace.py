@@ -47,7 +47,8 @@ class SchedtraceSource:
     """
 
     name = "schedtrace"
-    version = f"4+parsers-{_parsers_version()}"
+    # The schema hash invalidates the parses of the trace when the schemas change.
+    version = f"4+parsers-{_parsers_version()}+schema-{schedtrace.schema_hash()[:12]}"
 
     def accepts(self, path: Path) -> bool:
         if not _NAME_RE.fullmatch(path.name):

@@ -180,9 +180,19 @@ trace being written, is left out.
 
 The decoder is standard-library only: `schedtrace.schema` reads the FlatBuffers schemas of `schedtrace/fbs/`, copies of
 `lib/scheduler/trace/fbs` of OCUDU, and `schedtrace.flatbuf` decodes buffers with them. FlatBuffers' Python code
-generator does not support the vectors of unions of the schemas (`CellSlotEvent.inputs`). Copy the schemas again when
-OCUDU changes them; fields that newer traces append are ignored. The tests compare the decoder with flatc on a trace
-that `tests/schedtrace/data/make_fixtures.sh` builds. It decodes about 16k slots per second of busy slots.
+generator does not support the vectors of unions of the schemas (`CellSlotEvent.inputs`). Decoding uses
+`schedtrace/_generated.py`, which `schedtrace.codegen` compiles from the schemas into one function per table and
+struct, about 2.3 times faster than `schedtrace.flatbuf`. Copy the schemas again when OCUDU changes them, then
+regenerate it:
+
+```bash
+python -m parsers.schedtrace.codegen
+```
+
+`_generated.py` holds the hash of the schemas and of the generator; when it is stale, decoding warns and falls back to
+`schedtrace.flatbuf`, and a test fails. Fields that newer traces append are ignored. The tests compare the decoder with
+flatc on a trace that `tests/schedtrace/data/make_fixtures.sh` builds, and the generated decoder with
+`schedtrace.flatbuf`. It decodes about 18k slots per second of busy slots.
 
 ### UEs of a run
 

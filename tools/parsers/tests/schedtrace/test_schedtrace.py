@@ -5,9 +5,10 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from parsers import schedtrace
-from parsers.schedtrace import grid
+from parsers.schedtrace import _generated, codegen, grid
 
 # Trace built by data/make_fixtures.sh with flatc from the JSON events, and flatc's decoding of it.
 DATA = Path(__file__).parent / "data"
@@ -90,6 +91,30 @@ class SchedtraceTest(unittest.TestCase):
         self.assertEqual([(f.name, f.slot) for f in tables["CellSlotEvent"].fields],
                          [("slot_tx", 0), ("latency_us", 1), ("inputs", 3), ("decision", 4)])
         self.assertIsNone(next(f for f in tables["VrbAlloc"].fields if f.name == "vrb_second_hop_start").default)
+
+
+class GeneratedTest(unittest.TestCase):
+    def tearDown(self):
+        schedtrace._root.cache_clear()
+
+    def test_up_to_date(self):
+        self.assertEqual(_generated.SCHEMA_HASH, codegen.source_hash(),
+                         "_generated.py is stale, regenerate it with python -m parsers.schedtrace.codegen")
+
+    def test_matches_decoder(self):
+        dec = schedtrace.decoder()
+        for name in ("schedtrace_cell0.bin", "cell_stop_newer.bin"):
+            data = memoryview((DATA / name).read_bytes())
+            for offset in schedtrace.offsets(data):
+                size = int.from_bytes(data[offset : offset + 4], "little")
+                buf = data[offset + 4 : offset + 4 + size]
+                # Compared as lists of items, so that the order of the fields matters too.
+                self.assertEqual(list(_generated.root(buf).items()), list(dec.root(buf).items()), name)
+
+    def test_stale_falls_back_to_decoder(self):
+        schedtrace._root.cache_clear()
+        with mock.patch.object(_generated, "SCHEMA_HASH", "stale"), self.assertWarns(UserWarning):
+            self.assertEqual(schedtrace._root(), schedtrace.decoder().root)
 
 
 class GridTest(unittest.TestCase):

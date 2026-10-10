@@ -1,0 +1,297 @@
+# SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
+# SPDX-License-Identifier: BSD-3-Clause-Open-MPI
+
+"""Generates _generated.py, the decoder of CellEvent buffers compiled from the schemas of fbs/: one function per
+table and struct, with the vtable slots, struct formats, enums and defaults of their fields resolved, which decodes
+as flatbuf.Decoder does, several times faster.
+
+Run it after changing fbs/ or this file:
+
+    python -m parsers.schedtrace.codegen
+
+The generated module holds the hash of its sources, SCHEMA_HASH, which the decoder checks against source_hash().
+"""
+
+from __future__ import annotations
+
+import hashlib
+from pathlib import Path
+from typing import Any
+
+from . import schema as fbs
+from .schema import SCALARS, Schema, Struct, Table
+
+HERE = Path(__file__).parent
+FBS_DIR = HERE / "fbs"
+OUTPUT = HERE / "_generated.py"
+# Names of the scalar unpackers of the generated module, by struct format character.
+_FORMAT_NAMES = {"?": "bool", "b": "i8", "B": "u8", "h": "i16", "H": "u16", "i": "i32", "I": "u32", "q": "i64", "Q": "u64",
+                 "f": "f32", "d": "f64"}
+
+_PRELUDE = '''
+import struct
+from typing import Any
+
+_unpack_from = struct.unpack_from
+_u16 = struct.Struct("<H").unpack_from
+_u32 = struct.Struct("<I").unpack_from
+_i32 = struct.Struct("<i").unpack_from
+
+
+def _string(buf, at):
+    length = _u32(buf, at)[0]
+    return bytes(buf[at + 4 : at + 4 + length]).decode("utf-8", "replace")
+
+
+def _strings(buf, at):
+    return [_string(buf, e + _u32(buf, e)[0]) for e in range(at + 4, at + 4 + 4 * _u32(buf, at)[0], 4)]
+
+
+def _scalars(buf, at, fmt):
+    return list(_unpack_from("<%d%s" % (_u32(buf, at)[0], fmt), buf, at + 4))
+
+
+def _enums(buf, at, fmt, names):
+    return [names.get(v, v) for v in _unpack_from("<%d%s" % (_u32(buf, at)[0], fmt), buf, at + 4)]
+
+
+def _structs(buf, at, size, iter_unpack, build):
+    return [build(v) for v in iter_unpack(buf[at + 4 : at + 4 + size * _u32(buf, at)[0]])]
+
+
+def _tables(buf, at, table):
+    return [table(buf, e + _u32(buf, e)[0]) for e in range(at + 4, at + 4 + 4 * _u32(buf, at)[0], 4)]
+
+
+def _union(buf, at, kind, members):
+    member = members.get(kind)
+    return member(buf, at + _u32(buf, at)[0]) if member else {"type": kind}
+
+
+def _union_vector(buf, types_at, values_at, members):
+    types_at += _u32(buf, types_at)[0]
+    values_at += _u32(buf, values_at)[0] + 4
+    out = []
+    for i in range(_u32(buf, types_at)[0]):
+        kind = buf[types_at + 4 + i]
+        out.append(_union(buf, values_at + 4 * i, kind, members) if kind else None)
+    return out
+'''
+
+
+def source_hash() -> str:
+    """Hash of the sources of the generated decoder: the schemas of fbs/ and this file, without their license headers,
+    which the header annotator rewrites.
+    """
+    h = hashlib.sha256()
+    for path in [*sorted(FBS_DIR.glob("*.fbs")), Path(__file__)]:
+        h.update(path.name.encode() + b"\0")
+        for line in path.read_text().splitlines():
+            if "SPDX-" not in line:
+                h.update(line.encode() + b"\n")
+    return h.hexdigest()
+
+
+def generate(sch: Schema, source: str) -> str:
+    """The source of the decoder module of a schema, with source as its SCHEMA_HASH."""
+    return _Generator(sch).module(source)
+
+
+class _Generator:
+    def __init__(self, sch: Schema):
+        self.s = sch
+        # struct format characters of the scalar unpackers the module defines.
+        self.formats: set[str] = set()
+
+    def module(self, source: str) -> str:
+        if self.s.root_type is None:
+            raise ValueError("No root type.")
+        members = {m for u in self.s.unions.values() for m in u.members.values()}
+        body: list[str] = []
+        for st in self.s.structs.values():
+            body += self._struct(st)
+        for t in self.s.tables.values():
+            body += self._table(t, None)
+            if t.name in members:
+                body += self._table(t, t.name)
+        consts = [f"_ENUM_{e.name} = {e.names!r}" for e in self.s.enums.values()]
+        consts += [f'_s_{_FORMAT_NAMES[c]} = struct.Struct("<{c}").unpack_from' for c in sorted(self.formats)]
+        for st in self.s.structs.values():
+            consts.append(f'_STRUCT_{st.name} = struct.Struct("<{self._format(st)}")')
+        # Unpackers of the vtable offsets of n fields, by n.
+        max_slots = max((f.slot + 1 for t in self.s.tables.values() for f in t.fields), default=0)
+        consts.append(f'_VTABLES = [struct.Struct("<%dH" % n).unpack_from for n in range({max_slots + 1})]')
+        unions = [
+            f"_UNION_{u.name} = {{" + ", ".join(f"{k}: _member_{m}" for k, m in u.members.items()) + "}"
+            for u in self.s.unions.values()
+        ]
+        header = "\n".join(line for line in Path(__file__).read_text().splitlines()[:2])
+        return "\n".join([
+            header,
+            "",
+            '"""Decoder of CellEvent buffers, generated by codegen.py from the schemas of fbs/. Do not edit: run',
+            "python -m parsers.schedtrace.codegen instead.",
+            '"""',
+            "",
+            "# ruff: noqa",
+            "# fmt: off",
+            _PRELUDE,
+            f'SCHEMA_HASH = "{source}"',
+            "",
+            *consts,
+            "",
+            *body,
+            "",
+            *unions,
+            "",
+            "",
+            "def root(buf: bytes | memoryview) -> dict[str, Any]:",
+            '    """The CellEvent of a buffer, as flatbuf.Decoder.root() gives it."""',
+            f"    return _table_{self.s.root_type}(buf, _u32(buf, 0)[0])",
+            "",
+        ])
+
+    def _scalar(self, type_name: str) -> str | None:
+        """The struct format character of a scalar or enum type, else None."""
+        scalar = fbs.scalar_of(type_name, self.s)
+        return SCALARS[scalar][0] if scalar is not None else None
+
+    def _unpacker(self, fmt: str) -> str:
+        self.formats.add(fmt)
+        return f"_s_{_FORMAT_NAMES[fmt]}"
+
+    def _format(self, st: Struct) -> str:
+        """The struct format of a struct, its fields flattened, padding as "x"."""
+        out, end = [], 0
+        for f, offset in zip(st.fields, st.offsets):
+            if offset > end:
+                out.append(f"{offset - end}x")
+            if (fmt := self._scalar(f.type.name)) is not None:
+                out.append(fmt)
+                end = offset + SCALARS[fbs.scalar_of(f.type.name, self.s)][1]
+            else:
+                inner = self.s.structs[f.type.name]
+                out.append(self._format(inner))
+                end = offset + inner.size
+        if st.size > end:
+            out.append(f"{st.size - end}x")
+        return "".join(out)
+
+    def _struct_value(self, st: Struct, index: int) -> tuple[str, int]:
+        """A dict expression of a struct from the tuple v of its flattened fields, from index, and the next index."""
+        items = []
+        for f in st.fields:
+            if self._scalar(f.type.name) is not None:
+                expr = f"v[{index}]"
+                if f.type.name in self.s.enums:
+                    expr = f"_ENUM_{f.type.name}.get(v[{index}], v[{index}])"
+                index += 1
+            else:
+                expr, index = self._struct_value(self.s.structs[f.type.name], index)
+            items.append(f'"{f.name}": {expr}')
+        return "{" + ", ".join(items) + "}", index
+
+    def _struct(self, st: Struct) -> list[str]:
+        value, _ = self._struct_value(st, 0)
+        return [
+            "",
+            "",
+            f"def _build_{st.name}(v):",
+            f"    return {value}",
+            "",
+            "",
+            f"def _struct_{st.name}(buf, at):",
+            f"    return _build_{st.name}(_STRUCT_{st.name}.unpack_from(buf, at))",
+        ]
+
+    def _default(self, default: Any, type_name: str) -> str:
+        """The value of an absent scalar field, as flatbuf.Decoder gives it."""
+        if default is None:
+            return "None"
+        if fbs.scalar_of(type_name, self.s) == "bool":
+            return repr(bool(default))
+        enum = self.s.enums.get(type_name)
+        return repr(enum.names.get(default, default) if enum else default)
+
+    def _table(self, t: Table, member: str | None) -> list[str]:
+        """The function of a table, _table_<name>, or of a union member, _member_<name>, which adds its "type"."""
+        nof_slots = max((f.slot + 1 for f in t.fields), default=0)
+        name = f"_member_{t.name}" if member else f"_table_{t.name}"
+        lines = ["", "", f"def {name}(buf, pos):"]
+        if nof_slots:
+            lines += [
+                "    vt = pos - _i32(buf, pos)[0]",
+                "    n = (_u16(buf, vt)[0] - 4) >> 1",
+                # A newer writer may have more fields, an older one fewer, which are absent.
+                f"    vo = _VTABLES[{nof_slots}](buf, vt + 4) if n >= {nof_slots} else _VTABLES[n](buf, vt + 4) + (0,) * ({nof_slots} - n)",
+            ]
+        items = [f'"type": "{member}"'] if member else []
+        for i, f in enumerate(t.fields):
+            var = f"v{i}"
+            lines += self._field(f, var)
+            items.append(f'"{f.name}": {var}')
+        lines.append("    return {")
+        lines += [f"        {item}," for item in items]
+        lines.append("    }")
+        return lines
+
+    def _field(self, f: fbs.Field, var: str) -> list[str]:
+        """Statements that decode a field of a table into var, given its vtable offsets vo."""
+        tname = f.type.name
+        lines = [f"    o = vo[{f.slot}]"]
+        if tname in self.s.unions:
+            lines.append(f"    t = vo[{f.slot - 1}]")
+            if f.type.vector:
+                lines.append(f"    {var} = _union_vector(buf, pos + t, pos + o, _UNION_{tname}) if t and o else None")
+            else:
+                lines += [
+                    "    kind = buf[pos + t] if t else 0",
+                    "    if o and kind:",
+                    f"        member = _UNION_{tname}.get(kind)",
+                    f'        {var} = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {{"type": kind}}',
+                    "    else:",
+                    f"        {var} = None",
+                ]
+            return lines
+        if f.type.vector:
+            lines.append(f"    {var} = {self._vector(tname)} if o else None")
+            return lines
+        if (fmt := self._scalar(tname)) is not None:
+            default = self._default(f.default, tname)
+            if tname in self.s.enums:
+                value = f"_ENUM_{tname}.get(x := {self._unpacker(fmt)}(buf, pos + o)[0], x)"
+            elif fmt == "B":
+                value = "buf[pos + o]"
+            else:
+                value = f"{self._unpacker(fmt)}(buf, pos + o)[0]"
+            lines.append(f"    {var} = {value} if o else {default}")
+        elif tname in self.s.structs:
+            lines.append(f"    {var} = _struct_{tname}(buf, pos + o) if o else None")
+        elif tname == "string":
+            lines.append(f"    {var} = _string(buf, pos + o + _u32(buf, pos + o)[0]) if o else None")
+        else:
+            lines.append(f"    {var} = _table_{tname}(buf, pos + o + _u32(buf, pos + o)[0]) if o else None")
+        return lines
+
+    def _vector(self, tname: str) -> str:
+        """An expression of a vector field, at its offset o from pos."""
+        at = "pos + o + _u32(buf, pos + o)[0]"
+        if (fmt := self._scalar(tname)) is not None:
+            if tname in self.s.enums:
+                return f'_enums(buf, {at}, "{fmt}", _ENUM_{tname})'
+            return f'_scalars(buf, {at}, "{fmt}")'
+        if tname in self.s.structs:
+            st = self.s.structs[tname]
+            return f"_structs(buf, {at}, {st.size}, _STRUCT_{tname}.iter_unpack, _build_{tname})"
+        if tname == "string":
+            return f"_strings(buf, {at})"
+        return f"_tables(buf, {at}, _table_{tname})"
+
+
+def main() -> None:
+    OUTPUT.write_text(generate(fbs.load(FBS_DIR / "cell_event.fbs"), source_hash()))
+    print(f"Wrote {OUTPUT}.")
+
+
+if __name__ == "__main__":
+    main()
