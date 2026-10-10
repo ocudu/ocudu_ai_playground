@@ -5,7 +5,7 @@ import uPlot from "uplot";
 import { buildQuery, getJSON } from "../api.js";
 import ExportDialog from "./export-dialog.js";
 import { displayUnit, formatStat } from "../units.js";
-import { CURSOR_SYNC_KEY, MAX_LEGEND_SERIES, TIME_TICK_SPACE, attachZoomPan, capLegend, chartSeries, cssVar, eventText, fmtFull, formatTime, plotData, selectToZoom, seriesColor, timeTicks, utcDate, valueAxes } from "./chart-utils.js";
+import { CURSOR_SYNC_KEY, MAX_LEGEND_SERIES, TIME_TICK_SPACE, attachZoomPan, capLegend, chartSeries, cssVar, eventText, fitHeight, fmtFull, formatTime, plotData, selectToZoom, seriesColor, timeTicks, utcDate, valueAxes } from "./chart-utils.js";
 
 // Distance in pixels within which the cursor is on an event marker.
 const EVENT_HIT_PX = 5;
@@ -50,12 +50,17 @@ export default {
     choices: { type: Array, default: null },
     // Events drawn as markers on time series, in display time, each with t, source, record, category, type and text.
     events: { type: Array, default: () => [] },
+    // Whether the panel is maximized, alone with the log pane, and the height it then takes, in CSS pixels.
+    maximized: { type: Boolean, default: false },
+    maximizedHeight: { type: Number, default: 0 },
   },
   components: { ExportDialog },
-  emits: ["zoom", "remove", "select-record", "parse-source"],
+  emits: ["zoom", "remove", "select-record", "parse-source", "maximize"],
   data() {
     return {
       maxLegendSeries: MAX_LEGEND_SERIES,
+      // Height of the chart, in CSS pixels, larger when the panel is maximized.
+      chartHeight: CHART_HEIGHT,
       loading: false,
       error: "",
       downsampled: false,
@@ -158,6 +163,12 @@ export default {
       this.plot.splitBy = split && this.splitFields.includes(split) ? split : null;
       this.loadInstanceOptions(true);
     },
+    maximized() {
+      this.fitChart();
+    },
+    maximizedHeight() {
+      this.fitChart();
+    },
     "plot.field"() {
       // Until the second metric is shown, its field follows the first, e.g. ul_brate for dl_brate.
       if (!this.plot.second) this.plot.field2 = this.defaultField2();
@@ -199,7 +210,7 @@ export default {
   },
   mounted() {
     this.resizeObserver = new ResizeObserver(() => {
-      if (this.chart) this.chart.setSize({ width: this.$refs.chart.clientWidth, height: CHART_HEIGHT });
+      if (this.chart) this.chart.setSize({ width: this.$refs.chart.clientWidth, height: this.chartHeight });
     });
     this.resizeObserver.observe(this.$refs.chart);
     if (!this.plot.dataset) this.plot.dataset = this.defaultDataset();
@@ -429,6 +440,18 @@ export default {
       this.cursorText = text;
     },
 
+    /** Sizes the chart to fill the panel when maximized, else to its usual height. */
+    async fitChart() {
+      // Twice, since the first resize can change the height of the rest of the panel, e.g. its legend.
+      for (let pass = 0; pass < 2; pass++) {
+        await this.$nextTick();
+        const height = this.maximized ? fitHeight(this.$el, this.chartHeight, this.maximizedHeight) : CHART_HEIGHT;
+        if (height === this.chartHeight) return;
+        this.chartHeight = height;
+        this.chart?.setSize({ width: this.$refs.chart.clientWidth, height });
+      }
+    },
+
     /** Tracks whether the mouse is over this chart, as opposed to a cursor synced from another plot. */
     trackHover(chart) {
       chart.over.addEventListener("mouseenter", () => { this.hovering = true; });
@@ -451,7 +474,7 @@ export default {
       const single = labels.length === 1;
       const opts = {
         width: this.$refs.chart.clientWidth,
-        height: CHART_HEIGHT,
+        height: this.chartHeight,
         scales: { x: { time: false } },
         series: [
           { label: unitLabel ? `value [${unitLabel}]` : "value", value: (u, v) => (v == null ? "--" : formatStat(v)) },
@@ -479,7 +502,7 @@ export default {
       const xAxis = absolute ? { ...axis, values: timeTicks, space: TIME_TICK_SPACE } : { ...axis };
       const opts = {
         width: this.$refs.chart.clientWidth,
-        height: CHART_HEIGHT,
+        height: this.chartHeight,
         scales: { x: { time: absolute } },
         tzDate: utcDate,
         series: [
@@ -621,6 +644,7 @@ export default {
         <a v-if="labels.length" class="button" :href="csvHref" download
            title="Samples of the plotted series in the visible window, at full resolution, values in the canonical unit">CSV</a>
         <button class="icon" :disabled="plot.mode === 'histogram' || !labels.length" title="Save the plot as an image" @click="exporting = true">💾</button>
+        <button class="icon" :title="maximized ? 'Restore (Esc)' : 'Maximize, alone with the log pane'" @click="$emit('maximize')">{{ maximized ? "🗗" : "⛶" }}</button>
         <button class="icon" title="Remove plot" @click="$emit('remove')">✕</button>
       </header>
       <div class="chart-wrap">

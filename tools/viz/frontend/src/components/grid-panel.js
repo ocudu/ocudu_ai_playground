@@ -3,7 +3,7 @@
 
 import uPlot from "uplot";
 import { getJSON } from "../api.js";
-import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
+import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, fitHeight, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
 
 // Height of the chart, in CSS pixels, of one grid (TDD) and of the DL and UL grids (FDD).
 const TDD_HEIGHT = 320;
@@ -49,10 +49,14 @@ export default {
     shifts: { type: Array, required: true },
     timeMode: { type: String, required: true },
     themeVersion: { type: Number, default: 0 },
+    // Whether the panel is maximized, alone with the log pane, and the height it then takes, in CSS pixels.
+    maximized: { type: Boolean, default: false },
+    maximizedHeight: { type: Number, default: 0 },
   },
-  emits: ["zoom", "remove", "select-record", "parse-source"],
+  emits: ["zoom", "remove", "select-record", "parse-source", "maximize"],
   data() {
-    return { loading: false, error: "", mode: "", level: 0, nofSlots: 0, cursorText: "", cursorItem: "" };
+    // maxChartHeight is the height of the chart that fills the panel when maximized.
+    return { loading: false, error: "", mode: "", level: 0, nofSlots: 0, cursorText: "", cursorItem: "", maxChartHeight: null };
   },
   computed: {
     source() {
@@ -71,6 +75,7 @@ export default {
       return this.cell?.duplex === "FDD";
     },
     chartHeight() {
+      if (this.maximized && this.maxChartHeight) return this.maxChartHeight;
       return this.fdd ? FDD_HEIGHT : TDD_HEIGHT;
     },
     legend() {
@@ -105,6 +110,15 @@ export default {
     timeMode() {
       this.rebuild();
     },
+    maximized() {
+      this.fitChart();
+    },
+    maximizedHeight() {
+      this.fitChart();
+    },
+    chartHeight(height) {
+      this.chart?.setSize({ width: this.$refs.chart.clientWidth, height });
+    },
     themeVersion() {
       this.rebuild();
     },
@@ -135,6 +149,15 @@ export default {
     this.chart?.destroy();
   },
   methods: {
+    /** Sizes the chart to fill the panel when maximized. */
+    async fitChart() {
+      // Twice, since the first resize can change the height of the rest of the panel, e.g. its header.
+      for (let pass = 0; pass < 2; pass++) {
+        await this.$nextTick();
+        this.maxChartHeight = this.maximized ? fitHeight(this.$el, this.chartHeight, this.maximizedHeight) : null;
+      }
+    },
+
     scheduleFetch() {
       clearTimeout(this.fetchTimer);
       this.fetchTimer = setTimeout(() => this.fetch(), FETCH_DELAY_MS);
@@ -484,6 +507,7 @@ export default {
           <span v-else class="muted">{{ status }}</span>
           <span v-if="error" class="error">{{ error }}</span>
         </span>
+<button class="icon" :title="maximized ? 'Restore (Esc)' : 'Maximize, alone with the log pane'" @click="$emit('maximize')">{{ maximized ? "🗗" : "⛶" }}</button>
         <button class="icon" title="Remove the grid" @click="$emit('remove')">✕</button>
       </header>
       <div class="chart-wrap">

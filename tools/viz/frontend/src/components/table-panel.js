@@ -3,6 +3,7 @@
 
 import uPlot from "uplot";
 import { buildQuery, getJSON } from "../api.js";
+import { fitHeight } from "./chart-utils.js";
 import { displayUnit, formatStat } from "../units.js";
 
 // Rows shown in the table, the CSV export has all of them.
@@ -30,10 +31,14 @@ export default {
     showSource: { type: Boolean, default: true },
     // Sources the panel may show, e.g. the sources of its tab, or all sources when null.
     choices: { type: Array, default: null },
+    // Whether the panel is maximized, alone with the log pane, and the height it then takes, in CSS pixels.
+    maximized: { type: Boolean, default: false },
+    maximizedHeight: { type: Number, default: 0 },
   },
-  emits: ["remove", "select-record", "parse-source"],
+  emits: ["remove", "select-record", "parse-source", "maximize"],
   data() {
-    return { loading: false, error: "", fields: [], rows: [], total: 0, instanceOptions: [], filterDraft: this.panel.filter };
+    // maxScrollHeight is the height of the rows that fill the panel when maximized.
+    return { loading: false, error: "", fields: [], rows: [], total: 0, instanceOptions: [], filterDraft: this.panel.filter, maxScrollHeight: null };
   },
   computed: {
     /** Sources the panel offers: those with datasets, parsed or not, e.g. not scheduler event traces, which have none. */
@@ -88,6 +93,12 @@ export default {
     },
   },
   watch: {
+    maximized() {
+      this.fitRows();
+    },
+    maximizedHeight() {
+      this.fitRows();
+    },
     // A source left to parse on request, e.g. a MAC pcap, is parsed once picked; its datasets come once parsed.
     "source.status": {
       handler(status) {
@@ -126,6 +137,12 @@ export default {
     this.abort?.abort();
   },
   methods: {
+    /** Sizes the rows to fill the panel when maximized. */
+    async fitRows() {
+      await this.$nextTick();
+      this.maxScrollHeight = this.maximized ? fitHeight(this.$el, this.$refs.scroll.offsetHeight, this.maximizedHeight) : null;
+    },
+
     queryParams() {
       const params = {
         source: this.panel.source,
@@ -225,6 +242,7 @@ export default {
           <span v-if="error" class="error">{{ error }}</span>
         </span>
         <a class="button" :href="csvHref" download title="All rows of the visible window and the shown columns, values in the canonical unit">export CSV</a>
+<button class="icon" :title="maximized ? 'Restore (Esc)' : 'Maximize, alone with the log pane'" @click="$emit('maximize')">{{ maximized ? "🗗" : "⛶" }}</button>
         <button class="icon" title="Remove table" @click="$emit('remove')">✕</button>
       </header>
       <div class="table-view">
@@ -232,7 +250,7 @@ export default {
           {{ rows.length < total ? "first " + rows.length.toLocaleString() + " of " : "" }}{{ total.toLocaleString() }} rows in the visible window,
           {{ nofShownMetricColumns }} of {{ nofMetricColumns }} metric columns
         </div>
-        <div class="table-scroll">
+        <div ref="scroll" class="table-scroll" :style="maxScrollHeight ? { height: maxScrollHeight + 'px', maxHeight: 'none' } : null">
           <table>
             <thead>
               <tr><th>time (UTC)</th><th>{{ source?.has_detail ? "frame" : "line" }}</th><th v-for="i in shownColumns" :key="fields[i].name">{{ header(i) }}</th></tr>

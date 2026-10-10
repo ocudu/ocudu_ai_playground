@@ -22,6 +22,17 @@ export function eventText(ev) {
   return `${ev.type}: ${ev.text}${repeated}`;
 }
 
+/**
+ * Height for a part of a panel, e.g. its chart, now of height pixels, so that the panel is target pixels high, the
+ * other parts of the panel keeping theirs.
+ * @param {HTMLElement} panel
+ * @param {number} height
+ * @param {number} target
+ */
+export function fitHeight(panel, height, target) {
+  return Math.max(100, Math.round(height + target - panel.offsetHeight));
+}
+
 /** Hides the legend rows of a uPlot chart past the first MAX_LEGEND_SERIES series. */
 export function capLegend(chart) {
   // Row 0 is the one of the x values.

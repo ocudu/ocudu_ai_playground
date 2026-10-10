@@ -450,3 +450,9 @@ a.button {
 .event-table th, .event-table td { padding: 1px 6px; border-bottom: 1px solid var(--border); text-align: right; }
 .event-table th { color: var(--fg-muted); font-weight: normal; }
 .event-table tr.selected td { background: var(--selected); }
+
+/* A maximized panel is alone with the log pane. */
+main.focused .source-bar,
+main.focused .hint,
+main.focused .event-bar,
+main.focused .add-buttons { display: none; }

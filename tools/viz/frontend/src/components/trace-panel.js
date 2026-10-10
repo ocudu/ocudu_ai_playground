@@ -3,7 +3,7 @@
 
 import uPlot from "uplot";
 import { getJSON } from "../api.js";
-import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, eventText, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
+import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, eventText, fitHeight, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
 
 // Height of a row of the trace in CSS pixels, and of the space taken by the time axis.
 const ROW_HEIGHT = 18;
@@ -151,8 +151,11 @@ export default {
     choices: { type: Array, default: null },
     // Run of the tab, whose logs can be joined to an F1AP pcap.
     runId: { type: Number, default: null },
+    // Whether the panel is maximized, alone with the log pane, and the height it then takes, in CSS pixels.
+    maximized: { type: Boolean, default: false },
+    maximizedHeight: { type: Number, default: 0 },
   },
-  emits: ["zoom", "remove", "select-record"],
+  emits: ["zoom", "remove", "select-record", "maximize"],
   data() {
     return {
       loading: false,
@@ -162,6 +165,8 @@ export default {
       truncated: false,
       // Height of the chart and of the content it scrolls over, in CSS pixels.
       chartHeight: AXIS_HEIGHT + ROW_HEIGHT,
+      // UE rows that fill the panel when maximized.
+      maxRows: null,
       scrollHeight: AXIS_HEIGHT + ROW_HEIGHT,
       cursorText: "",
       // Event or UE under the mouse, shown with the cursor readout.
@@ -250,8 +255,12 @@ export default {
       }
       return LEGEND.filter(([category]) => counts[category]).map(([category, label]) => ({ category, label, glyph: GLYPHS[category] }));
     },
+    /** UE rows shown at once: those that fill the panel when maximized. */
+    visibleRows() {
+      return this.maximized && this.maxRows ? this.maxRows : VISIBLE_UE_ROWS;
+    },
     scrollable() {
-      return this.nofLanes > VISIBLE_UE_ROWS;
+      return this.nofLanes > this.visibleRows;
     },
   },
   watch: {
@@ -261,6 +270,12 @@ export default {
     },
     shift() {
       this.scheduleFetch();
+    },
+    maximized() {
+      this.fitRows();
+    },
+    maximizedHeight() {
+      this.fitRows();
     },
     "panel.source"() {
       // The identifiers of the rows of the previous source do not apply.
@@ -293,6 +308,8 @@ export default {
     this.lanes = [];
     this.events = [];
     this.hasCellRow = false;
+    // Last trace laid out, to lay it out again when the rows shown change.
+    this.lastRes = null;
     // First UE row shown, set by the scrollbar.
     this.firstRow = 0;
     this.hovering = false;
@@ -356,8 +373,22 @@ export default {
       }
     },
 
+    /** Shows as many UE rows as fill the panel when maximized, laying the last trace out again. */
+    async fitRows() {
+      await this.$nextTick();
+      const rows = this.maximized ? Math.max(MIN_CHART_ROWS, Math.floor((fitHeight(this.$el, this.chartHeight, this.maximizedHeight) - AXIS_HEIGHT) / ROW_HEIGHT) - (this.hasCellRow ? 1 : 0)) : null;
+      if (rows === this.maxRows) return;
+      this.maxRows = rows;
+      if (this.lastRes) {
+        this.layout(this.lastRes);
+        await this.$nextTick();
+        this.draw();
+      }
+    },
+
     /** Gives each UE its own row, in start order. Events of no UE go to a last row, always shown. */
     layout(res) {
+      this.lastRes = res;
       const shift = this.shift;
       const end = this.source.t_max + shift;
       const rowOfLane = new Map();
@@ -376,10 +407,10 @@ export default {
       this.nofLanes = res.lanes.length;
       this.totalLanes = res.total_lanes;
       this.truncated = res.truncated;
-      const shown = Math.max(1, Math.min(this.nofLanes, VISIBLE_UE_ROWS) + (this.hasCellRow ? 1 : 0));
+      const shown = Math.max(1, Math.min(this.nofLanes, this.visibleRows) + (this.hasCellRow ? 1 : 0));
       this.chartHeight = Math.max(shown, MIN_CHART_ROWS) * ROW_HEIGHT + AXIS_HEIGHT;
-      this.scrollHeight = this.chartHeight + Math.max(0, this.nofLanes - VISIBLE_UE_ROWS) * ROW_HEIGHT;
-      this.firstRow = Math.min(this.firstRow, Math.max(0, this.nofLanes - VISIBLE_UE_ROWS));
+      this.scrollHeight = this.chartHeight + Math.max(0, this.nofLanes - this.visibleRows) * ROW_HEIGHT;
+      this.firstRow = Math.min(this.firstRow, Math.max(0, this.nofLanes - this.visibleRows));
     },
 
     /** Width of the chart: the one of the plots, so that times line up, also under the scrollbar of the rows. */
@@ -389,12 +420,12 @@ export default {
 
     /** Number of rows drawn: the UE rows in view and the row of the events of no UE. */
     nofShownRows() {
-      return Math.max(1, Math.min(this.nofLanes, VISIBLE_UE_ROWS) + (this.hasCellRow ? 1 : 0));
+      return Math.max(1, Math.min(this.nofLanes, this.visibleRows) + (this.hasCellRow ? 1 : 0));
     },
 
     /** Drawn row of a UE row, or of the events of no UE for -1, or -1 when out of view. */
     shownRow(row) {
-      const ueRows = Math.min(this.nofLanes, VISIBLE_UE_ROWS);
+      const ueRows = Math.min(this.nofLanes, this.visibleRows);
       if (row === -1) return this.hasCellRow ? ueRows : -1;
       const shown = row - this.firstRow;
       return row >= 0 && shown >= 0 && shown < ueRows ? shown : -1;
@@ -402,7 +433,7 @@ export default {
 
     /** Labels of the drawn rows. */
     shownLabels() {
-      const labels = this.lanes.slice(this.firstRow, this.firstRow + VISIBLE_UE_ROWS).map((lane) => lane.axisLabel);
+      const labels = this.lanes.slice(this.firstRow, this.firstRow + this.visibleRows).map((lane) => lane.axisLabel);
       if (this.hasCellRow) labels.push("common");
       return labels;
     },
@@ -608,6 +639,7 @@ export default {
           <span v-if="truncated" class="muted">, events truncated, zoom in for all</span>
           <span v-if="error" class="error">{{ error }}</span>
         </span>
+<button class="icon" :title="maximized ? 'Restore (Esc)' : 'Maximize, alone with the log pane'" @click="$emit('maximize')">{{ maximized ? "🗗" : "⛶" }}</button>
         <button class="icon" title="Remove trace" @click="$emit('remove')">✕</button>
       </header>
       <p v-for="n in notes" :key="n" class="muted trace-note">{{ n }}</p>

@@ -99,6 +99,8 @@ In the page:
   CSI report, RACH), or as raw JSON, and click
   the occupancy to zoom to 40 slots around it. Traces are parsed on request, like MAC and RLC pcaps: a grid parses its
   trace when it opens.
+- `⛶` maximizes a plot, table, trace or grid: it fills the window, alone with the log pane, its chart taller (a trace
+  showing more UE rows). `🗗` or Esc restores it.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,
   double-click it to reset the height. Its search box finds text in the whole file, case-insensitive, from the
   highlighted line: Enter or `↓` goes to the next match, Shift+Enter or `↑` to the previous one, wrapping around the

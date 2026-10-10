@@ -72,7 +72,8 @@ function newPlot(init) {
  * other files of its run once checked (related), and whether the question to open them was answered.
  */
 function newTab() {
-  return { plots: [], userRange: null, defaultPlotAdded: false, eventCategories: [], related: null, relatedAnswered: false };
+  // focused is the id of the panel maximized, alone with the log pane, or null.
+  return { plots: [], userRange: null, defaultPlotAdded: false, eventCategories: [], related: null, relatedAnswered: false, focused: null };
 }
 
 const App = {
@@ -85,6 +86,8 @@ const App = {
       sources: [],
       // Tab state by run id.
       tabs: {},
+      // Height of a maximized panel, in CSS pixels: the window less the app bar and the log pane.
+      maximizedHeight: 0,
       activeId: null,
       timeMode: "absolute",
       selection: null,
@@ -205,6 +208,11 @@ const App = {
     },
   },
   watch: {
+    // The log pane opens and closes with the selection, changing the height of a maximized panel.
+    async selection() {
+      await this.$nextTick();
+      this.observeHeights();
+    },
     themePref(pref) {
       saveThemePreference(pref);
       applyTheme(pref);
@@ -277,6 +285,10 @@ const App = {
       if (location.hash !== this.writtenHash) location.reload();
     });
     window.addEventListener("keydown", (e) => this.onKey(e));
+    // A maximized panel fills the space the app bar and the log pane leave, both of which can change.
+    this.heightObserver = new ResizeObserver(() => this.updateMaximizedHeight());
+    window.addEventListener("resize", () => this.updateMaximizedHeight());
+    this.updateMaximizedHeight();
   },
   methods: {
     async restoreView() {
@@ -457,6 +469,30 @@ const App = {
 
     removePlot(id) {
       this.activeTab.plots = this.activeTab.plots.filter((p) => p.id !== id);
+      if (this.activeTab.focused === id) this.activeTab.focused = null;
+    },
+
+    /** Maximizes a panel of the active tab, or restores it when it is maximized. */
+    async toggleFocus(id) {
+      const tab = this.activeTab;
+      tab.focused = tab.focused === id ? null : id;
+      await this.$nextTick();
+      this.observeHeights();
+      if (tab.focused != null) window.scrollTo({ top: 0 });
+    },
+
+    /** Watches the elements whose heights a maximized panel leaves to them: the app bar and the log pane. */
+    observeHeights() {
+      this.heightObserver.disconnect();
+      for (const el of document.querySelectorAll(".app-bar, aside.records")) this.heightObserver.observe(el);
+      this.updateMaximizedHeight();
+    },
+
+    updateMaximizedHeight() {
+      const bar = document.querySelector(".app-bar")?.offsetHeight ?? 0;
+      const pane = document.querySelector("aside.records")?.offsetHeight ?? 0;
+      // The vertical padding of main.
+      this.maximizedHeight = Math.max(200, window.innerHeight - bar - pane - 24);
     },
 
     zoom(range) {
@@ -465,6 +501,10 @@ const App = {
 
     /** Zooms with w and s and pans with a and d, unless typing or a dialog is open. */
     onKey(e) {
+      if (e.key === "Escape" && this.activeTab?.focused != null && !this.browserOpen) {
+        this.toggleFocus(this.activeTab.focused);
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey || this.browserOpen || this.relatedQuestion) return;
       if (e.target.closest?.("input, select, textarea, [contenteditable]")) return;
       const action = { w: 1 / KEY_ZOOM_FACTOR, s: KEY_ZOOM_FACTOR, a: -KEY_PAN_FRACTION, d: KEY_PAN_FRACTION }[e.key.toLowerCase()];
@@ -633,7 +673,7 @@ const App = {
       <button @click="zoom(null)" :disabled="!activeTab || !activeTab.userRange" title="Show the whole time range of the files">reset zoom</button>
       <button @click="zoom(panelsRange)" :disabled="!panelsRange" title="Fit the time range of the data in the plots, tables and traces">fit plots</button>
     </header>
-    <main>
+    <main :class="{ focused: activeTab?.focused != null }">
       <p v-if="error" class="error">{{ error }}</p>
       <p v-for="w in warnings" :key="w" class="error">{{ w }}</p>
       <div v-if="!runs.length && !error" class="empty-state">
@@ -677,16 +717,20 @@ const App = {
             <span v-for="n in activeNotes" :key="n" class="muted event-note">{{ n }}</span>
           </div>
           <template v-for="p in activeTab.plots" :key="p.id">
-            <trace-panel v-if="p.kind === 'trace'" :panel="p" :sources="sources" :choices="runSources" :run-id="activeId" :view="view" :shifts="shifts"
+            <trace-panel v-if="p.kind === 'trace'" v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
+                         :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :panel="p" :sources="sources" :choices="runSources" :run-id="activeId" :view="view" :shifts="shifts"
                          :time-mode="timeMode" :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)"
                          @select-record="selection = $event" />
-            <grid-panel v-else-if="p.kind === 'grid'" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
+            <grid-panel v-else-if="p.kind === 'grid'" v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
+                         :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
                         :time-mode="timeMode" :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)"
                         @select-record="selection = $event" @parse-source="parseSource" />
-            <table-panel v-else-if="p.kind === 'table'" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
+            <table-panel v-else-if="p.kind === 'table'" v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
+                         :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
                          :show-source="runSources.length > 1" @remove="removePlot(p.id)" @select-record="selection = $event"
                          @parse-source="parseSource" />
-            <plot-panel v-else :plot="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts" :time-mode="timeMode"
+            <plot-panel v-else v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
+                         :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :plot="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts" :time-mode="timeMode"
                         :theme-version="themeVersion" :show-source="runSources.length > 1" :events="events"
                         @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" @parse-source="parseSource" />
           </template>
