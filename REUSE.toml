@@ -16,3 +16,11 @@ path = [
   "tools/viz/frontend/package.json",
   "tools/viz/frontend/package-lock.json",
 ]
+
+[[annotations]]
+SPDX-FileCopyrightText = "Copyright (C) 2021-2026 Software Radio Systems Limited"
+SPDX-License-Identifier = "BSD-3-Clause-Open-MPI"
+path = [
+  "tools/parsers/tests/schedtrace/data/*.json",
+  "tools/parsers/tests/schedtrace/data/*.bin",
+]
