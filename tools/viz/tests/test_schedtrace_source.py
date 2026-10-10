@@ -57,7 +57,8 @@ class SchedtraceSourceTest(unittest.TestCase):
         texts = [r["text"] for r in self.store.records(1, 10)]
         self.assertEqual(len(texts), 3)
         self.assertTrue(texts[0].endswith("CellStartEvent"))
-        self.assertIn("slot_tx=12345 latency=42us", texts[1])
+        # slot_tx 12345 of 10 slots per frame.
+        self.assertIn("slot=1234.5 latency=42us", texts[1])
         self.assertEqual(json.loads(self.source.record_detail(self.path, 3))["type"], "CellStopEvent")
         # The structure of the event too, which the record pane shows as tables.
         slot = self.source.record_data(self.path, 2)

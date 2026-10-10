@@ -249,7 +249,7 @@ export default {
             <button v-for="tab in ['decisions', 'events', 'raw']" :key="tab" :class="{ active: detailTab === tab }" @click="detailTab = tab">{{ tab }}</button>
           </div>
           <pre v-if="detailTab === 'raw'">{{ detail }}</pre>
-          <event-tables v-else :event="detailData" :view="detailTab"
+          <event-tables v-else :event="detailData" :view="detailTab" :slots-per-frame="source?.grid?.slots_per_frame ?? null"
                         :highlight="current === selection.record ? selection.item ?? null : null" />
         </div>
         <pre v-else-if="hasDetail" class="record-detail" :style="height ? { height: height + 'px' } : null"><span v-if="detailError" class="error">{{ detailError }}</span>{{ detail || (detailError ? "" : "decoding…") }}</pre>

@@ -47,7 +47,7 @@ class SchedtraceSource:
     """
 
     name = "schedtrace"
-    version = f"3+parsers-{_parsers_version()}"
+    version = f"4+parsers-{_parsers_version()}"
 
     def accepts(self, path: Path) -> bool:
         if not _NAME_RE.fullmatch(path.name):
@@ -203,15 +203,16 @@ def _offsets(path: str, mtime_ns: int) -> list[int]:
         return schedtrace.offsets(mm)
 
 
-def _summary(event: dict[str, Any], allocs: list[dict[str, Any]]) -> str:
-    """One line of an event for the record pane."""
+def _summary(event: dict[str, Any], allocs: list[dict[str, Any]], slots_per_frame: int) -> str:
+    """One line of an event for the record pane, its slot in SFN.slot."""
     t = datetime.fromtimestamp(event["timestamp_us"] / 1e6, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")
     if event["type"] != "CellSlotEvent":
         return f"{t} {event['type']}"
     counts = Counter(a["channel"] for a in allocs)
     inputs = Counter(i["type"] for i in event.get("inputs") or [] if i)
     parts = [f"{n}x{ch}" for ch, n in counts.items()] + [f"{n}x{name.removesuffix('Event')}" for name, n in inputs.items()]
-    return f"{t} slot_tx={event['slot_tx']} latency={event['latency_us']}us " + " ".join(parts)
+    sfn, slot = divmod(event["slot_tx"], slots_per_frame)
+    return f"{t} slot={sfn}.{slot} latency={event['latency_us']}us " + " ".join(parts)
 
 
 def _parse_chunk(path: str, start: int, end: int, first_record: int, cell_dict: dict[str, Any]) -> dict[str, Any]:
@@ -221,6 +222,7 @@ def _parse_chunk(path: str, start: int, end: int, first_record: int, cell_dict: 
     """
     cell = grid_util.Cell(**cell_dict)
     duration = cell.slot_duration_s
+    spf = round(0.01 / duration)
     texts, slots = [], []
     bins: dict[tuple[int, int], dict[str, Any]] = {}
     mixed: Counter = Counter()
@@ -233,10 +235,10 @@ def _parse_chunk(path: str, start: int, end: int, first_record: int, cell_dict: 
             t_min = t if t_min is None else min(t_min, t)
             t_max = t if t_max is None else max(t_max, t)
             if event["type"] != "CellSlotEvent":
-                texts.append((record, _summary(event, [])))
+                texts.append((record, _summary(event, [], spf)))
                 continue
             allocs = grid_util.allocations(event, cell)
-            texts.append((record, _summary(event, allocs)))
+            texts.append((record, _summary(event, allocs, spf)))
             slots.append((record, t, offset, _U32.unpack_from(mm, offset)[0] + 4, event["slot_tx"]))
             dirs = {a["dir"] for a in allocs if a["channel"] in ("PDSCH", "PUSCH", "PUCCH")}
             if dirs:

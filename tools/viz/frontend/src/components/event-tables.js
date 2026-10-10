@@ -14,6 +14,8 @@ const DECISIONS = [
 const INPUTS = [["HarqAckEvent", "HARQ-ACK"], ["SrEvent", "SR"], ["CsiReportEvent", "CSI report"], ["RachIndication", "RACH"]];
 // Items of a list beyond which a nested list is shown by its length rather than as columns.
 const MAX_NESTED_ITEMS = 4;
+// Fields that hold a slot count, shown in SFN.slot.
+const SLOT_FIELDS = new Set(["slot_tx", "slot_rx", "anchor_slot"]);
 
 /** Whether a field holds an RNTI, e.g. "rnti" or "tc_rnti", shown in hex. @param {string} key */
 function isRnti(key) {
@@ -27,7 +29,7 @@ function isRnti(key) {
  * @param {string} [prefix]
  * @param {Record<string, string>} [row]
  */
-function flatten(item, prefix = "", row = {}) {
+function flatten(item, slotsPerFrame, prefix = "", row = {}) {
   for (const [key, value] of Object.entries(item)) {
     const name = prefix + key;
     if (value == null) {
@@ -35,9 +37,11 @@ function flatten(item, prefix = "", row = {}) {
     } else if (Array.isArray(value)) {
       if (value.every((v) => v == null || typeof v !== "object")) row[name] = value.join(",");
       else if (value.length > MAX_NESTED_ITEMS) row[name] = `${value.length} items`;
-      else value.forEach((v, i) => flatten(v ?? {}, `${name}.${i}.`, row));
+      else value.forEach((v, i) => flatten(v ?? {}, slotsPerFrame, `${name}.${i}.`, row));
     } else if (typeof value === "object") {
-      flatten(value, `${name}.`, row);
+      flatten(value, slotsPerFrame, `${name}.`, row);
+    } else if (typeof value === "number" && SLOT_FIELDS.has(key) && slotsPerFrame) {
+      row[name] = sfnSlot(value, slotsPerFrame);
     } else if (typeof value === "number" && isRnti(name)) {
       row[name] = `0x${value.toString(16).padStart(4, "0")}`;
     } else {
@@ -47,9 +51,18 @@ function flatten(item, prefix = "", row = {}) {
   return row;
 }
 
-/** A table of items: their columns, in the order first seen, and their rows. @param {Array<Record<string, any>>} items */
-function table(items) {
-  const rows = items.map((item) => flatten(item));
+/** SFN.slot of a slot count. @param {number} count @param {number} slotsPerFrame */
+function sfnSlot(count, slotsPerFrame) {
+  return `${Math.floor(count / slotsPerFrame)}.${count % slotsPerFrame}`;
+}
+
+/**
+ * A table of items: their columns, in the order first seen, and their rows.
+ * @param {Array<Record<string, any>>} items
+ * @param {number | null} slotsPerFrame
+ */
+function table(items, slotsPerFrame) {
+  const rows = items.map((item) => flatten(item, slotsPerFrame));
   const columns = [];
   for (const row of rows) for (const key of Object.keys(row)) if (!columns.includes(key)) columns.push(key);
   return { columns, rows };
@@ -77,6 +90,8 @@ export default {
     view: { type: String, required: true },
     // Decision item to highlight, as [list, index], e.g. ["ue_pdschs", 3], or null.
     highlight: { type: Array, default: null },
+    // Slots per frame of the cell, to show slot counts in SFN.slot, or null to show them as counts.
+    slotsPerFrame: { type: Number, default: null },
   },
   watch: {
     highlight() {
@@ -108,33 +123,36 @@ export default {
     },
   },
   computed: {
+    slotLabel() {
+      return this.slotsPerFrame ? sfnSlot(this.event.slot_tx, this.slotsPerFrame) : String(this.event.slot_tx);
+    },
     /** The tables of the view, each with its title and count of items. */
     tables() {
       const ev = this.event;
       if (ev.type !== "CellSlotEvent") {
         const { type, ...fields } = ev;
-        return [{ title: type ?? "event", count: 1, ...table([fields]) }];
+        return [{ title: type ?? "event", count: 1, ...table([fields], this.slotsPerFrame) }];
       }
       if (this.view === "decisions") {
         const decision = ev.decision ?? {};
         return DECISIONS.filter(([key]) => decision[key] != null && (!Array.isArray(decision[key]) || decision[key].length))
           .map(([key, title]) => {
             const items = Array.isArray(decision[key]) ? decision[key] : [decision[key]];
-            return { key, title, count: items.length, ...table(items) };
+            return { key, title, count: items.length, ...table(items, this.slotsPerFrame) };
           });
       }
       const inputs = (ev.inputs ?? []).filter(Boolean);
       return INPUTS.map(([type, title]) => {
         const items = inputs.filter((i) => i.type === type).map(({ type: _, ...rest }) => rest);
         const rows = type === "RachIndication" ? rachRows(items) : items;
-        return { key: type, title, count: rows.length, ...table(rows) };
+        return { key: type, title, count: rows.length, ...table(rows, this.slotsPerFrame) };
       }).filter((t) => t.count);
     },
   },
   template: `
     <div class="event-tables">
       <p class="muted">
-        <template v-if="event.type === 'CellSlotEvent'">slot_tx={{ event.slot_tx }} latency={{ event.latency_us }} us</template>
+        <template v-if="event.type === 'CellSlotEvent'">slot={{ slotLabel }} latency={{ event.latency_us }} us</template>
         <template v-else>{{ event.type }}</template>
       </p>
       <p v-if="!tables.length" class="muted">no {{ view }} in this slot</p>
