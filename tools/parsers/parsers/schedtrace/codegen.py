@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
-"""Generates _generated.py, the decoder of CellEvent buffers compiled from the schemas of fbs/: one function per
-table and struct, with the vtable slots, struct formats, enums and defaults of their fields resolved, which decodes
-as flatbuf.Decoder does, several times faster.
+"""Generates _generated.py, the decoders of CellEvent buffers compiled from the schemas of fbs/: one function per
+table and struct, with the vtable slots, struct formats, enums and defaults of their fields resolved. root() decodes
+as flatbuf.Decoder does, several times faster, and root_grid() only the fields of GRID_FIELDS, faster still.
 
 Run it after changing fbs/ or this file:
 
@@ -27,6 +27,24 @@ OUTPUT = HERE / "_generated.py"
 # Names of the scalar unpackers of the generated module, by struct format character.
 _FORMAT_NAMES = {"?": "bool", "b": "i8", "B": "u8", "h": "i16", "H": "u16", "i": "i32", "I": "u32", "q": "i64", "Q": "u64",
                  "f": "f32", "d": "f64"}
+
+# Fields that root_grid() keeps, by table: those that grid.allocations() reads, the timestamp, slot and latency of an
+# event, and the type of each input. Tables not listed keep all their fields.
+GRID_FIELDS: dict[str, tuple[str, ...]] = {
+    "CellSlotEvent": ("slot_tx", "latency_us", "inputs", "decision"),
+    "SlotDecision": ("sib_pdschs", "rar_pdschs", "paging_pdschs", "ue_pdschs", "puschs", "pucchs", "ssbs", "csi_rs"),
+    "Pdsch": ("rnti", "rbs", "sym_start", "sym_length", "codewords", "harq_id", "ue_index", "nof_retxs", "k1"),
+    "Pusch": ("rnti", "rbs", "sym_start", "sym_length", "rv_index", "harq_id", "tb_size_bytes", "ue_index", "nof_retxs",
+              "k2"),
+    "Pucch": ("rnti", "res_idx", "nof_bits_harq_ack", "nof_bits_sr", "nof_bits_csi1"),
+    "SibPdsch": ("is_sib1", "rbs", "sym_start", "sym_length"),
+    "RarPdsch": ("rnti", "rbs", "sym_start", "sym_length", "grants"),
+    "PagingPdsch": ("rbs", "sym_start", "sym_length", "paging_ues"),
+    "RachIndication": (),
+    "HarqAckEvent": (),
+    "SrEvent": (),
+    "CsiReportEvent": (),
+}
 
 _PRELUDE = '''
 import struct
@@ -102,18 +120,23 @@ class _Generator:
         self.s = sch
         # struct format characters of the scalar unpackers the module defines.
         self.formats: set[str] = set()
+        # Prefix of the function names of the decoder being generated.
+        self.prefix = ""
+        # Fields that the decoder being generated keeps, by table, all of them for tables not in it.
+        self.keep: dict[str, tuple[str, ...]] = {}
 
     def module(self, source: str) -> str:
         if self.s.root_type is None:
             raise ValueError("No root type.")
-        members = {m for u in self.s.unions.values() for m in u.members.values()}
         body: list[str] = []
         for st in self.s.structs.values():
             body += self._struct(st)
-        for t in self.s.tables.values():
-            body += self._table(t, None)
-            if t.name in members:
-                body += self._table(t, t.name)
+        unions: list[str] = []
+        for prefix, keep in (("", {}), ("grid_", GRID_FIELDS)):
+            self.prefix, self.keep = prefix, keep
+            tables, union_lines = self._decoder()
+            body += tables
+            unions += union_lines
         consts = [f"_ENUM_{e.name} = {e.names!r}" for e in self.s.enums.values()]
         consts += [f'_s_{_FORMAT_NAMES[c]} = struct.Struct("<{c}").unpack_from' for c in sorted(self.formats)]
         for st in self.s.structs.values():
@@ -121,10 +144,6 @@ class _Generator:
         # Unpackers of the vtable offsets of n fields, by n.
         max_slots = max((f.slot + 1 for t in self.s.tables.values() for f in t.fields), default=0)
         consts.append(f'_VTABLES = [struct.Struct("<%dH" % n).unpack_from for n in range({max_slots + 1})]')
-        unions = [
-            f"_UNION_{u.name} = {{" + ", ".join(f"{k}: _member_{m}" for k, m in u.members.items()) + "}"
-            for u in self.s.unions.values()
-        ]
         header = "\n".join(line for line in Path(__file__).read_text().splitlines()[:2])
         return "\n".join([
             header,
@@ -149,7 +168,61 @@ class _Generator:
             '    """The CellEvent of a buffer, as flatbuf.Decoder.root() gives it."""',
             f"    return _table_{self.s.root_type}(buf, _u32(buf, 0)[0])",
             "",
+            "",
+            "def root_grid(buf: bytes | memoryview) -> dict[str, Any]:",
+            '    """The CellEvent of a buffer, as root() gives it, with only the fields of GRID_FIELDS of codegen.py."""',
+            f"    return _grid_table_{self.s.root_type}(buf, _u32(buf, 0)[0])",
+            "",
         ])
+
+    def _fields(self, t: Table) -> list[fbs.Field]:
+        """The fields of a table that the decoder being generated keeps."""
+        keep = self.keep.get(t.name)
+        return t.fields if keep is None else [f for f in t.fields if f.name in keep]
+
+    def _decoder(self) -> tuple[list[str], list[str]]:
+        """The functions of the tables of the decoder being generated, those reachable from the root type through the
+        fields it keeps, and the dicts of the members of its unions.
+        """
+        for name, keep in self.keep.items():
+            if name not in self.s.tables:
+                raise ValueError(f"No table {name}.")
+            if missing := set(keep) - {f.name for f in self.s.tables[name].fields}:
+                raise ValueError(f"No fields {sorted(missing)} in table {name}.")
+        tables, members, unions = {self.s.root_type}, set(), set()
+        pending = [self.s.root_type]
+        while pending:
+            for f in self._fields(self.s.tables[pending.pop()]):
+                tname = f.type.name
+                if tname in self.s.unions and tname not in unions:
+                    unions.add(tname)
+                    new = set(self.s.unions[tname].members.values()) - members - tables
+                    members.update(self.s.unions[tname].members.values())
+                    pending += new
+                elif tname in self.s.tables and tname not in tables:
+                    tables.add(tname)
+                    if tname not in members:
+                        pending.append(tname)
+        body: list[str] = []
+        for t in self.s.tables.values():
+            if t.name in tables:
+                body += self._table(t, None)
+            if t.name in members:
+                body += self._table(t, t.name)
+        union_lines = [
+            f"{self._name('members', u.name)} = {{"
+            + ", ".join(f"{k}: {self._name('member', m)}" for k, m in u.members.items())
+            + "}"
+            for u in self.s.unions.values()
+            if u.name in unions
+        ]
+        return body, union_lines
+
+    def _name(self, kind: str, name: str) -> str:
+        """The name of the function of a table ("table") or union member ("member"), or of the dict of the members of
+        a union ("members"), in the decoder being generated.
+        """
+        return f"_{self.prefix}{kind}_{name}"
 
     def _scalar(self, type_name: str) -> str | None:
         """The struct format character of a scalar or enum type, else None."""
@@ -214,9 +287,10 @@ class _Generator:
         return repr(enum.names.get(default, default) if enum else default)
 
     def _table(self, t: Table, member: str | None) -> list[str]:
-        """The function of a table, _table_<name>, or of a union member, _member_<name>, which adds its "type"."""
-        nof_slots = max((f.slot + 1 for f in t.fields), default=0)
-        name = f"_member_{t.name}" if member else f"_table_{t.name}"
+        """The function of a table, or of a union member, which adds its "type"."""
+        fields = self._fields(t)
+        nof_slots = max((f.slot + 1 for f in fields), default=0)
+        name = self._name("member", t.name) if member else self._name("table", t.name)
         lines = ["", "", f"def {name}(buf, pos):"]
         if nof_slots:
             lines += [
@@ -226,7 +300,7 @@ class _Generator:
                 f"    vo = _VTABLES[{nof_slots}](buf, vt + 4) if n >= {nof_slots} else _VTABLES[n](buf, vt + 4) + (0,) * ({nof_slots} - n)",
             ]
         items = [f'"type": "{member}"'] if member else []
-        for i, f in enumerate(t.fields):
+        for i, f in enumerate(fields):
             var = f"v{i}"
             lines += self._field(f, var)
             items.append(f'"{f.name}": {var}')
@@ -242,12 +316,12 @@ class _Generator:
         if tname in self.s.unions:
             lines.append(f"    t = vo[{f.slot - 1}]")
             if f.type.vector:
-                lines.append(f"    {var} = _union_vector(buf, pos + t, pos + o, _UNION_{tname}) if t and o else None")
+                lines.append(f"    {var} = _union_vector(buf, pos + t, pos + o, {self._name('members', tname)}) if t and o else None")
             else:
                 lines += [
                     "    kind = buf[pos + t] if t else 0",
                     "    if o and kind:",
-                    f"        member = _UNION_{tname}.get(kind)",
+                    f"        member = {self._name('members', tname)}.get(kind)",
                     f'        {var} = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {{"type": kind}}',
                     "    else:",
                     f"        {var} = None",
@@ -270,7 +344,7 @@ class _Generator:
         elif tname == "string":
             lines.append(f"    {var} = _string(buf, pos + o + _u32(buf, pos + o)[0]) if o else None")
         else:
-            lines.append(f"    {var} = _table_{tname}(buf, pos + o + _u32(buf, pos + o)[0]) if o else None")
+            lines.append(f"    {var} = {self._name('table', tname)}(buf, pos + o + _u32(buf, pos + o)[0]) if o else None")
         return lines
 
     def _vector(self, tname: str) -> str:
@@ -285,7 +359,7 @@ class _Generator:
             return f"_structs(buf, {at}, {st.size}, _STRUCT_{tname}.iter_unpack, _build_{tname})"
         if tname == "string":
             return f"_strings(buf, {at})"
-        return f"_tables(buf, {at}, _table_{tname})"
+        return f"_tables(buf, {at}, {self._name('table', tname)})"
 
 
 def main() -> None:

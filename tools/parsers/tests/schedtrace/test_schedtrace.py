@@ -95,7 +95,7 @@ class SchedtraceTest(unittest.TestCase):
 
 class GeneratedTest(unittest.TestCase):
     def tearDown(self):
-        schedtrace._root.cache_clear()
+        schedtrace._stale.cache_clear()
 
     def test_up_to_date(self):
         self.assertEqual(_generated.SCHEMA_HASH, codegen.source_hash(),
@@ -112,9 +112,26 @@ class GeneratedTest(unittest.TestCase):
                 self.assertEqual(list(_generated.root(buf).items()), list(dec.root(buf).items()), name)
 
     def test_stale_falls_back_to_decoder(self):
-        schedtrace._root.cache_clear()
+        schedtrace._stale.cache_clear()
         with mock.patch.object(_generated, "SCHEMA_HASH", "stale"), self.assertWarns(UserWarning):
-            self.assertEqual(schedtrace._root(), schedtrace.decoder().root)
+            self.assertEqual(schedtrace._root(False), schedtrace.decoder().root)
+            self.assertEqual(schedtrace._root(True), schedtrace.decoder().root)
+
+    def test_grid_only(self):
+        full = list(schedtrace.read(DATA / "schedtrace_cell0.bin"))
+        brief = list(schedtrace.read(DATA / "schedtrace_cell0.bin", grid_only=True))
+        cell = grid.cell_of(full[0])
+        self.assertEqual(brief[0], full[0])
+        self.assertEqual(grid.allocations(brief[1], cell), grid.allocations(full[1], cell))
+        self.assertEqual([i["type"] for i in brief[1]["inputs"]], [i["type"] for i in full[1]["inputs"]])
+        self.assertEqual((brief[1]["slot_tx"], brief[1]["latency_us"]), (full[1]["slot_tx"], full[1]["latency_us"]))
+        self.assertNotIn("dl_pdcchs", brief[1]["decision"])
+        self.assertEqual(brief[2], full[2])
+
+    def test_grid_fields_exist(self):
+        tables = schedtrace.decoder().schema.tables
+        for name, fields in codegen.GRID_FIELDS.items():
+            self.assertLessEqual(set(fields), {f.name for f in tables[name].fields}, name)
 
 
 class GridTest(unittest.TestCase):

@@ -152,7 +152,7 @@ class SchedtraceSource:
             out["anchors"] = [[t, r[4]] for t, r in list(zip(times, rows))[::every]]
             with path.open("rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
                 for (record, _, offset, _, _), t in zip(rows, times):
-                    allocs = grid_util.allocations(schedtrace.event_at(mm, offset), cell)
+                    allocs = grid_util.allocations(schedtrace.event_at(mm, offset, grid_only=True), cell)
                     if count <= RECTS_MAX:
                         rects.extend({**a, "t": t, "t1": t + duration, "record": record} for a in allocs)
                     else:
@@ -231,7 +231,7 @@ def _parse_chunk(path: str, start: int, end: int, first_record: int, cell_dict: 
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
         for i, offset in enumerate(schedtrace.offsets(mm, start, end)):
             record = first_record + i
-            event = schedtrace.event_at(mm, offset)
+            event = schedtrace.event_at(mm, offset, grid_only=True)
             t = event["timestamp_us"] / 1e6
             t_min = t if t_min is None else min(t_min, t)
             t_max = t if t_max is None else max(t_max, t)

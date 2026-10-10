@@ -56,7 +56,7 @@ def _union_vector(buf, types_at, values_at, members):
         out.append(_union(buf, values_at + 4 * i, kind, members) if kind else None)
     return out
 
-SCHEMA_HASH = "e1a18e28a4ab892d5ab5ba90d5fd2f2cd4648f81b1e62f50cc68b8e757c61e70"
+SCHEMA_HASH = "526e92f86e162866148d2bc2ff0c6ea96cc2a0eb50dc275987b1a9bbaac3383b"
 
 _ENUM_CyclicPrefix = {0: 'Normal', 1: 'Extended'}
 _ENUM_SubcarrierSpacing = {0: 'Khz15', 1: 'Khz30', 2: 'Khz60', 3: 'Khz120', 4: 'Khz240'}
@@ -178,17 +178,6 @@ def _struct_FailedAttempts(buf, at):
     return _build_FailedAttempts(_STRUCT_FailedAttempts.unpack_from(buf, at))
 
 
-def _table_PucchF0(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[1](buf, vt + 4) if n >= 1 else _VTABLES[n](buf, vt + 4) + (0,) * (1 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    return {
-        "initial_cyclic_shift": v0,
-    }
-
-
 def _member_PucchF0(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
@@ -198,20 +187,6 @@ def _member_PucchF0(buf, pos):
     return {
         "type": "PucchF0",
         "initial_cyclic_shift": v0,
-    }
-
-
-def _table_PucchF1(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[2](buf, vt + 4) if n >= 2 else _VTABLES[n](buf, vt + 4) + (0,) * (2 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    o = vo[1]
-    v1 = buf[pos + o] if o else 0
-    return {
-        "initial_cyclic_shift": v0,
-        "time_domain_occ": v1,
     }
 
 
@@ -230,17 +205,6 @@ def _member_PucchF1(buf, pos):
     }
 
 
-def _table_PucchF2(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[1](buf, vt + 4) if n >= 1 else _VTABLES[n](buf, vt + 4) + (0,) * (1 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    return {
-        "nof_prbs": v0,
-    }
-
-
 def _member_PucchF2(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
@@ -250,23 +214,6 @@ def _member_PucchF2(buf, pos):
     return {
         "type": "PucchF2",
         "nof_prbs": v0,
-    }
-
-
-def _table_PucchF3(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    o = vo[1]
-    v1 = _s_bool(buf, pos + o)[0] if o else False
-    o = vo[2]
-    v2 = _s_bool(buf, pos + o)[0] if o else False
-    return {
-        "nof_prbs": v0,
-        "pi_2_bpsk": v1,
-        "additional_dmrs": v2,
     }
 
 
@@ -285,26 +232,6 @@ def _member_PucchF3(buf, pos):
         "nof_prbs": v0,
         "pi_2_bpsk": v1,
         "additional_dmrs": v2,
-    }
-
-
-def _table_PucchF4(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[4](buf, vt + 4) if n >= 4 else _VTABLES[n](buf, vt + 4) + (0,) * (4 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    o = vo[1]
-    v1 = buf[pos + o] if o else 0
-    o = vo[2]
-    v2 = _s_bool(buf, pos + o)[0] if o else False
-    o = vo[3]
-    v3 = _s_bool(buf, pos + o)[0] if o else False
-    return {
-        "occ_index": v0,
-        "occ_length": v1,
-        "pi_2_bpsk": v2,
-        "additional_dmrs": v3,
     }
 
 
@@ -337,7 +264,7 @@ def _table_PucchResource(buf, pos):
     t = vo[0]
     kind = buf[pos + t] if t else 0
     if o and kind:
-        member = _UNION_PucchFormat.get(kind)
+        member = _members_PucchFormat.get(kind)
         v0 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
     else:
         v0 = None
@@ -358,26 +285,6 @@ def _table_PucchResource(buf, pos):
         "sym_start": v3,
         "sym_length": v4,
         "rep_factor": v5,
-    }
-
-
-def _table_CellStartEvent(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[4](buf, vt + 4) if n >= 4 else _VTABLES[n](buf, vt + 4) + (0,) * (4 - n)
-    o = vo[0]
-    v0 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[1]
-    v1 = _struct_BwpConfiguration(buf, pos + o) if o else None
-    o = vo[2]
-    v2 = _struct_BwpConfiguration(buf, pos + o) if o else None
-    o = vo[3]
-    v3 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _table_PucchResource) if o else None
-    return {
-        "pci": v0,
-        "init_ul_bwp": v1,
-        "init_dl_bwp": v2,
-        "pucch_resources": v3,
     }
 
 
@@ -419,20 +326,6 @@ def _table_RachOccasion(buf, pos):
     }
 
 
-def _table_RachIndication(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[2](buf, vt + 4) if n >= 2 else _VTABLES[n](buf, vt + 4) + (0,) * (2 - n)
-    o = vo[0]
-    v0 = _s_u32(buf, pos + o)[0] if o else 0
-    o = vo[1]
-    v1 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _table_RachOccasion) if o else None
-    return {
-        "slot_rx": v0,
-        "occasions": v1,
-    }
-
-
 def _member_RachIndication(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
@@ -445,32 +338,6 @@ def _member_RachIndication(buf, pos):
         "type": "RachIndication",
         "slot_rx": v0,
         "occasions": v1,
-    }
-
-
-def _table_HarqAckEvent(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[6](buf, vt + 4) if n >= 6 else _VTABLES[n](buf, vt + 4) + (0,) * (6 - n)
-    o = vo[0]
-    v0 = _s_u32(buf, pos + o)[0] if o else 0
-    o = vo[1]
-    v1 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[2]
-    v2 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[3]
-    v3 = buf[pos + o] if o else 0
-    o = vo[4]
-    v4 = _ENUM_HarqAckReportStatus.get(x := _s_u8(buf, pos + o)[0], x) if o else 'Nack'
-    o = vo[5]
-    v5 = _s_u32(buf, pos + o)[0] if o else 0
-    return {
-        "slot_rx": v0,
-        "ue_idx": v1,
-        "rnti": v2,
-        "harq_id": v3,
-        "status": v4,
-        "tbs": v5,
     }
 
 
@@ -501,23 +368,6 @@ def _member_HarqAckEvent(buf, pos):
     }
 
 
-def _table_SrEvent(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
-    o = vo[0]
-    v0 = _s_u32(buf, pos + o)[0] if o else 0
-    o = vo[1]
-    v1 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[2]
-    v2 = _s_u16(buf, pos + o)[0] if o else 0
-    return {
-        "slot_rx": v0,
-        "ue_idx": v1,
-        "rnti": v2,
-    }
-
-
 def _member_SrEvent(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
@@ -536,25 +386,9 @@ def _member_SrEvent(buf, pos):
     }
 
 
-def _table_PmiUnknown(buf, pos):
-    return {
-    }
-
-
 def _member_PmiUnknown(buf, pos):
     return {
         "type": "PmiUnknown",
-    }
-
-
-def _table_PmiTwoAntennaPorts(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[1](buf, vt + 4) if n >= 1 else _VTABLES[n](buf, vt + 4) + (0,) * (1 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    return {
-        "pmi": v0,
     }
 
 
@@ -567,32 +401,6 @@ def _member_PmiTwoAntennaPorts(buf, pos):
     return {
         "type": "PmiTwoAntennaPorts",
         "pmi": v0,
-    }
-
-
-def _table_PmiTypeISinglePanel(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[6](buf, vt + 4) if n >= 6 else _VTABLES[n](buf, vt + 4) + (0,) * (6 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    o = vo[1]
-    v1 = buf[pos + o] if o else 0
-    o = vo[2]
-    v2 = buf[pos + o] if o else 0
-    o = vo[3]
-    v3 = buf[pos + o] if o else None
-    o = vo[4]
-    v4 = buf[pos + o] if o else None
-    o = vo[5]
-    v5 = buf[pos + o] if o else 0
-    return {
-        "n1_n2": v0,
-        "mode": v1,
-        "i_1_1": v2,
-        "i_1_2": v3,
-        "i_1_3": v4,
-        "i_2": v5,
     }
 
 
@@ -643,35 +451,6 @@ def _table_PmiTypeIILayer(buf, pos):
     }
 
 
-def _table_PmiTypeII(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[7](buf, vt + 4) if n >= 7 else _VTABLES[n](buf, vt + 4) + (0,) * (7 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    o = vo[1]
-    v1 = buf[pos + o] if o else 0
-    o = vo[2]
-    v2 = buf[pos + o] if o else 0
-    o = vo[3]
-    v3 = _s_bool(buf, pos + o)[0] if o else False
-    o = vo[4]
-    v4 = buf[pos + o] if o else 0
-    o = vo[5]
-    v5 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[6]
-    v6 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _table_PmiTypeIILayer) if o else None
-    return {
-        "n1_n2": v0,
-        "nof_beams": v1,
-        "phase_alphabet_size": v2,
-        "subband_amplitude": v3,
-        "i_1_1": v4,
-        "i_1_2": v5,
-        "layers": v6,
-    }
-
-
 def _member_PmiTypeII(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
@@ -702,59 +481,6 @@ def _member_PmiTypeII(buf, pos):
     }
 
 
-def _table_CsiReportEvent(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[14](buf, vt + 4) if n >= 14 else _VTABLES[n](buf, vt + 4) + (0,) * (14 - n)
-    o = vo[0]
-    v0 = _s_u32(buf, pos + o)[0] if o else 0
-    o = vo[1]
-    v1 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[2]
-    v2 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[3]
-    v3 = _scalars(buf, pos + o + _u32(buf, pos + o)[0], "B") if o else None
-    o = vo[4]
-    v4 = _scalars(buf, pos + o + _u32(buf, pos + o)[0], "h") if o else None
-    o = vo[5]
-    v5 = buf[pos + o] if o else None
-    o = vo[6]
-    v6 = buf[pos + o] if o else None
-    o = vo[8]
-    t = vo[7]
-    kind = buf[pos + t] if t else 0
-    if o and kind:
-        member = _UNION_PmiValue.get(kind)
-        v7 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
-    else:
-        v7 = None
-    o = vo[9]
-    v8 = buf[pos + o] if o else None
-    o = vo[10]
-    v9 = buf[pos + o] if o else None
-    o = vo[11]
-    v10 = _scalars(buf, pos + o + _u32(buf, pos + o)[0], "B") if o else None
-    o = vo[12]
-    v11 = _scalars(buf, pos + o + _u32(buf, pos + o)[0], "B") if o else None
-    o = vo[13]
-    v12 = _s_bool(buf, pos + o)[0] if o else False
-    return {
-        "slot_rx": v0,
-        "ue_idx": v1,
-        "rnti": v2,
-        "cri": v3,
-        "rsrp_dbm": v4,
-        "ri": v5,
-        "li": v6,
-        "pmi": v7,
-        "first_tb_wb_cqi": v8,
-        "second_tb_wb_cqi": v9,
-        "first_tb_subband_diff_cqi": v10,
-        "second_tb_subband_diff_cqi": v11,
-        "valid": v12,
-    }
-
-
 def _member_CsiReportEvent(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
@@ -777,7 +503,7 @@ def _member_CsiReportEvent(buf, pos):
     t = vo[7]
     kind = buf[pos + t] if t else 0
     if o and kind:
-        member = _UNION_PmiValue.get(kind)
+        member = _members_PmiValue.get(kind)
         v7 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
     else:
         v7 = None
@@ -809,20 +535,6 @@ def _member_CsiReportEvent(buf, pos):
     }
 
 
-def _table_RbgAlloc(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[2](buf, vt + 4) if n >= 2 else _VTABLES[n](buf, vt + 4) + (0,) * (2 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    o = vo[1]
-    v1 = _s_u32(buf, pos + o)[0] if o else 0
-    return {
-        "nof_rbgs": v0,
-        "bitmap": v1,
-    }
-
-
 def _member_RbgAlloc(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
@@ -835,23 +547,6 @@ def _member_RbgAlloc(buf, pos):
         "type": "RbgAlloc",
         "nof_rbgs": v0,
         "bitmap": v1,
-    }
-
-
-def _table_VrbAlloc(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
-    o = vo[0]
-    v0 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[1]
-    v1 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[2]
-    v2 = _s_u16(buf, pos + o)[0] if o else None
-    return {
-        "vrb_start": v0,
-        "vrb_length": v1,
-        "vrb_second_hop_start": v2,
     }
 
 
@@ -883,7 +578,7 @@ def _table_Pusch(buf, pos):
     t = vo[1]
     kind = buf[pos + t] if t else 0
     if o and kind:
-        member = _UNION_RbAlloc.get(kind)
+        member = _members_RbAlloc.get(kind)
         v1 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
     else:
         v1 = None
@@ -930,7 +625,7 @@ def _table_Pdsch(buf, pos):
     t = vo[1]
     kind = buf[pos + t] if t else 0
     if o and kind:
-        member = _UNION_RbAlloc.get(kind)
+        member = _members_RbAlloc.get(kind)
         v1 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
     else:
         v1 = None
@@ -961,20 +656,6 @@ def _table_Pdsch(buf, pos):
     }
 
 
-def _table_PucchTxF0(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[2](buf, vt + 4) if n >= 2 else _VTABLES[n](buf, vt + 4) + (0,) * (2 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    o = vo[1]
-    v1 = _s_u16(buf, pos + o)[0] if o else 0
-    return {
-        "group_hopping": v0,
-        "n_id_hopping": v1,
-    }
-
-
 def _member_PucchTxF0(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
@@ -985,20 +666,6 @@ def _member_PucchTxF0(buf, pos):
     v1 = _s_u16(buf, pos + o)[0] if o else 0
     return {
         "type": "PucchTxF0",
-        "group_hopping": v0,
-        "n_id_hopping": v1,
-    }
-
-
-def _table_PucchTxF1(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[2](buf, vt + 4) if n >= 2 else _VTABLES[n](buf, vt + 4) + (0,) * (2 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    o = vo[1]
-    v1 = _s_u16(buf, pos + o)[0] if o else 0
-    return {
         "group_hopping": v0,
         "n_id_hopping": v1,
     }
@@ -1019,23 +686,6 @@ def _member_PucchTxF1(buf, pos):
     }
 
 
-def _table_PucchTxF2(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
-    o = vo[0]
-    v0 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[1]
-    v1 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[2]
-    v2 = buf[pos + o] if o else 0
-    return {
-        "n_id_scrambling": v0,
-        "n_id_0_scrambling": v1,
-        "nof_prbs": v2,
-    }
-
-
 def _member_PucchTxF2(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
@@ -1051,29 +701,6 @@ def _member_PucchTxF2(buf, pos):
         "n_id_scrambling": v0,
         "n_id_0_scrambling": v1,
         "nof_prbs": v2,
-    }
-
-
-def _table_PucchTxF3(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[5](buf, vt + 4) if n >= 5 else _VTABLES[n](buf, vt + 4) + (0,) * (5 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    o = vo[1]
-    v1 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[2]
-    v2 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[3]
-    v3 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[4]
-    v4 = buf[pos + o] if o else 0
-    return {
-        "group_hopping": v0,
-        "n_id_hopping": v1,
-        "n_id_scrambling": v2,
-        "n_id_0_scrambling": v3,
-        "nof_prbs": v4,
     }
 
 
@@ -1098,26 +725,6 @@ def _member_PucchTxF3(buf, pos):
         "n_id_scrambling": v2,
         "n_id_0_scrambling": v3,
         "nof_prbs": v4,
-    }
-
-
-def _table_PucchTxF4(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[4](buf, vt + 4) if n >= 4 else _VTABLES[n](buf, vt + 4) + (0,) * (4 - n)
-    o = vo[0]
-    v0 = buf[pos + o] if o else 0
-    o = vo[1]
-    v1 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[2]
-    v2 = _s_u16(buf, pos + o)[0] if o else 0
-    o = vo[3]
-    v3 = _s_u16(buf, pos + o)[0] if o else 0
-    return {
-        "group_hopping": v0,
-        "n_id_hopping": v1,
-        "n_id_scrambling": v2,
-        "n_id_0_scrambling": v3,
     }
 
 
@@ -1168,7 +775,7 @@ def _table_Pucch(buf, pos):
     t = vo[2]
     kind = buf[pos + t] if t else 0
     if o and kind:
-        member = _UNION_PucchTxParams.get(kind)
+        member = _members_PucchTxParams.get(kind)
         v2 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
     else:
         v2 = None
@@ -1201,7 +808,7 @@ def _table_SibPdsch(buf, pos):
     t = vo[1]
     kind = buf[pos + t] if t else 0
     if o and kind:
-        member = _UNION_RbAlloc.get(kind)
+        member = _members_RbAlloc.get(kind)
         v1 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
     else:
         v1 = None
@@ -1230,7 +837,7 @@ def _table_RarPdsch(buf, pos):
     t = vo[1]
     kind = buf[pos + t] if t else 0
     if o and kind:
-        member = _UNION_RbAlloc.get(kind)
+        member = _members_RbAlloc.get(kind)
         v1 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
     else:
         v1 = None
@@ -1260,7 +867,7 @@ def _table_PagingPdsch(buf, pos):
     t = vo[0]
     kind = buf[pos + t] if t else 0
     if o and kind:
-        member = _UNION_RbAlloc.get(kind)
+        member = _members_RbAlloc.get(kind)
         v0 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
     else:
         v0 = None
@@ -1328,27 +935,6 @@ def _table_SlotDecision(buf, pos):
     }
 
 
-def _table_CellSlotEvent(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[5](buf, vt + 4) if n >= 5 else _VTABLES[n](buf, vt + 4) + (0,) * (5 - n)
-    o = vo[0]
-    v0 = _s_u32(buf, pos + o)[0] if o else 0
-    o = vo[1]
-    v1 = _s_i64(buf, pos + o)[0] if o else 0
-    o = vo[3]
-    t = vo[2]
-    v2 = _union_vector(buf, pos + t, pos + o, _UNION_SlotInput) if t and o else None
-    o = vo[4]
-    v3 = _table_SlotDecision(buf, pos + o + _u32(buf, pos + o)[0]) if o else None
-    return {
-        "slot_tx": v0,
-        "latency_us": v1,
-        "inputs": v2,
-        "decision": v3,
-    }
-
-
 def _member_CellSlotEvent(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
@@ -1359,7 +945,7 @@ def _member_CellSlotEvent(buf, pos):
     v1 = _s_i64(buf, pos + o)[0] if o else 0
     o = vo[3]
     t = vo[2]
-    v2 = _union_vector(buf, pos + t, pos + o, _UNION_SlotInput) if t and o else None
+    v2 = _union_vector(buf, pos + t, pos + o, _members_SlotInput) if t and o else None
     o = vo[4]
     v3 = _table_SlotDecision(buf, pos + o + _u32(buf, pos + o)[0]) if o else None
     return {
@@ -1368,17 +954,6 @@ def _member_CellSlotEvent(buf, pos):
         "latency_us": v1,
         "inputs": v2,
         "decision": v3,
-    }
-
-
-def _table_CellStopEvent(buf, pos):
-    vt = pos - _i32(buf, pos)[0]
-    n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[1](buf, vt + 4) if n >= 1 else _VTABLES[n](buf, vt + 4) + (0,) * (1 - n)
-    o = vo[0]
-    v0 = _s_u16(buf, pos + o)[0] if o else 0
-    return {
-        "cell_idx": v0,
     }
 
 
@@ -1404,7 +979,7 @@ def _table_CellEvent(buf, pos):
     t = vo[1]
     kind = buf[pos + t] if t else 0
     if o and kind:
-        member = _UNION_CellEventValue.get(kind)
+        member = _members_CellEventValue.get(kind)
         v1 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
     else:
         v1 = None
@@ -1413,14 +988,486 @@ def _table_CellEvent(buf, pos):
         "value": v1,
     }
 
-_UNION_PucchFormat = {1: _member_PucchF0, 2: _member_PucchF1, 3: _member_PucchF2, 4: _member_PucchF3, 5: _member_PucchF4}
-_UNION_PmiValue = {1: _member_PmiUnknown, 2: _member_PmiTwoAntennaPorts, 3: _member_PmiTypeISinglePanel, 4: _member_PmiTypeII}
-_UNION_SlotInput = {1: _member_RachIndication, 2: _member_HarqAckEvent, 3: _member_SrEvent, 4: _member_CsiReportEvent}
-_UNION_RbAlloc = {1: _member_RbgAlloc, 2: _member_VrbAlloc}
-_UNION_PucchTxParams = {1: _member_PucchTxF0, 2: _member_PucchTxF1, 3: _member_PucchTxF2, 4: _member_PucchTxF3, 5: _member_PucchTxF4}
-_UNION_CellEventValue = {1: _member_CellStartEvent, 2: _member_CellSlotEvent, 3: _member_CellStopEvent}
+
+def _grid_member_PucchF0(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[1](buf, vt + 4) if n >= 1 else _VTABLES[n](buf, vt + 4) + (0,) * (1 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    return {
+        "type": "PucchF0",
+        "initial_cyclic_shift": v0,
+    }
+
+
+def _grid_member_PucchF1(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[2](buf, vt + 4) if n >= 2 else _VTABLES[n](buf, vt + 4) + (0,) * (2 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = buf[pos + o] if o else 0
+    return {
+        "type": "PucchF1",
+        "initial_cyclic_shift": v0,
+        "time_domain_occ": v1,
+    }
+
+
+def _grid_member_PucchF2(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[1](buf, vt + 4) if n >= 1 else _VTABLES[n](buf, vt + 4) + (0,) * (1 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    return {
+        "type": "PucchF2",
+        "nof_prbs": v0,
+    }
+
+
+def _grid_member_PucchF3(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = _s_bool(buf, pos + o)[0] if o else False
+    o = vo[2]
+    v2 = _s_bool(buf, pos + o)[0] if o else False
+    return {
+        "type": "PucchF3",
+        "nof_prbs": v0,
+        "pi_2_bpsk": v1,
+        "additional_dmrs": v2,
+    }
+
+
+def _grid_member_PucchF4(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[4](buf, vt + 4) if n >= 4 else _VTABLES[n](buf, vt + 4) + (0,) * (4 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = buf[pos + o] if o else 0
+    o = vo[2]
+    v2 = _s_bool(buf, pos + o)[0] if o else False
+    o = vo[3]
+    v3 = _s_bool(buf, pos + o)[0] if o else False
+    return {
+        "type": "PucchF4",
+        "occ_index": v0,
+        "occ_length": v1,
+        "pi_2_bpsk": v2,
+        "additional_dmrs": v3,
+    }
+
+
+def _grid_table_PucchResource(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[7](buf, vt + 4) if n >= 7 else _VTABLES[n](buf, vt + 4) + (0,) * (7 - n)
+    o = vo[1]
+    t = vo[0]
+    kind = buf[pos + t] if t else 0
+    if o and kind:
+        member = _grid_members_PucchFormat.get(kind)
+        v0 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
+    else:
+        v0 = None
+    o = vo[2]
+    v1 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[3]
+    v2 = _s_u16(buf, pos + o)[0] if o else None
+    o = vo[4]
+    v3 = buf[pos + o] if o else 0
+    o = vo[5]
+    v4 = buf[pos + o] if o else 0
+    o = vo[6]
+    v5 = buf[pos + o] if o else 0
+    return {
+        "format": v0,
+        "prb_start": v1,
+        "prb_second_hop_start": v2,
+        "sym_start": v3,
+        "sym_length": v4,
+        "rep_factor": v5,
+    }
+
+
+def _grid_member_CellStartEvent(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[4](buf, vt + 4) if n >= 4 else _VTABLES[n](buf, vt + 4) + (0,) * (4 - n)
+    o = vo[0]
+    v0 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[1]
+    v1 = _struct_BwpConfiguration(buf, pos + o) if o else None
+    o = vo[2]
+    v2 = _struct_BwpConfiguration(buf, pos + o) if o else None
+    o = vo[3]
+    v3 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_PucchResource) if o else None
+    return {
+        "type": "CellStartEvent",
+        "pci": v0,
+        "init_ul_bwp": v1,
+        "init_dl_bwp": v2,
+        "pucch_resources": v3,
+    }
+
+
+def _grid_member_RachIndication(buf, pos):
+    return {
+        "type": "RachIndication",
+    }
+
+
+def _grid_member_HarqAckEvent(buf, pos):
+    return {
+        "type": "HarqAckEvent",
+    }
+
+
+def _grid_member_SrEvent(buf, pos):
+    return {
+        "type": "SrEvent",
+    }
+
+
+def _grid_member_CsiReportEvent(buf, pos):
+    return {
+        "type": "CsiReportEvent",
+    }
+
+
+def _grid_member_RbgAlloc(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[2](buf, vt + 4) if n >= 2 else _VTABLES[n](buf, vt + 4) + (0,) * (2 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = _s_u32(buf, pos + o)[0] if o else 0
+    return {
+        "type": "RbgAlloc",
+        "nof_rbgs": v0,
+        "bitmap": v1,
+    }
+
+
+def _grid_member_VrbAlloc(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[0]
+    v0 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[1]
+    v1 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[2]
+    v2 = _s_u16(buf, pos + o)[0] if o else None
+    return {
+        "type": "VrbAlloc",
+        "vrb_start": v0,
+        "vrb_length": v1,
+        "vrb_second_hop_start": v2,
+    }
+
+
+def _grid_table_Pusch(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[12](buf, vt + 4) if n >= 12 else _VTABLES[n](buf, vt + 4) + (0,) * (12 - n)
+    o = vo[0]
+    v0 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[2]
+    t = vo[1]
+    kind = buf[pos + t] if t else 0
+    if o and kind:
+        member = _grid_members_RbAlloc.get(kind)
+        v1 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
+    else:
+        v1 = None
+    o = vo[3]
+    v2 = buf[pos + o] if o else 0
+    o = vo[4]
+    v3 = buf[pos + o] if o else 0
+    o = vo[5]
+    v4 = buf[pos + o] if o else 0
+    o = vo[7]
+    v5 = buf[pos + o] if o else 0
+    o = vo[8]
+    v6 = _s_u32(buf, pos + o)[0] if o else 0
+    o = vo[9]
+    v7 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[10]
+    v8 = buf[pos + o] if o else 0
+    o = vo[11]
+    v9 = buf[pos + o] if o else 0
+    return {
+        "rnti": v0,
+        "rbs": v1,
+        "sym_start": v2,
+        "sym_length": v3,
+        "rv_index": v4,
+        "harq_id": v5,
+        "tb_size_bytes": v6,
+        "ue_index": v7,
+        "nof_retxs": v8,
+        "k2": v9,
+    }
+
+
+def _grid_table_Pdsch(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[10](buf, vt + 4) if n >= 10 else _VTABLES[n](buf, vt + 4) + (0,) * (10 - n)
+    o = vo[0]
+    v0 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[2]
+    t = vo[1]
+    kind = buf[pos + t] if t else 0
+    if o and kind:
+        member = _grid_members_RbAlloc.get(kind)
+        v1 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
+    else:
+        v1 = None
+    o = vo[3]
+    v2 = buf[pos + o] if o else 0
+    o = vo[4]
+    v3 = buf[pos + o] if o else 0
+    o = vo[5]
+    v4 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 12, _STRUCT_PdschCodeword.iter_unpack, _build_PdschCodeword) if o else None
+    o = vo[6]
+    v5 = buf[pos + o] if o else 0
+    o = vo[7]
+    v6 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[8]
+    v7 = buf[pos + o] if o else 0
+    o = vo[9]
+    v8 = buf[pos + o] if o else 0
+    return {
+        "rnti": v0,
+        "rbs": v1,
+        "sym_start": v2,
+        "sym_length": v3,
+        "codewords": v4,
+        "harq_id": v5,
+        "ue_index": v6,
+        "nof_retxs": v7,
+        "k1": v8,
+    }
+
+
+def _grid_table_Pucch(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[7](buf, vt + 4) if n >= 7 else _VTABLES[n](buf, vt + 4) + (0,) * (7 - n)
+    o = vo[0]
+    v0 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[1]
+    v1 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[4]
+    v2 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[5]
+    v3 = buf[pos + o] if o else 0
+    o = vo[6]
+    v4 = _s_u16(buf, pos + o)[0] if o else 0
+    return {
+        "rnti": v0,
+        "res_idx": v1,
+        "nof_bits_harq_ack": v2,
+        "nof_bits_sr": v3,
+        "nof_bits_csi1": v4,
+    }
+
+
+def _grid_table_SibPdsch(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[5](buf, vt + 4) if n >= 5 else _VTABLES[n](buf, vt + 4) + (0,) * (5 - n)
+    o = vo[0]
+    v0 = _s_bool(buf, pos + o)[0] if o else False
+    o = vo[2]
+    t = vo[1]
+    kind = buf[pos + t] if t else 0
+    if o and kind:
+        member = _grid_members_RbAlloc.get(kind)
+        v1 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
+    else:
+        v1 = None
+    o = vo[3]
+    v2 = buf[pos + o] if o else 0
+    o = vo[4]
+    v3 = buf[pos + o] if o else 0
+    return {
+        "is_sib1": v0,
+        "rbs": v1,
+        "sym_start": v2,
+        "sym_length": v3,
+    }
+
+
+def _grid_table_RarPdsch(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[7](buf, vt + 4) if n >= 7 else _VTABLES[n](buf, vt + 4) + (0,) * (7 - n)
+    o = vo[0]
+    v0 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[2]
+    t = vo[1]
+    kind = buf[pos + t] if t else 0
+    if o and kind:
+        member = _grid_members_RbAlloc.get(kind)
+        v1 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
+    else:
+        v1 = None
+    o = vo[3]
+    v2 = buf[pos + o] if o else 0
+    o = vo[4]
+    v3 = buf[pos + o] if o else 0
+    o = vo[6]
+    v4 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 16, _STRUCT_RarUlGrant.iter_unpack, _build_RarUlGrant) if o else None
+    return {
+        "rnti": v0,
+        "rbs": v1,
+        "sym_start": v2,
+        "sym_length": v3,
+        "grants": v4,
+    }
+
+
+def _grid_table_PagingPdsch(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[6](buf, vt + 4) if n >= 6 else _VTABLES[n](buf, vt + 4) + (0,) * (6 - n)
+    o = vo[1]
+    t = vo[0]
+    kind = buf[pos + t] if t else 0
+    if o and kind:
+        member = _grid_members_RbAlloc.get(kind)
+        v0 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
+    else:
+        v0 = None
+    o = vo[2]
+    v1 = buf[pos + o] if o else 0
+    o = vo[3]
+    v2 = buf[pos + o] if o else 0
+    o = vo[5]
+    v3 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 16, _STRUCT_PagingUe.iter_unpack, _build_PagingUe) if o else None
+    return {
+        "rbs": v0,
+        "sym_start": v1,
+        "sym_length": v2,
+        "paging_ues": v3,
+    }
+
+
+def _grid_table_SlotDecision(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[10](buf, vt + 4) if n >= 10 else _VTABLES[n](buf, vt + 4) + (0,) * (10 - n)
+    o = vo[2]
+    v0 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_SibPdsch) if o else None
+    o = vo[3]
+    v1 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_RarPdsch) if o else None
+    o = vo[4]
+    v2 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_PagingPdsch) if o else None
+    o = vo[5]
+    v3 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_Pdsch) if o else None
+    o = vo[6]
+    v4 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_Pusch) if o else None
+    o = vo[7]
+    v5 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_Pucch) if o else None
+    o = vo[8]
+    v6 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 8, _STRUCT_Ssb.iter_unpack, _build_Ssb) if o else None
+    o = vo[9]
+    v7 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 18, _STRUCT_CsiRs.iter_unpack, _build_CsiRs) if o else None
+    return {
+        "sib_pdschs": v0,
+        "rar_pdschs": v1,
+        "paging_pdschs": v2,
+        "ue_pdschs": v3,
+        "puschs": v4,
+        "pucchs": v5,
+        "ssbs": v6,
+        "csi_rs": v7,
+    }
+
+
+def _grid_member_CellSlotEvent(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[5](buf, vt + 4) if n >= 5 else _VTABLES[n](buf, vt + 4) + (0,) * (5 - n)
+    o = vo[0]
+    v0 = _s_u32(buf, pos + o)[0] if o else 0
+    o = vo[1]
+    v1 = _s_i64(buf, pos + o)[0] if o else 0
+    o = vo[3]
+    t = vo[2]
+    v2 = _union_vector(buf, pos + t, pos + o, _grid_members_SlotInput) if t and o else None
+    o = vo[4]
+    v3 = _grid_table_SlotDecision(buf, pos + o + _u32(buf, pos + o)[0]) if o else None
+    return {
+        "type": "CellSlotEvent",
+        "slot_tx": v0,
+        "latency_us": v1,
+        "inputs": v2,
+        "decision": v3,
+    }
+
+
+def _grid_member_CellStopEvent(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[1](buf, vt + 4) if n >= 1 else _VTABLES[n](buf, vt + 4) + (0,) * (1 - n)
+    o = vo[0]
+    v0 = _s_u16(buf, pos + o)[0] if o else 0
+    return {
+        "type": "CellStopEvent",
+        "cell_idx": v0,
+    }
+
+
+def _grid_table_CellEvent(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[0]
+    v0 = _s_i64(buf, pos + o)[0] if o else 0
+    o = vo[2]
+    t = vo[1]
+    kind = buf[pos + t] if t else 0
+    if o and kind:
+        member = _grid_members_CellEventValue.get(kind)
+        v1 = member(buf, pos + o + _u32(buf, pos + o)[0]) if member else {"type": kind}
+    else:
+        v1 = None
+    return {
+        "timestamp_us": v0,
+        "value": v1,
+    }
+
+_members_PucchFormat = {1: _member_PucchF0, 2: _member_PucchF1, 3: _member_PucchF2, 4: _member_PucchF3, 5: _member_PucchF4}
+_members_PmiValue = {1: _member_PmiUnknown, 2: _member_PmiTwoAntennaPorts, 3: _member_PmiTypeISinglePanel, 4: _member_PmiTypeII}
+_members_SlotInput = {1: _member_RachIndication, 2: _member_HarqAckEvent, 3: _member_SrEvent, 4: _member_CsiReportEvent}
+_members_RbAlloc = {1: _member_RbgAlloc, 2: _member_VrbAlloc}
+_members_PucchTxParams = {1: _member_PucchTxF0, 2: _member_PucchTxF1, 3: _member_PucchTxF2, 4: _member_PucchTxF3, 5: _member_PucchTxF4}
+_members_CellEventValue = {1: _member_CellStartEvent, 2: _member_CellSlotEvent, 3: _member_CellStopEvent}
+_grid_members_PucchFormat = {1: _grid_member_PucchF0, 2: _grid_member_PucchF1, 3: _grid_member_PucchF2, 4: _grid_member_PucchF3, 5: _grid_member_PucchF4}
+_grid_members_SlotInput = {1: _grid_member_RachIndication, 2: _grid_member_HarqAckEvent, 3: _grid_member_SrEvent, 4: _grid_member_CsiReportEvent}
+_grid_members_RbAlloc = {1: _grid_member_RbgAlloc, 2: _grid_member_VrbAlloc}
+_grid_members_CellEventValue = {1: _grid_member_CellStartEvent, 2: _grid_member_CellSlotEvent, 3: _grid_member_CellStopEvent}
 
 
 def root(buf: bytes | memoryview) -> dict[str, Any]:
     """The CellEvent of a buffer, as flatbuf.Decoder.root() gives it."""
     return _table_CellEvent(buf, _u32(buf, 0)[0])
+
+
+def root_grid(buf: bytes | memoryview) -> dict[str, Any]:
+    """The CellEvent of a buffer, as root() gives it, with only the fields of GRID_FIELDS of codegen.py."""
+    return _grid_table_CellEvent(buf, _u32(buf, 0)[0])

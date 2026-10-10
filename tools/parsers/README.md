@@ -182,8 +182,9 @@ The decoder is standard-library only: `schedtrace.schema` reads the FlatBuffers 
 `lib/scheduler/trace/fbs` of OCUDU, and `schedtrace.flatbuf` decodes buffers with them. FlatBuffers' Python code
 generator does not support the vectors of unions of the schemas (`CellSlotEvent.inputs`). Decoding uses
 `schedtrace/_generated.py`, which `schedtrace.codegen` compiles from the schemas into one function per table and
-struct, about 2.3 times faster than `schedtrace.flatbuf`. Copy the schemas again when OCUDU changes them, then
-regenerate it:
+struct, about 2.3 times faster than `schedtrace.flatbuf`. With `grid_only=True`, `read()`, `events()` and `event_at()`
+decode only the fields of `codegen.GRID_FIELDS`, those that `grid.allocations()` needs and the slot, latency and input
+types, 1.6 times faster again. Copy the schemas again when OCUDU changes them, then regenerate it:
 
 ```bash
 python -m parsers.schedtrace.codegen
