@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -70,6 +71,14 @@ class SchedtraceTest(unittest.TestCase):
         data = (DATA / "schedtrace_cell0.bin").read_bytes()
         self.assertEqual(len(list(schedtrace.events(data[:-5]))), 2)
         self.assertEqual(list(schedtrace.events(b"")), [])
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "schedtrace_cell0.bin"
+            path.write_bytes(data[:-5])
+            self.assertEqual(len(list(schedtrace.read(path))), 2)
+
+    def test_read_matches_events(self):
+        data = (DATA / "schedtrace_cell0.bin").read_bytes()
+        self.assertEqual(list(schedtrace.read(DATA / "schedtrace_cell0.bin")), list(schedtrace.events(data)))
 
     def test_fields_of_newer_schemas_are_ignored(self):
         (stop,) = schedtrace.read(DATA / "cell_stop_newer.bin")

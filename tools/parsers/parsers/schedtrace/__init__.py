@@ -73,5 +73,14 @@ def event_at(data: bytes | memoryview, offset: int) -> dict[str, Any]:
 
 
 def read(path: str | os.PathLike[str]) -> Iterator[dict[str, Any]]:
-    """The events of a schedtrace file, see events()."""
-    yield from events(Path(path).read_bytes())
+    """The events of a schedtrace file, see events(), read one at a time, so that memory does not grow with the file."""
+    dec = decoder()
+    with open(path, "rb") as f:
+        while len(prefix := f.read(4)) == 4:
+            size = _U32.unpack(prefix)[0]
+            buf = f.read(size)
+            if len(buf) < size:
+                return
+            event = dec.root(buf)
+            value = event.pop("value") or {"type": None}
+            yield {**event, **value}
