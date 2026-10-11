@@ -63,3 +63,32 @@ class ConfigTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_values(self):
+        cfg = config.parse_config(YAML)
+        self.assertEqual(cfg.values, {"gnb_id": "411", "pci": "2", "band": "78", "common_scs": "30"})
+        self.assertEqual(cfg.pcaps, ["ngap", "f1ap"])
+        self.assertTrue(cfg.tdd)
+        self.assertEqual((cfg.amf_addrs, cfg.amf_bind_addrs, cfg.amf_port), (["10.0.0.1"], ["10.0.0.2"], 38412))
+
+
+# A configuration file, shortened, with a repeated option.
+YAML = """gnb_id: 411
+cu_cp:
+  amf:
+    addrs: 10.0.0.1
+    port: 38412
+    bind_addrs: 10.0.0.2
+cell_cfg:
+  pci: 1
+  band: 78
+  common_scs: 30
+  tdd_ul_dl_cfg:
+    dl_ul_tx_period: 10
+pcap:
+  ngap_enable: true
+  f1ap_enable: true
+  mac_enable: false
+cell_cfg:
+  pci: 2
+"""

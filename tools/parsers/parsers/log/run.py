@@ -1,7 +1,9 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
-"""Identity of the run that wrote an OCUDU log: its build, from the first line, and its time span."""
+"""Identity of the run that wrote an OCUDU log: its build, from the first line, and its time span. And the files of a
+run directory: its log, found from a file or directory path.
+"""
 
 from __future__ import annotations
 
@@ -9,9 +11,14 @@ import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from pathlib import Path
 
 from . import preamble
 
+# Names of the logs of the OCUDU applications, which share a format, by preference when a directory holds several.
+LOG_NAMES = ("gnb.log", "du.log", "cu.log", "cu_cp.log", "cu_up.log")
+# Pattern of the names of their configuration files, e.g. ocudu_gnb.yml.
+CONFIG_GLOB = "ocudu_*.yml"
 # Bytes read from the end of a log to find its last timestamp.
 _TAIL_BYTES = 64 << 10
 _build_re = re.compile(r"Built in (?P<mode>\S+) mode using commit (?P<commit>\S+) on branch (?P<branch>\S+)")
@@ -66,3 +73,36 @@ def _epoch(timestamp: str) -> float | None:
         return datetime.fromisoformat(timestamp).replace(tzinfo=timezone.utc).timestamp()
     except ValueError:
         return None
+
+
+def primary_log_in(run_dir: str | os.PathLike[str]) -> Path | None:
+    """The OCUDU application log of a run directory, by the preference of LOG_NAMES, or None."""
+    run_dir = Path(run_dir)
+    return next((run_dir / n for n in LOG_NAMES if (run_dir / n).is_file()), None)
+
+
+def resolve_run_dir(path: str | os.PathLike[str]) -> Path:
+    """The run directory of a path: the directory of a file, a directory with a log, or the directory of the last log
+    under it by path, e.g. the latest run of a component or test directory. Raises FileNotFoundError without one.
+    """
+    p = Path(path).resolve()
+    if p.is_file():
+        return p.parent
+    if primary_log_in(p) is not None:
+        return p
+    for name in LOG_NAMES:
+        candidates = sorted((d for d in p.rglob(name) if d.is_file()), key=str)
+        if candidates:
+            return candidates[-1].parent
+    raise FileNotFoundError(f"No OCUDU app log ({', '.join(LOG_NAMES)}) found under {p}")
+
+
+def find_log(path: str | os.PathLike[str]) -> Path:
+    """The log of a path: a file itself, whatever its name, else the log of its run directory, see resolve_run_dir()."""
+    p = Path(path)
+    if p.is_file():
+        return p.resolve()
+    log = primary_log_in(resolve_run_dir(p))
+    if log is None:
+        raise FileNotFoundError(f"No OCUDU app log under {p}")
+    return log

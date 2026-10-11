@@ -16,8 +16,9 @@ the first timestamped line).
 Usage:
   python3 ocudu_log_search.py <path> [options]
 
-<path>: gnb.log file or any directory (resolved the same way as
-ocudu_log_summary.py).
+<path>: an OCUDU app log (gnb.log, du.log, cu*.log) or any directory (resolved the
+same way as ocudu_log_summary.py). Filtering is done by parsers.log.search of this
+repo.
 
 Options:
   --layer <LAYER>       Filter by log layer (e.g. RRC, NGAP, CU-CP, CU-CP-F1,
@@ -65,32 +66,13 @@ Examples:
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 from pathlib import Path
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR.parent / "_lib"))
 
-# Real event lines start with an ISO-8601 timestamp.
-HEADER_RE = re.compile(
-    r"^(?P<ts>\d{4}-\d{2}-\d{2}T(?P<time>\d{2}:\d{2}:\d{2}\.\d{6}))\s+"
-    r"\[(?P<layer>[A-Z][A-Z0-9_ -]*?)\s*\]\s+"
-    # The level token is absent on some layers (e.g. [METRICS ]); keep it optional.
-    r"(?:\[(?P<lvl>[A-Z])\]\s+)?"
-)
-
-
-def resolve_gnb_log(path_str: str) -> Path:
-    p = Path(path_str).resolve()
-    if p.is_file() and p.name == "gnb.log":
-        return p
-    if p.is_file():
-        return p
-    if (p / "gnb.log").exists():
-        return p / "gnb.log"
-    candidates = sorted(p.rglob("gnb.log"), key=lambda f: str(f))
-    if candidates:
-        return candidates[-1]
-    raise FileNotFoundError(f"No gnb.log found at or under {p}")
+from parsers.log import run, search as log_search  # noqa: E402
 
 
 def parse_args(argv=None):
@@ -115,124 +97,12 @@ def parse_args(argv=None):
     return ap.parse_args(argv)
 
 
-def ts_matches_after(line_ts: str, line_time: str, ref: str) -> bool:
-    """Return True if line is on/after ref. ref may be ISO or HH:MM:SS.mmm."""
-    if "T" in ref:
-        return line_ts >= ref
-    # Allow lower-precision HH:MM:SS or HH:MM:SS.mmm — compare prefix-wise.
-    return line_time[: len(ref)] >= ref
-
-
-def ts_matches_before(line_ts: str, line_time: str, ref: str) -> bool:
-    if "T" in ref:
-        return line_ts <= ref
-    return line_time[: len(ref)] <= ref
-
-
-def block_matches(header_line: str, body_lines: list[str], args) -> bool:
-    m = HEADER_RE.match(header_line)
-    if not m:
-        return False
-    ts = m.group("ts")
-    time_only = m.group("time")
-    layer = m.group("layer").strip()
-    lvl = m.group("lvl") or ""  # absent on level-less layers (e.g. METRICS)
-
-    if args.after and not ts_matches_after(ts, time_only, args.after):
-        return False
-    if args.before and not ts_matches_before(ts, time_only, args.before):
-        return False
-
-    if args.layer and layer.upper() != args.layer.upper():
-        return False
-
-    if args.level and not re.fullmatch(args.level, lvl):
-        return False
-
-    full_text = header_line
-    if body_lines:
-        full_text += "\n" + "\n".join(body_lines)
-
-    if args.ue is not None:
-        if not re.search(rf"\bue={re.escape(args.ue)}\b", full_text):
-            return False
-
-    if args.rnti is not None:
-        # MAC/SCHED use `rnti=0x..` and `tc-rnti=0x..`; RRC/CU-CP use `c-rnti=0x..`.
-        if not re.search(rf"(?:c-|tc-)?rnti=0x{re.escape(args.rnti)}\b",
-                         full_text, re.IGNORECASE):
-            return False
-
-    if args.pci is not None:
-        if not re.search(rf"\bpci={re.escape(args.pci)}\b", full_text):
-            return False
-
-    if args.pattern:
-        if not re.search(args.pattern, full_text, re.IGNORECASE | re.MULTILINE):
-            return False
-
-    return True
-
-
-def _is_config_echo_header(line: str) -> bool:
-    """The `[CONFIG  ] [D] gNB input configuration (all values):` line, whose
-    body is the effective-config dump echoed at the top of every gnb.log."""
-    m = HEADER_RE.match(line)
-    return bool(m) and m.group("layer").strip() == "CONFIG" and \
-        m.group("lvl") == "D" and "gnb input configuration" in line.lower()
-
-
-def iter_blocks(log_path: Path, include_config_echo: bool):
-    """Yield (header_line, body_lines) blocks from the log.
-
-    A block is a header line (matching HEADER_RE) plus any subsequent
-    non-header lines that belong to the same record (continuation lines
-    for ASN.1 PDU dumps, SIB1 JSON, the CONFIG echo, ...).
-
-    By default the giant CONFIG echo block (header + its untimestamped YAML body)
-    is skipped entirely — it is redundant with ocudu_gnb.yml and would otherwise
-    let `--pattern` match config text. Pass include_config_echo=True to keep it.
-    """
-    current_header = None
-    current_body: list[str] = []
-    skipping = False
-
-    with open(log_path, encoding="utf-8", errors="replace") as f:
-        for raw in f:
-            line = raw.rstrip("\n")
-            if not line:
-                continue
-
-            if HEADER_RE.match(line):
-                if current_header is not None:
-                    yield current_header, current_body
-                if (not include_config_echo) and _is_config_echo_header(line):
-                    current_header = None
-                    current_body = []
-                    skipping = True
-                else:
-                    current_header = line
-                    current_body = []
-                    skipping = False
-            else:
-                if skipping or current_header is None:
-                    continue
-                current_body.append(line)
-
-        if current_header is not None:
-            yield current_header, current_body
-
-
 def search(args):
-    log_path = resolve_gnb_log(args.path)
-
-    matches: list[str] = []
-    for header, body in iter_blocks(log_path, args.include_config_echo):
-        if block_matches(header, body, args):
-            block_text = header
-            if body:
-                block_text += "\n" + "\n".join(body)
-            matches.append(block_text)
+    log_path = run.find_log(args.path)
+    flt = log_search.Filter(layer=args.layer, level=args.level, ue=args.ue, rnti=args.rnti, pci=args.pci,
+                            after=args.after, before=args.before, pattern=args.pattern)
+    with open(log_path, encoding="utf-8", errors="replace") as f:
+        matches = list(log_search.search(f, flt, args.include_config_echo))
 
     if args.count:
         print(len(matches))

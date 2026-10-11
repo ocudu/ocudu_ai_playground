@@ -8,7 +8,7 @@ Standard-library only, so it can be imported by visualization or analysis tools 
 
 | Subpackage    | Artifact                                                      |
 |---------------|---------------------------------------------------------------|
-| `parsers.log` | OCUDU text logs: line preamble, `METRICS` lines, events and the configuration echo. |
+| `parsers.log` | The text outputs of OCUDU applications: log line preamble, `METRICS` lines, events, the configuration echo, entry search, UE procedure stage latencies and a log summary; and the console output (`stdout.log`), `metrics.json` and the files of a run directory. |
 | `parsers.pcap` | The pcaps of a run (`mac`, `rlc`, `f1ap`, `e1ap`, `ngap`), through `tshark`: UE identifiers, F1AP messages with their RRC and NAS messages, NGAP procedures, overviews and a merged timeline. |
 | `parsers.ran` | 3GPP knowledge shared by the artifacts: NGAP, F1AP and E1AP procedure codes, NAS and RRC message types. |
 | `parsers.schedtrace` | Scheduler event traces (`schedtrace_cell<N>.bin`): the FlatBuffers cell events of the OCUDU scheduler, per slot its inputs and decisions. |
@@ -199,6 +199,30 @@ flatc on a trace that `tests/schedtrace/data/make_fixtures.sh` builds, and the g
 PUSCH with PUCCH, and PDCCH with PDCCH, by their CCEs in a CORESET. The traces lack the resources of the CORESETs, so
 PDCCHs are not checked against PDSCHs, and PDSCHs of DCI format 1_0, whose VRBs count from their CORESET, are only
 compared with each other. `skills/analyze-ran-log/scripts/ocudu/schedtrace_collisions.py` prints them.
+
+### Log search, summary and UE procedure latencies
+
+```python
+from parsers.log import procedures, run, search, summary
+
+log = run.find_log("e2e/log/tests/.../ocudu-gnb-1")      # the log of the latest run under a directory
+with open(log, errors="replace") as f:
+    for entry in search.search(f, search.Filter(layer="RRC", rnti="4601", after="18:18:30")):
+        print(entry)
+with open(log, errors="replace") as f:
+    s = summary.summarize(f)                              # build, NG setup, cells, UE lifecycle, counters
+with open(log, errors="replace") as f:
+    found = procedures.instances(f)                      # per procedure, its instances with stage times
+mac = found["MAC UE Creation"]
+print(procedures.stats(procedures.latencies(mac, "start", "done")))
+```
+
+Search entries are a timestamped line and its continuation lines, so filters match ASN.1 bodies too, and the
+configuration echo is left out unless asked for. Procedures are the `proc="..."` traces of the DU (`PROCEDURES`):
+stages that a build does not log are skipped. `console.summarize()` reads the console output of an application,
+`metrics_json.rollup()` its `metrics.json`, and `config.parse_config()` also gives the cell, AMF, duplex and pcap
+options. The `ocudu_log_search.py`, `ocudu_log_summary.py` and `ocudu_ue_proc_latency.py` scripts of the
+analyze-ran-log skill print them.
 
 ### UEs of a run
 

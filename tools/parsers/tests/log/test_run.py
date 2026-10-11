@@ -51,3 +51,35 @@ class LogRunTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RunDirTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_run_dir_with_log(self):
+        (self.dir / "du.log").write_text("")
+        (self.dir / "gnb.log").write_text("")
+        self.assertEqual(run.primary_log_in(self.dir), self.dir / "gnb.log")
+        self.assertEqual(run.find_log(self.dir), (self.dir / "gnb.log"))
+
+    def test_latest_run_under_component_dir(self):
+        for name in ("2026-01-01_10-00-00", "2026-01-02_10-00-00"):
+            (self.dir / "ocudu-gnb-1" / name).mkdir(parents=True)
+            (self.dir / "ocudu-gnb-1" / name / "gnb.log").write_text("")
+        latest = (self.dir / "ocudu-gnb-1" / "2026-01-02_10-00-00").resolve()
+        self.assertEqual(run.resolve_run_dir(self.dir), latest)
+        self.assertEqual(run.find_log(self.dir), latest / "gnb.log")
+
+    def test_any_file_is_its_own_log(self):
+        log = self.dir / "srsdu (1).log"
+        log.write_text("")
+        self.assertEqual(run.find_log(log), log.resolve())
+
+    def test_no_log(self):
+        with self.assertRaises(FileNotFoundError):
+            run.find_log(self.dir)

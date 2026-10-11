@@ -7,7 +7,7 @@
 ocudu_log_summary.py — Summarize an OCUDU gNB run directory.
 
 Single-pass parse of the OCUDU app log (gnb/du/cu/cu_cp/cu_up) + stdout.log
-+ ocudu_*.yml + metrics.json.
++ ocudu_*.yml + metrics.json, with the parsers.log package of this repo.
 Emits a compact, token-efficient summary suitable for AI context.
 
 Usage:
@@ -23,519 +23,67 @@ Usage:
 from __future__ import annotations
 
 import datetime
-import json
-import re
 import sys
-from collections import Counter
 from pathlib import Path
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(SCRIPT_DIR.parent / "_lib"))
 
-# ---------------------------------------------------------------------------
-# Path resolution
-# ---------------------------------------------------------------------------
+from parsers.log import config, console, metrics_json, summary  # noqa: E402
+from parsers.log.run import CONFIG_GLOB, primary_log_in, resolve_run_dir  # noqa: E402
 
-# Every OCUDU app writes the same log format under a role-specific name, so all of
-# these resolve as kind `ocudu`. Order is the preference when several coexist.
-OCUDU_LOG_NAMES = ("gnb.log", "du.log", "cu.log", "cu_cp.log", "cu_up.log")
-# Matching per-role config file names.
-OCUDU_CFG_GLOB = "ocudu_*.yml"
-
-
-def primary_log_in(run_dir: Path) -> Path | None:
-    """The OCUDU app log in run_dir, by role preference, or None."""
-    return next((run_dir / n for n in OCUDU_LOG_NAMES if (run_dir / n).is_file()), None)
+# Log level options in display order.
+LEVEL_OPTIONS = ("all", "lib", "rrc", "ngap", "f1ap", "e1ap", "cu", "pdcp", "mac", "du", "phy", "sec", "xnap", "rlc",
+                 "gtpu", "f1u", "sdap", "ofh", "fapi", "e2ap", "config")
+# Node types of config.AppConfig, as shown.
+NODE_TYPES = {"gNB": "monolithic gNB", "CU": "CU (CP+UP)"}
 
 
-def resolve_run_dir(path_str: str) -> Path:
-    p = Path(path_str).resolve()
-
-    if p.is_file():
-        return p.parent
-
-    if primary_log_in(p) is not None:
-        return p
-
-    # Component dir or test dir: locate an OCUDU app log under it; prefer the
-    # latest by sort, and the earliest role in OCUDU_LOG_NAMES on a tie.
-    for name in OCUDU_LOG_NAMES:
-        candidates = sorted((d for d in p.rglob(name) if d.is_file()), key=str)
-        if candidates:
-            return candidates[-1].parent
-
-    raise FileNotFoundError(
-        f"No OCUDU app log ({', '.join(OCUDU_LOG_NAMES)}) found under {p}"
-    )
-
-
-# ---------------------------------------------------------------------------
-# ocudu_gnb.yml parser
-# ---------------------------------------------------------------------------
-
-# The YAML file is a concatenation of multiple documents without `---`. We do
-# not use a YAML library because duplicate keys would collapse silently. We
-# only need a handful of values, so a top-to-bottom scan that records the last
-# occurrence of each interesting key is enough.
-
-CFG_KEYS = (
-    "gnb_id", "ran_node_name",
-    "all_level", "lib_level", "rrc_level", "ngap_level", "f1ap_level",
-    "e1ap_level", "pdcp_level", "mac_level", "phy_level", "sec_level",
-    "cu_level", "xnap_level", "rlc_level", "du_level",
-    "gtpu_level", "f1u_level", "sdap_level", "ofh_level", "fapi_level", "e2ap_level",
-    "config_level", "hex_max_size",
-    "pci", "band", "dl_arfcn", "channel_bandwidth_MHz", "common_scs",
-    "nof_antennas_dl", "nof_antennas_ul",
-    "srate", "device_driver", "sync", "time_alignment_calibration",
-    "enable_log", "enable_json", "autostart_stdout_metrics",
-    "rlc_enable", "ngap_enable", "f1ap_enable", "e1ap_enable", "mac_enable",
-)
-
-
-def _extract_cfg_echo(gnb_log) -> str:
-    """Pull the `[CONFIG] [D] gNB input configuration` YAML echo out of a gnb.log.
-    Used when no standalone ocudu_gnb.yml is present (e.g. a bare log file).
-    Requires log.config_level: debug (else the echo is absent)."""
-    if not gnb_log or not gnb_log.exists():
-        return ""
-    ts = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}\s")
-    lines, capturing = [], False
-    with open(gnb_log, encoding="utf-8", errors="replace") as f:
-        for ln in f:
-            if not capturing:
-                if "[CONFIG" in ln and "gnb input configuration" in ln.lower():
-                    capturing = True
-                continue
-            if ts.match(ln):            # next real log line => echo ended
-                break
-            lines.append(ln)
-    return "".join(lines)
-
-
-def parse_cfg(cfg_path: Path, gnb_log=None) -> dict:
-    result: dict = {
-        "raw": {},
-        "pcaps": [],
-        "log_levels": {},
-        "node_type": None,
-        "planes": [],
-        "l2_traces_suppressed": False,
-        "tdd": False,
-        "amf_addrs": [],
-        "amf_port": None,
-        "amf_bind_addrs": [],
+def parse_cfg(cfg_path: Path, gnb_log: Path) -> dict:
+    """The configuration of a run, from its configuration file, else from the echo in its log."""
+    cfg = None
+    if cfg_path.exists():
+        cfg = config.parse_config(cfg_path.read_text(errors="replace"))
+    elif gnb_log.exists():
+        with open(gnb_log, encoding="utf-8", errors="replace") as f:
+            cfg = config.from_log(f)
+    cfg = cfg or config.AppConfig(planes=[])
+    levels = {k: cfg.levels[k] for k in LEVEL_OPTIONS if k in cfg.levels}
+    # MAC details, SCHED lines (gated by mac_level, there is no sched_level) and DU proc=... traces need info.
+    quiet = ("none", "warning", "error")
+    suppressed = "DU" in cfg.planes and (cfg.level("mac") in quiet or cfg.level("du") in quiet)
+    return {
+        "raw": cfg.values,
+        "pcaps": cfg.pcaps,
+        "log_levels": levels,
+        "node_type": NODE_TYPES.get(cfg.node_type, cfg.node_type),
+        "planes": cfg.planes,
+        "l2_traces_suppressed": suppressed,
+        "tdd": cfg.tdd,
+        "amf_addrs": cfg.amf_addrs,
+        "amf_port": cfg.amf_port,
+        "amf_bind_addrs": cfg.amf_bind_addrs,
     }
-    text = cfg_path.read_text(errors="replace") if cfg_path.exists() \
-        else _extract_cfg_echo(gnb_log)
-    if not text:
-        return result
-
-    # Last-wins for each simple scalar key.
-    for key in CFG_KEYS:
-        for m in re.finditer(rf"^\s*{re.escape(key)}\s*:\s*(.+?)\s*(?:#.*)?$",
-                             text, flags=re.MULTILINE):
-            result["raw"][key] = m.group(1).strip().strip('"')
-
-    # PCAPs: any `<name>_enable: true` in pcap context. The YAML is a concat of
-    # multiple documents, so a proto can be enabled more than once — dedupe while
-    # preserving first-seen order.
-    for m in re.finditer(r"^\s*(\w+)_enable\s*:\s*true\s*$", text, flags=re.MULTILINE):
-        proto = m.group(1)
-        if proto in {"ngap", "f1ap", "e1ap", "mac", "rlc", "n3", "f1u", "xnap",
-                     "e2ap_cu_cp", "e2ap_cu_up", "e2ap_du"} and proto not in result["pcaps"]:
-            result["pcaps"].append(proto)
-
-    # Per-layer log levels — keep only ones explicitly set. cu_level gates the
-    # CU-CP/CU-UP layers (UE creates, bearers, Initial Context Setup), so it must
-    # be shown to explain why those procedure counts may be zero.
-    for lvl in ("all_level", "lib_level", "rrc_level", "ngap_level",
-                "f1ap_level", "e1ap_level", "cu_level", "pdcp_level", "mac_level",
-                "du_level", "phy_level", "sec_level", "xnap_level", "rlc_level",
-                "gtpu_level", "f1u_level", "sdap_level", "ofh_level", "fapi_level",
-                "e2ap_level", "config_level"):
-        if lvl in result["raw"]:
-            result["log_levels"][lvl.removesuffix("_level")] = result["raw"][lvl]
-
-    # Node type — from config sections present. Authoritative even when only
-    # CU/RRC layers happen to log at info (which can masquerade as a CU-CP log).
-    has_cu_cp = re.search(r"(?m)^cu_cp:", text) is not None
-    has_cu_up = re.search(r"(?m)^cu_up:", text) is not None
-    has_du    = re.search(r"(?m)^(cells|cell_cfg|ru_sdr|ru_ofh|du_high):", text) is not None
-    planes = ([ "CU-CP"] if has_cu_cp else []) + (["CU-UP"] if has_cu_up else []) \
-             + (["DU"] if has_du else [])
-    result["planes"] = planes
-    if has_du and (has_cu_cp or has_cu_up):
-        result["node_type"] = "monolithic gNB"
-    elif has_cu_cp and has_cu_up:
-        result["node_type"] = "CU (CP+UP)"
-    elif len(planes) == 1:
-        result["node_type"] = planes[0]
-    elif planes:
-        result["node_type"] = "+".join(planes)
-
-    # L2 trace availability: MAC details, SCHED lines (gated by mac_level — there
-    # is no sched_level) and DU `proc=...` traces need info+. Effective level =
-    # explicit layer level else all_level.
-    alll = result["log_levels"].get("all")
-    mac_eff = result["log_levels"].get("mac") or alll
-    du_eff  = result["log_levels"].get("du") or alll
-    if has_du and (mac_eff in (None, "warning", "error")
-                   or du_eff in (None, "warning", "error")):
-        result["l2_traces_suppressed"] = True
-
-    if "tdd_ul_dl_cfg" in text or re.search(r"^\s*duplex\s*:\s*tdd\b", text, flags=re.MULTILINE):
-        result["tdd"] = True
-
-    # AMF block — addrs/port/bind_addrs may live under cu_cp.amf
-    for m in re.finditer(r"^\s+addrs\s*:\s*(.+?)\s*$", text, flags=re.MULTILINE):
-        v = m.group(1).strip().strip('"')
-        if re.match(r"\d+\.\d+\.\d+\.\d+", v):
-            result["amf_addrs"].append(v)
-    for m in re.finditer(r"^\s+bind_addrs\s*:\s*(.+?)\s*$", text, flags=re.MULTILINE):
-        v = m.group(1).strip().strip('"')
-        if re.match(r"\d+\.\d+\.\d+\.\d+", v):
-            result["amf_bind_addrs"].append(v)
-    m = re.search(r"^\s+port\s*:\s*(\d+)\s*$", text, flags=re.MULTILINE)
-    if m:
-        result["amf_port"] = int(m.group(1))
-
-    return result
-
-
-# ---------------------------------------------------------------------------
-# gnb.log parser
-# ---------------------------------------------------------------------------
-
-# Real event lines start with an ISO-8601 timestamp. Bodies of the CONFIG echo
-# at the top of the file (which has no per-line timestamp) are skipped by this
-# anchor.
-LINE_RE = re.compile(
-    r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6})\s+"
-    r"\[(?P<layer>[A-Z][A-Z0-9_ -]*?)\s*\]\s+"
-    # The level token is absent on some layers (e.g. [METRICS ]); keep it optional.
-    r"(?:\[(?P<lvl>[A-Z])\]\s+)?"
-    r"(?P<msg>.*)$"
-)
-
-UE_RE = re.compile(r"\bue=(\d+)\b")
-PCI_RE = re.compile(r"\bpci=(\d+)\b")
-CRNTI_RE = re.compile(r"c-rnti=0x([0-9a-fA-F]+)")
-
-# Warnings that are expected in healthy OCUDU runs and should not be flagged as
-# anomalies. The per-UE creation-latency lines are performance instrumentation,
-# not faults; the DRM/hyperthreading lines are host-environment notes.
-BENIGN_WARNING_SUBSTRINGS = (
-    "DRM KMS polling is enabled",
-    "hyperthreading",
-    "UE creation (ue=",        # [SCHED] perf instrumentation
-    "MAC UE creation (ue=",    # [MAC]  perf instrumentation
-)
-
-
-def _is_benign_warning(msg: str) -> bool:
-    return any(s in msg for s in BENIGN_WARNING_SUBSTRINGS)
 
 
 def parse_gnb_log(gnb_log: Path) -> dict:
-    result = {
-        "build_commit": None,
-        "build_branch": None,
-        "first_ts": None,
-        "last_ts": None,
-        "clean_shutdown": False,
-        "ng_setup": None,            # 'success' | 'failure' | None
-        "amf_connected_ts": None,
-        "cells_created": [],         # [(ts, pci)]
-        "ue_creates": [],            # [(ts, ue, c-rnti)]
-        "ue_releases": [],           # [(ts, ue)]
-        "init_ctx_done": [],         # [(ts, ue)]
-        "rrc_reconfigs": 0,
-        "ho_count": 0,               # reconfigurationWithSync occurrences (multi-line body)
-        "ngap_handover_count": 0,    # NGAP HandoverRequired / HandoverRequest etc.
-        "reest_count": 0,            # rrcReestablishmentRequest
-        "bearer_setups": 0,
-        "bearer_modifications": 0,
-        "bearer_releases": 0,
-        "prach_events": 0,
-        "crc_fails": 0,
-        "warnings": [],              # non-benign W lines: (ts, layer, msg), capped
-        "benign_warning_count": 0,   # expected perf/host warnings, not anomalies
-        "errors": [],                # E/C lines: (ts, layer, msg), capped
-        "ues_seen": set(),
-        "rntis_seen": set(),
-        "pcis_seen": set(),
-        "rrc_msgs": [],              # [(ts, layer, msg)] - sampled key RRC lines
-        "metrics_rows": 0,
-        "last_metrics": None,        # the last [METRICS] line text
-        "shutdown_signal_ts": None,
-    }
-
     if not gnb_log.exists():
-        return result
-
-    # We tolerate the giant CONFIG echo cheaply by not invoking the regex until
-    # we see a leading digit (ISO timestamp). Body lines of the echo start with
-    # letters/colons.
+        return vars(summary.LogSummary())
     with open(gnb_log, encoding="utf-8", errors="replace") as f:
-        for raw in f:
-            if not raw or raw[0] not in "0123456789":
-                continue
-            m = LINE_RE.match(raw)
-            if not m:
-                continue
+        return vars(summary.summarize(f))
 
-            ts = m.group("ts")
-            layer = m.group("layer").strip()
-            lvl = m.group("lvl") or ""  # absent on level-less layers (e.g. METRICS)
-            msg = m.group("msg")
-
-            if result["first_ts"] is None:
-                result["first_ts"] = ts
-            result["last_ts"] = ts
-
-            # Warnings / errors
-            if lvl == "E":
-                if len(result["errors"]) < 50:
-                    result["errors"].append((ts, layer, msg.strip()))
-            elif lvl == "W":
-                if _is_benign_warning(msg):
-                    result["benign_warning_count"] += 1
-                elif len(result["warnings"]) < 50:
-                    result["warnings"].append((ts, layer, msg.strip()))
-
-            # Build identity (top of file)
-            if layer == "GNB" and "Built in" in msg:
-                bm = re.search(r"commit (\S+) on branch (\S+)", msg)
-                if bm:
-                    result["build_commit"] = bm.group(1)
-                    result["build_branch"] = bm.group(2)
-
-            # NGAP NG setup
-            if layer == "NGAP":
-                if "NGSetupResponse" in msg:
-                    result["ng_setup"] = "success"
-                elif "NGSetupFailure" in msg:
-                    result["ng_setup"] = "failure"
-                if "HandoverRequired" in msg or "HandoverRequest" in msg:
-                    result["ngap_handover_count"] += 1
-
-            # AMF connection up
-            if layer == "CU-CP" and "Connection to AMF" in msg and "established" in msg:
-                result["amf_connected_ts"] = ts
-
-            # Cell creation (SCHED side, deterministic single line)
-            if layer == "SCHED" and "Cell creation idx=" in msg:
-                pci_m = PCI_RE.search(msg)
-                if pci_m:
-                    pci = int(pci_m.group(1))
-                    result["cells_created"].append((ts, pci))
-                    result["pcis_seen"].add(pci)
-
-            # PRACH (SCHED side: "prach(ra-rnti=...)")
-            if layer == "SCHED" and "prach(" in msg:
-                result["prach_events"] += 1
-
-            # PHY CRC failures
-            if layer == "PHY" and "crc=KO" in msg:
-                result["crc_fails"] += 1
-
-            # UE creation (CU-CP)
-            if layer == "CU-CP" and ": UE created" in msg:
-                ue_m = UE_RE.search(msg)
-                rn_m = CRNTI_RE.search(msg)
-                ue = ue_m.group(1) if ue_m else "?"
-                rnti = rn_m.group(1) if rn_m else "?"
-                result["ue_creates"].append((ts, ue, rnti))
-                result["ues_seen"].add(ue)
-                if rnti != "?":
-                    result["rntis_seen"].add(rnti)
-
-            # Initial Context Setup outcome
-            if layer == "CU-CP" and '"Initial Context Setup Routine" finished successfully' in msg:
-                ue_m = UE_RE.search(msg)
-                result["init_ctx_done"].append((ts, ue_m.group(1) if ue_m else "?"))
-
-            # UE Removal Routine
-            if layer == "CU-CP" and '"UE Removal Routine" finished successfully' in msg:
-                ue_m = UE_RE.search(msg)
-                result["ue_releases"].append((ts, ue_m.group(1) if ue_m else "?"))
-
-            # RRC counters and sampled events
-            if layer == "RRC":
-                if "rrcReconfiguration" in msg and "Complete" not in msg:
-                    result["rrc_reconfigs"] += 1
-                if "rrcReestablishmentRequest" in msg or "reestablishmentRequest" in msg:
-                    result["reest_count"] += 1
-                # Keep a small set of key RRC lines for the timeline.
-                if any(k in msg for k in (
-                    "rrcSetup", "rrcReconfiguration", "securityModeCommand",
-                    "securityModeComplete", "rrcRelease", "rrcReestablishment",
-                    "rrcReject",
-                )):
-                    if len(result["rrc_msgs"]) < 200:
-                        result["rrc_msgs"].append((ts, layer, msg.strip()))
-
-            # Handover bodies appear as multi-line continuation under RRC
-            # reconfiguration; the canonical marker is the ASN.1 brace.
-            if "reconfigurationWithSync" in msg and "{" in msg:
-                result["ho_count"] += 1
-
-            # E1AP bearer lifecycle. Each procedure is logged on both CU-CP and
-            # CU-UP sides; count from CU-CP only to avoid double-counting.
-            if layer == "CU-CP-E1":
-                if "BearerContextSetupResponse" in msg:
-                    result["bearer_setups"] += 1
-                elif "BearerContextModificationResponse" in msg:
-                    result["bearer_modifications"] += 1
-                elif "BearerContextReleaseComplete" in msg:
-                    result["bearer_releases"] += 1
-
-            # Scheduler metrics rows
-            if layer == "METRICS":
-                result["metrics_rows"] += 1
-                result["last_metrics"] = msg
-
-            # Shutdown markers
-            if "Closing PCAP files" in msg and result["shutdown_signal_ts"] is None:
-                result["shutdown_signal_ts"] = ts
-            if "Workers stopped successfully" in msg:
-                result["clean_shutdown"] = True
-
-    result["ues_seen"] = sorted(result["ues_seen"], key=lambda s: int(s) if s.isdigit() else -1)
-    result["rntis_seen"] = sorted(result["rntis_seen"])
-    result["pcis_seen"] = sorted(result["pcis_seen"])
-    return result
-
-
-# ---------------------------------------------------------------------------
-# stdout.log parser
-# ---------------------------------------------------------------------------
 
 def parse_stdout(stdout_log: Path) -> dict:
-    result = {
-        "banner_commit": None,
-        "cells": [],            # raw "Cell pci=..." lines
-        "amf_connected": False,
-        "started": False,
-        "stopped": False,
-        "logfile_path": None,
-        "metrics_rows": 0,
-    }
     if not stdout_log.exists():
-        return result
-
-    in_table = False
+        return vars(console.ConsoleSummary())
     with open(stdout_log, encoding="utf-8", errors="replace") as f:
-        for raw in f:
-            line = raw.rstrip("\n")
-            stripped = line.strip()
-            if not stripped:
-                continue
-
-            if "OCUDU gNB (commit" in stripped:
-                m = re.search(r"commit ([0-9a-fA-F]+)", stripped)
-                if m:
-                    result["banner_commit"] = m.group(1)
-            elif stripped.startswith("Cell pci="):
-                result["cells"].append(stripped)
-            elif stripped.startswith("N2:") and "completed" in stripped:
-                result["amf_connected"] = True
-            elif stripped.startswith("==== gNB started ==="):
-                result["started"] = True
-            elif stripped.startswith("Stopping..."):
-                result["stopped"] = True
-            elif stripped.startswith("Logfile stored in"):
-                m = re.search(r"Logfile stored in (\S+)", stripped)
-                if m:
-                    result["logfile_path"] = m.group(1)
-            elif re.match(r"^\s*\d+\s+[0-9a-f]{4}\s+\|", line):
-                in_table = True
-                result["metrics_rows"] += 1
-            elif in_table and not line.lstrip().startswith("pci") and not line.lstrip().startswith("|"):
-                in_table = False
-
-    return result
-
-
-# ---------------------------------------------------------------------------
-# metrics.json parser
-# ---------------------------------------------------------------------------
-
-def _load_metrics_records(metrics_path: Path) -> list:
-    """Return the list of metric records from metrics.json.
-
-    The file is a standard JSON array (`[ {...}, {...} ]`). Parse it whole.
-    Fall back to lenient line-by-line parsing only if the array is malformed
-    (e.g. a run that was killed mid-write leaves an unclosed array).
-    """
-    text = metrics_path.read_text(errors="replace").strip()
-    if not text:
-        return []
-    try:
-        data = json.loads(text)
-        return data if isinstance(data, list) else [data]
-    except json.JSONDecodeError:
-        pass
-    # Salvage path: strip a leading "[" / trailing "]" and parse each comma-
-    # terminated record independently so a truncated tail doesn't lose the rest.
-    records = []
-    for line in text.lstrip("[").rstrip("]").splitlines():
-        line = line.strip().rstrip(",")
-        if not line:
-            continue
-        try:
-            records.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-    return records
+        return vars(console.summarize(f))
 
 
 def parse_metrics(metrics_path: Path) -> dict:
-    result = {
-        "records": 0,
-        "peak_dl_brate": 0.0,
-        "peak_ul_brate": 0.0,
-        "max_latency_us": 0.0,
-        "late_dl_harqs": 0,
-        "late_ul_harqs": 0,
-        "failed_pdcch": 0,
-        "failed_uci": 0,
-        "errors": 0,
-        "msg3_ok": 0,
-        "msg3_nok": 0,
-        "event_counts": Counter(),
-    }
     if not metrics_path.exists():
-        return result
-
-    records = _load_metrics_records(metrics_path)
-    for obj in records:
-        result["records"] += 1
-        cells = obj.get("cells") or []
-        for cell in cells:
-            cm = cell.get("cell_metrics", {})
-            result["late_dl_harqs"] += cm.get("late_dl_harqs", 0) or 0
-            result["late_ul_harqs"] += cm.get("late_ul_harqs", 0) or 0
-            result["failed_pdcch"] += cm.get("nof_failed_pdcch_allocs", 0) or 0
-            result["failed_uci"] += cm.get("nof_failed_uci_allocs", 0) or 0
-            result["errors"] += cm.get("error_indication_count", 0) or 0
-            # Msg3 (RACH 3rd message) decode outcomes — high nok = RACH contention.
-            result["msg3_ok"] += cm.get("msg3_nof_ok", 0) or 0
-            result["msg3_nok"] += cm.get("msg3_nof_nok", 0) or 0
-            for ue in cell.get("ue_list", []) or []:
-                dl = ue.get("dl_brate", 0) or 0
-                ul = ue.get("ul_brate", 0) or 0
-                if dl > result["peak_dl_brate"]:
-                    result["peak_dl_brate"] = dl
-                if ul > result["peak_ul_brate"]:
-                    result["peak_ul_brate"] = ul
-            mlu = cm.get("max_latency", 0) or 0
-            if mlu > result["max_latency_us"]:
-                result["max_latency_us"] = mlu
-            for ev in cell.get("event_list", []) or []:
-                t = ev.get("event_type")
-                if t:
-                    result["event_counts"][t] += 1
-    return result
+        return vars(metrics_json.MetricsRollup())
+    return vars(metrics_json.rollup(metrics_json.load_records(metrics_path)))
 
 
 # ---------------------------------------------------------------------------
@@ -572,7 +120,7 @@ def summarize(path_str: str) -> None:
     # Config name tracks the role (ocudu_gnb.yml / ocudu_du.yml / ocudu_cu_cp.yml …).
     cfg_path = run_dir / "ocudu_gnb.yml"
     if not cfg_path.is_file():
-        cfg_path = next(iter(sorted(run_dir.glob(OCUDU_CFG_GLOB))), cfg_path)
+        cfg_path = next(iter(sorted(run_dir.glob(CONFIG_GLOB))), cfg_path)
     metrics_path = run_dir / "metrics.json"
 
     print(f"Run directory : {run_dir}")

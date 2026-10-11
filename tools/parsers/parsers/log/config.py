@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
-"""Parsing of the application configuration that OCUDU echoes at the top of its logs: log levels and node planes.
+"""Parsing of the application configuration that OCUDU echoes at the top of its logs: log levels, node planes, cell
+and AMF values, duplex mode and enabled pcaps.
 
 The echo is logged by the CONFIG logger, with all values at debug level and only the non-default values at info level.
 The same text format is used by the YAML configuration files, which parse_config() also accepts.
@@ -53,6 +54,22 @@ _PLANE_SECTIONS = {
     "CU-UP": re.compile(r"(?m)^cu_up:"),
     "DU": re.compile(r"(?m)^(?:cells|cell_cfg|ru_sdr|ru_ofh|du_high):"),
 }
+# Scalar options kept in AppConfig.values.
+VALUE_KEYS = (
+    "gnb_id", "ran_node_name", "hex_max_size",
+    "pci", "band", "dl_arfcn", "channel_bandwidth_MHz", "common_scs", "nof_antennas_dl", "nof_antennas_ul",
+    "srate", "device_driver", "sync", "time_alignment_calibration",
+    "enable_log", "enable_json", "autostart_stdout_metrics",
+)
+# Protocols of the "<proto>_enable: true" options of the pcap section.
+PCAP_PROTOCOLS = ("ngap", "f1ap", "e1ap", "mac", "rlc", "n3", "f1u", "xnap", "e2ap_cu_cp", "e2ap_cu_up", "e2ap_du")
+_VALUE_RES = {key: re.compile(rf"^\s*{re.escape(key)}\s*:\s*(.+?)\s*(?:#.*)?$", re.MULTILINE) for key in VALUE_KEYS}
+_PCAP_RE = re.compile(r"^\s*(\w+)_enable\s*:\s*true\s*$", re.MULTILINE)
+_TDD_RE = re.compile(r"^\s*duplex\s*:\s*tdd\b", re.MULTILINE)
+_ADDRS_RE = re.compile(r"^\s+addrs\s*:\s*(.+?)\s*$", re.MULTILINE)
+_BIND_ADDRS_RE = re.compile(r"^\s+bind_addrs\s*:\s*(.+?)\s*$", re.MULTILINE)
+_PORT_RE = re.compile(r"^\s+port\s*:\s*(\d+)\s*$", re.MULTILINE)
+_IPV4_RE = re.compile(r"\d+\.\d+\.\d+\.\d+")
 _ECHO_HEADER_RE = re.compile(r"input configuration \((?P<scope>all values|only non-default values)\)")
 _LEVEL_RE = re.compile(r"^\s+(?P<option>\w+)_level\s*:\s*(?P<level>\w+)")
 # Lines searched for the echo header before giving up.
@@ -61,7 +78,7 @@ _MAX_HEADER_LINES = 1000
 
 @dataclass
 class AppConfig:
-    """Log levels and planes of an OCUDU application, from its configuration."""
+    """Log levels, planes and main values of an OCUDU application, from its configuration."""
 
     # Explicitly configured log levels, by option name without the "_level" suffix.
     levels: dict[str, str] = field(default_factory=dict)
@@ -69,6 +86,16 @@ class AppConfig:
     planes: list[str] = field(default_factory=list)
     # Whether the configuration has all values, rather than only the non-default ones.
     complete: bool = True
+    # Values of the options of VALUE_KEYS that are set, as text, the last one where an option repeats.
+    values: dict[str, str] = field(default_factory=dict)
+    # Protocols of PCAP_PROTOCOLS with an enabled pcap, in the order first seen.
+    pcaps: list[str] = field(default_factory=list)
+    # Whether the cell is TDD.
+    tdd: bool = False
+    # IPv4 addresses of the AMF and of the local end of the connection to it, and the AMF port.
+    amf_addrs: list[str] = field(default_factory=list)
+    amf_bind_addrs: list[str] = field(default_factory=list)
+    amf_port: int | None = None
 
     def level(self, option: str) -> str:
         """Effective log level of an option, e.g. "mac"."""
@@ -110,6 +137,18 @@ def parse_config(text: str, complete: bool = True) -> AppConfig:
         if in_log and (m := _LEVEL_RE.match(line)):
             cfg.levels[m.group("option")] = m.group("level")
     cfg.planes = [plane for plane, pattern in _PLANE_SECTIONS.items() if pattern.search(text)]
+    for key, pattern in _VALUE_RES.items():
+        if values := pattern.findall(text):
+            cfg.values[key] = values[-1].strip().strip('"')
+    for proto in _PCAP_RE.findall(text):
+        if proto in PCAP_PROTOCOLS and proto not in cfg.pcaps:
+            cfg.pcaps.append(proto)
+    cfg.tdd = "tdd_ul_dl_cfg" in text or _TDD_RE.search(text) is not None
+    # The addresses of the AMF section, wherever it is nested, e.g. under cu_cp.
+    cfg.amf_addrs = [v for v in (a.strip().strip('"') for a in _ADDRS_RE.findall(text)) if _IPV4_RE.match(v)]
+    cfg.amf_bind_addrs = [v for v in (a.strip().strip('"') for a in _BIND_ADDRS_RE.findall(text)) if _IPV4_RE.match(v)]
+    if m := _PORT_RE.search(text):
+        cfg.amf_port = int(m.group(1))
     return cfg
 
 

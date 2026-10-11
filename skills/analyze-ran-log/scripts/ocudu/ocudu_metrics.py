@@ -42,7 +42,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent / "_lib"))
 
-from ocudu_log_summary import primary_log_in, resolve_run_dir  # noqa: E402
+from parsers.log.run import primary_log_in, resolve_run_dir  # noqa: E402
 from parsers.log import metrics  # noqa: E402
 
 # Logs from this size are parsed in parallel by default.
