@@ -195,6 +195,11 @@ python -m parsers.schedtrace.codegen
 flatc on a trace that `tests/schedtrace/data/make_fixtures.sh` builds, and the generated decoder with
 `schedtrace.flatbuf`. It decodes about 18k slots per second of busy slots.
 
+`schedtrace.collisions` finds the allocations of a slot whose resources overlap: PDSCH with PDSCH, PUSCH with PUSCH,
+PUSCH with PUCCH, and PDCCH with PDCCH, by their CCEs in a CORESET. The traces lack the resources of the CORESETs, so
+PDCCHs are not checked against PDSCHs, and PDSCHs of DCI format 1_0, whose VRBs count from their CORESET, are only
+compared with each other. `skills/analyze-ran-log/scripts/ocudu/schedtrace_collisions.py` prints them.
+
 ### UEs of a run
 
 `parsers.correlate.ues.combine()` combines the UE contexts that the sources of a run see, the most reliable source

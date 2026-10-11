@@ -96,6 +96,19 @@ rows with their log line numbers. When the log has no `[METRICS]` lines, parse
 `metrics.json` with python instead; never `cat` it whole. The summary script
 already does the common rollups of it.
 
+**Scheduler collisions** — for "does the scheduler allocate overlapping resources",
+search the scheduler event traces (`schedtrace_cell<N>.bin`, written when the
+`trace.schedtrace` option is on) for pairs of allocations of a slot that overlap:
+PDSCH/PDSCH, PUSCH/PUSCH, PUSCH/PUCCH and PDCCH/PDCCH (shared CCEs):
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/schedtrace_collisions.py <trace or run dir> \
+  [--kinds PUSCH-PUCCH,PDCCH-PDCCH] [--rnti 0x4601] [--summary] [-j <workers>]
+```
+
+The traces lack the CORESET resources, so PDCCH/PDSCH is not checked, and PDSCHs
+of DCI format 1_0 (SIB, RAR, paging, fallback) are only compared with each other.
+
 ## answer shape
 
 ```
