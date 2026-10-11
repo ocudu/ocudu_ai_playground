@@ -11,7 +11,7 @@ A single run directory typically contains:
 | `gnb.log` | Per-layer protocol trace (CONFIG echo + RRC/NGAP/F1AP/E1AP/MAC/PHY/SCHED/PDCP/GTPU/...) |
 | `stdout.log` | Console: banner, cell config, AMF connection, metrics table, shutdown lines |
 | `ocudu_gnb.yml` | YAML config the binary was started with (multi-document — sections are concatenated) |
-| `metrics.json` | Per-period JSON metrics (one object per record, NDJSON-like) |
+| `metrics.json` | Per-period JSON metrics (a single JSON array of records) |
 | `ps_info_gnb.txt` | Process CPU/memory snapshot (rarely needed) |
 | `*.pcap` | Optional protocol captures — analyze with the `pcap` type (`references/pcap/`) |
 

@@ -37,8 +37,7 @@ Before editing, classify what you learned:
    Code-derived constants (fixed slot windows, timeout values, message names) are
    fine because they generalise.
 
-If none of 1–2 apply (it's not generalisable, or it's preference/run-specific),
-do not edit the skill.
+If item 1 fails, or item 3 or 4 applies, do not edit the skill.
 
 ## Step 2 — where it goes
 

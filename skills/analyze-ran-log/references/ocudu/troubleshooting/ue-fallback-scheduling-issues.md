@@ -42,8 +42,8 @@ Generalisable facts about `lib/scheduler/ue_scheduling/ue_fallback_scheduler.cpp
 that drive attribution (constants may be re-tuned; verify against the run's
 build commit):
 
-- **Run order per slot** (`run_slot`): DL retx → UL new/retx → DL new-tx
-  `conres_only` → `srb0` → `srb1`. A shared per-slot attempt counter
+- **Run order per slot** (`run_slot`): DL new-tx `conres_only` → DL retx →
+  UL new/retx → `srb0` → `srb1`. A shared per-slot attempt counter
   (`max_dl_sched_attempts`, impl-defined ~22) spans **all** of these; when it is
   hit, `stop_dl_scheduling` aborts the rest of DL for that slot. Its own comment
   notes it only guarantees ~1 fallback UE allocated per TDD period.
@@ -71,7 +71,7 @@ build commit):
 |---|---|
 | **UL ACK-slot funneling** — UL-scarce TDD (few `nof_ul_slots`) + a high `min_k1`/`min_k2` floor forces all HARQ-ACK/PUSCH onto one slot position; that slot's PUCCH/RBs (incl. the band-edge common-PUCCH region) deplete, so the ConRes common PUCCH cannot be placed | Fallback DL search space idle while DL grid has room; PUCCH+PUSCH occupancy concentrated on one slot-position-mod-period; special slot's UL symbols unused; fallback grants absent from DL positions whose `[min_k1..7]` window reaches no full-UL slot |
 | **Bursty simultaneous RACH** — many UEs on the same PRACH occasion enter fallback together and exceed the ~1-UE/period fallback throughput | `msg3 rx at slot=X` clustering (multiple UEs same slot); `conres_timer_expired` arrives in bursts aligned to those slots |
-| **Attempt-budget / failure storm** — `max_dl_sched_attempts` exhausted by retx or repeated failed allocs → `stop_dl_scheduling` before ConRes pass | Non-trivial fallback DL **retx** volume (`newtx=false` on the RA search space); or successes ≈1/slot then nothing (budget hit) |
+| **Attempt-budget / failure storm** — `max_dl_sched_attempts` exhausted by repeated failed ConRes/retx allocs → `stop_dl_scheduling` aborts the remaining DL (retx, SRB0, SRB1) for that slot | Non-trivial fallback DL **retx** volume (`newtx=false` on the RA search space); or successes ≈1/slot then nothing (budget hit) |
 | **DL common PDCCH/PDSCH contention** — CORESET0 / common SS crowded | `failed_common_dl_pdcch > 0` in metrics (if `0`, DL common PDCCH is *not* the cause); DL grid genuinely full on the fallback slots |
 | **ConRes/C-RNTI CE never pending** — state gate (F1AP-created vs UL-CCCH UE; C-RNTI CE vs UE-ConRes-ID CE) | UE never appears in any RA-search-space DL grant and no `conres` scheduling attempt; check the pcell conres state / `is_con_res_id_pending` path |
 

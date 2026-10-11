@@ -8,7 +8,8 @@ do **not** download artifacts before the user picks one.
 ## Step 1 — Fetch the raw job log (lightweight)
 
 ```bash
-curl -fsSL "https://gitlab.com/<group>/<project>/-/jobs/<job_id>/raw" -o /tmp/job.log
+C="${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}"; mkdir -p "$C"
+curl -fsSL "https://gitlab.com/<group>/<project>/-/jobs/<job_id>/raw" -o "$C/ci-job.log"
 # Private project: add  --header "PRIVATE-TOKEN: $GITLAB_TOKEN"   (or use: glab ci ...)
 ```
 
@@ -16,12 +17,14 @@ curl -fsSL "https://gitlab.com/<group>/<project>/-/jobs/<job_id>/raw" -o /tmp/jo
 
 Strip ANSI codes, then pull the test summary:
 ```bash
-sed 's/\x1b\[[0-9;]*m//g' /tmp/job.log > /tmp/job_clean.log
-grep -A200 'short test summary info' /tmp/job_clean.log | grep -E '(FAILED|PASSED|SKIPPED|ERROR) tests/'
+C="${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}"; mkdir -p "$C"
+sed 's/\x1b\[[0-9;]*m//g' "$C/ci-job.log" > "$C/ci-job-clean.log"
+grep -A200 'short test summary info' "$C/ci-job-clean.log" | grep -E '(FAILED|PASSED|SKIPPED|ERROR) tests/'
 ```
 Retina also emits per-component error/warning summaries — high-value fast signals:
 ```bash
-grep -E 'has [0-9]+ errors|has [0-9]+ warnings' /tmp/job_clean.log | head -20
+C="${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}"; mkdir -p "$C"
+grep -E 'has [0-9]+ errors|has [0-9]+ warnings' "$C/ci-job-clean.log" | head -20
 ```
 Build a numbered list (status, test name, failure reason) and present it.
 **Do not proceed until the user selects a run.**
@@ -30,10 +33,11 @@ Build a numbered list (status, test name, failure reason) and present it.
 
 One artifact archive per job (not per test):
 ```bash
+C="${CLAUDE_CODE_TMPDIR:-/tmp}/claude-skills-${CLAUDE_CODE_SESSION_ID}"; mkdir -p "$C"
 curl -fsSL "https://gitlab.com/<group>/<project>/-/jobs/<job_id>/artifacts/download" \
-  -o /tmp/job_artifacts.zip
-python3 -m zipfile -e /tmp/job_artifacts.zip /tmp/run_artifacts/
-find /tmp/run_artifacts -maxdepth 4 -name testbed.json
+  -o "$C/ci-artifacts.zip"
+python3 -m zipfile -e "$C/ci-artifacts.zip" "$C/ci-run/"
+find "$C/ci-run" -maxdepth 4 -name testbed.json
 ```
 
 > Use `python3 -m zipfile`, **not** `unzip`: the `unzip` CLI treats `[...]` in
@@ -43,6 +47,6 @@ find /tmp/run_artifacts -maxdepth 4 -name testbed.json
 ## Step 4 — Continue as a local run
 
 Point this skill's `scripts/resolve.py` (the dispatcher) at the selected test's
-directory under `/tmp/run_artifacts/...` and proceed with the chosen mode. The
+directory under `$C/ci-run/...` and proceed with the chosen mode. The
 downloaded layout matches the local run layout documented in this skill's
 `correlate` subtree.

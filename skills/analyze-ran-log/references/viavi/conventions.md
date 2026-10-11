@@ -39,8 +39,8 @@ confirms the file is non-empty and carries the VIAVI signature (`RSET` / `C: RSE
 0x00 Ok` / `I: CMPI` in the first lines), then prints the path, format, size, and
 a `verdict:` line. **Bail if the verdict is not OK.**
 
-**Scope** — a single command log already aggregates *all* simulated UEs (this
-example: 100 UE Ids, 0–119). Scope queries by `UE Id` early; the per-UE
+**Scope** — a single command log already aggregates *all* simulated UEs (often
+100+). Scope queries by `UE Id` early; the per-UE
 cross-product over a multi-hour run is large.
 
 ## Efficiency rules (viavi)

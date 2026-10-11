@@ -40,7 +40,7 @@ DD/MM/YY HH:MM:SS:mmm <payload>
 | Command | Meaning |
 |---|---|
 | `RSET` | Reset the tester |
-| `SCXT <idx> <LTE\|NR>` | Define a system context (this run uses `0:LTE`, `1:NR`) |
+| `SCXT <idx> <LTE\|NR>` | Define a system context (typically `0:LTE`, `1:NR`) |
 | `SELR <idx> …`, `CFGR <idx> SCS <n> <n>` | Select & configure a radio / sub-carrier spacing index |
 | `CONF ORU <RU> <key> <val>` | O-RAN RU emulator settings (MAC, MTU, RachVer, …) |
 | `SCFG MTS_MODE` | Enable multi-test-scenario mode |

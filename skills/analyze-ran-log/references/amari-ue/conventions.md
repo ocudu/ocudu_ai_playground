@@ -13,7 +13,7 @@ A single run directory typically contains:
 | `amarisoft_ue.cfg` | JSON5 configuration: cell groups, UE list, sim events |
 | `ps_info_lteue-avx2.txt` | Process CPU/memory snapshot (rarely needed) |
 
-Ignore `metrics.json` — it is empty in these runs.
+`metrics.json` in a UE dir is normally empty; check its size before skipping it.
 
 ## Subtree layout
 

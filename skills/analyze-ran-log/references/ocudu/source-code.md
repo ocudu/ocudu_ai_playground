@@ -16,8 +16,8 @@ Typical trigger: doubt about the exact meaning of a field in `metrics.json` / th
 ## Where — preference order
 
 If `$ANALYZE_RAN_LOG_OCUDU_PATH` is set, use that checkout — the user saved it in
-a prior session. (Legacy name: `$RAN_LOG_REFERENCE_OCUDU_PATH`, from before this
-skill was renamed — still honoured if the new one is unset; offer to migrate it.)
+a prior session. If unset but `$RAN_LOG_REFERENCE_OCUDU_PATH` is set, use it and
+offer to rename it to `ANALYZE_RAN_LOG_OCUDU_PATH`.
 Otherwise, in order:
 
 1. **In-project** (preferred) — a checkout vendored inside the current project as a

@@ -94,8 +94,7 @@ Repeat until diagnosis or the user stops:
    - it confirms or refutes the current hypothesis, **or**
    - it opens a lead in another layer, UE, or source.
 
-   Intermediate non-results feed **silently** into the next check — don't narrate
-   them.
+   A non-result does not trigger the step-5 question; fold it into the next check.
 4. On a meaningful finding, emit:
 
    ```
