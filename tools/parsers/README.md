@@ -197,13 +197,9 @@ tree, its working tree or a revision, and regenerate it:
 python -m parsers.schedtrace.codegen --ocudu ~/srs/ocudu [--rev origin/dev]
 ```
 
-Then add the hash of the schemas of the new version to `SCHEMA_HASHES` of `tests/schedtrace/test_schedtrace.py`: a
-test fails when the schemas differ from those recorded for their version, as when they change without a version bump.
-
-`_generated.py` holds the hash of the schemas and of the generator; when it is stale, decoding warns and falls back to
-`schedtrace.flatbuf`, and a test fails. Fields that newer traces append are ignored. The tests compare the decoder with
-flatc on a trace that `tests/schedtrace/data/make_fixtures.sh` builds, and the generated decoder with
-`schedtrace.flatbuf`. It decodes about 18k slots per second of busy slots.
+`_generated.py` holds the hash of the schemas, the file format header and the generator, and a test fails when it is
+stale. The tests compare the decoder with flatc on a trace that `tests/schedtrace/data/make_fixtures.sh` builds, and
+the generated decoder with `schedtrace.flatbuf`. It decodes about 18k slots per second of busy slots.
 
 `schedtrace.collisions` finds the allocations of a slot whose resources overlap: PDSCH with PDSCH, PUSCH with PUSCH,
 PUSCH with PUCCH, and PDCCH with PDCCH, by their CCEs in a CORESET. The traces lack the resources of the CORESETs, so

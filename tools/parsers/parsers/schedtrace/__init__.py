@@ -92,27 +92,12 @@ def decoder() -> Decoder:
 
 
 def schema_hash() -> str:
-    """Hash of the schemas of fbs/ and of the generator of the decoders."""
-    # Imported here so that running codegen as a module does not find it already imported.
-    from . import codegen
-
-    return codegen.source_hash()
-
-
-@lru_cache(maxsize=1)
-def _stale() -> bool:
-    """Whether _generated.py is stale, which it warns about."""
-    if _generated.SCHEMA_HASH == schema_hash():
-        return False
-    warnings.warn("parsers/schedtrace/_generated.py is stale, decoding without it. Regenerate it with "
-                  "python -m parsers.schedtrace.codegen.", stacklevel=3)
-    return True
+    """Hash of the schemas and the file format version of fbs/ and of the generator of the decoders."""
+    return _generated.SCHEMA_HASH
 
 
 def _root(grid_only: bool) -> Callable[[bytes | memoryview], dict[str, Any]]:
-    """The decoder of CellEvent buffers of _generated.py, or decoder().root, which is slower, if it is stale."""
-    if _stale():
-        return decoder().root
+    """The decoder of CellEvent buffers of _generated.py."""
     return _generated.root_grid if grid_only else _generated.root
 
 

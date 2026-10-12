@@ -56,7 +56,7 @@ def _union_vector(buf, types_at, values_at, members):
         out.append(_union(buf, values_at + 4 * i, kind, members) if kind else None)
     return out
 
-SCHEMA_HASH = "f830f2702b1a0dbc2469cac3adb3ea6e81acdb4ccf2ea1e36c634a4fb5aeefc7"
+SCHEMA_HASH = "09d44a2fcc263615a6a8b8a5b346ac45713a7adff3fffe2c9a3f9578bdd58d38"
 
 _ENUM_CyclicPrefix = {0: 'Normal', 1: 'Extended'}
 _ENUM_SubcarrierSpacing = {0: 'Khz15', 1: 'Khz30', 2: 'Khz60', 3: 'Khz120', 4: 'Khz240'}

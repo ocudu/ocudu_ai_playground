@@ -14,7 +14,7 @@ revision:
 
     python -m parsers.schedtrace.codegen --ocudu ~/srs/ocudu [--rev origin/dev]
 
-The generated module holds the hash of its sources, SCHEMA_HASH, which the decoder checks against source_hash().
+The generated module holds the hash of its sources, SCHEMA_HASH, which a test checks against source_hash().
 """
 
 from __future__ import annotations
@@ -108,20 +108,11 @@ def _union_vector(buf, types_at, values_at, members):
 
 
 def source_hash() -> str:
-    """Hash of the sources of the generated decoder: the schemas of fbs/ and this file, without their license headers,
-    which the header annotator rewrites.
+    """Hash of the sources of the generated decoder: the schemas and the file format header of fbs/ and this file,
+    without their license headers, which the header annotator rewrites.
     """
-    return _hash([*sorted(FBS_DIR.glob("*.fbs")), Path(__file__)])
-
-
-def fbs_hash() -> str:
-    """Hash of the schemas of fbs/, without their license headers."""
-    return _hash(sorted(FBS_DIR.glob("*.fbs")))
-
-
-def _hash(paths: list[Path]) -> str:
     h = hashlib.sha256()
-    for path in paths:
+    for path in [*sorted(FBS_DIR.glob("*.fbs")), FBS_DIR / FORMAT_HEADER, Path(__file__)]:
         h.update(path.name.encode() + b"\0")
         for line in path.read_text().splitlines():
             if "SPDX-" not in line:

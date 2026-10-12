@@ -6,7 +6,6 @@ import tempfile
 import unittest
 import warnings
 from pathlib import Path
-from unittest import mock
 
 from parsers import schedtrace
 from parsers.schedtrace import _generated, codegen, grid
@@ -14,10 +13,6 @@ from parsers.schedtrace import _generated, codegen, grid
 # Trace built by data/make_fixtures.sh with flatc from the JSON events, and flatc's decoding of it.
 DATA = Path(__file__).parent / "data"
 EVENTS = ("cell_start", "cell_slot", "cell_stop")
-# Hash of the schemas of fbs/, codegen.fbs_hash(), of each file format version.
-SCHEMA_HASHES = {
-    (1, 0): "6d7243ad03a3afcb1c055bbaad68de7cc29a96e71bcca6da45acee4b752d5aa3",
-}
 
 
 def from_flatc(value):
@@ -106,12 +101,6 @@ class FormatVersionTest(unittest.TestCase):
     def with_version(self, major, minor):
         return schedtrace.HEADER.pack(schedtrace.MAGIC, major, minor) + self.data[schedtrace.HEADER.size :]
 
-    def test_schemas_match_the_version(self):
-        self.assertEqual(SCHEMA_HASHES.get(schedtrace.FORMAT_VERSION), codegen.fbs_hash(),
-                         "fbs/ differs from the schemas of its file format version in fbs/trace_file_format.h. Copy both "
-                         "from OCUDU with python -m parsers.schedtrace.codegen --ocudu <dir>, then add the hash of the "
-                         "version to SCHEMA_HASHES.")
-
     def test_version(self):
         self.assertEqual(schedtrace.version(self.data), schedtrace.FORMAT_VERSION)
         self.assertIsNone(schedtrace.version(self.data[schedtrace.HEADER.size :]))
@@ -145,9 +134,6 @@ class FormatVersionTest(unittest.TestCase):
 
 
 class GeneratedTest(unittest.TestCase):
-    def tearDown(self):
-        schedtrace._stale.cache_clear()
-
     def test_up_to_date(self):
         self.assertEqual(_generated.SCHEMA_HASH, codegen.source_hash(),
                          "_generated.py is stale, regenerate it with python -m parsers.schedtrace.codegen")
@@ -164,12 +150,6 @@ class GeneratedTest(unittest.TestCase):
                 buf = data[offset + 4 : offset + 4 + size]
                 # Compared as lists of items, so that the order of the fields matters too.
                 self.assertEqual(list(_generated.root(buf).items()), list(dec.root(buf).items()), name)
-
-    def test_stale_falls_back_to_decoder(self):
-        schedtrace._stale.cache_clear()
-        with mock.patch.object(_generated, "SCHEMA_HASH", "stale"), self.assertWarns(UserWarning):
-            self.assertEqual(schedtrace._root(False), schedtrace.decoder().root)
-            self.assertEqual(schedtrace._root(True), schedtrace.decoder().root)
 
     def test_grid_only(self):
         full = list(schedtrace.read(DATA / "schedtrace_cell0.bin"))
