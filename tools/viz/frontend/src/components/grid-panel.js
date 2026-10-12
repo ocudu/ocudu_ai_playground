@@ -33,6 +33,18 @@ function channelColor(channel) {
   return cssVar(`--ch-${channel.toLowerCase()}`);
 }
 
+/**
+ * A #rrggbb color mixed toward black by a fraction, or the color itself if not #rrggbb.
+ * @param {string} color
+ * @param {number} amount
+ */
+function darken(color, amount) {
+  const m = /^#([0-9a-f]{6})$/i.exec(color.trim());
+  if (!m) return color;
+  const channels = [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16));
+  return `rgb(${channels.map((c) => Math.round(c * (1 - amount))).join(",")})`;
+}
+
 /** @param {number | null | undefined} rnti */
 function hexRnti(rnti) {
   return rnti == null ? "" : `0x${rnti.toString(16).padStart(4, "0")}`;
@@ -363,6 +375,9 @@ export default {
       const { ctx, bbox } = u;
       const colors = {};
       const color = (channel) => (colors[channel] ??= channelColor(channel));
+      const borders = {};
+      // Allocations are filled with their channel color, as in the legend, and outlined darker.
+      const border = (channel) => (borders[channel] ??= darken(color(channel), 0.35));
       ctx.save();
       ctx.beginPath();
       ctx.rect(bbox.left, bbox.top, bbox.width, bbox.height);
@@ -378,12 +393,12 @@ export default {
           const [t0, t1] = this.symbolSpan(r.t, r.sym_start, r.sym_length);
           const b = this.box(u, t0, t1, r.dir, r.crb_start, r.crb_length);
           if (!b) continue;
-          ctx.globalAlpha = 0.8;
+          ctx.globalAlpha = 1;
           ctx.fillStyle = color(r.channel);
           ctx.fillRect(...b);
           if (b[2] > 4 * devicePixelRatio) {
             ctx.globalAlpha = 1;
-            ctx.strokeStyle = color(r.channel);
+            ctx.strokeStyle = border(r.channel);
             ctx.lineWidth = devicePixelRatio;
             ctx.strokeRect(...b);
           }
