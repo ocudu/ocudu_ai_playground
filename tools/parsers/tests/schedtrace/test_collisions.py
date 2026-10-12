@@ -140,3 +140,34 @@ class PdcchTest(unittest.TestCase):
         # 2 columns, shift 1: CCEs 0 and 1 are bundles 1 and 3, RBs 6 to 11 and 18 to 23 of CRBs 8 to 19 and 32 to 43.
         self.assertEqual([(a["channel"], a["sym_start"], a["sym_length"], a["crb_start"], a["crb_length"], a["item"])
                           for a in allocs], [("PDCCH", 0, 1, 14, 6, ["ul_pdcchs", 0]), ("PDCCH", 0, 1, 38, 6, ["ul_pdcchs", 0])])
+
+
+class PrachTest(unittest.TestCase):
+    """PRACH occasions: msg1-FrequencyStart 3 in the UL BWP from CRB 0, PRACH and PUSCH subcarrier spacing 30 kHz."""
+
+    def setUp(self):
+        self.cell = grid.cell_of(next(schedtrace.read(DATA / "schedtrace_cell0.bin")))
+
+    def rects(self, **prach):
+        prach = {"pci": 1, "format": 0, "nof_occasions": 1, "index_fd_ra": 0, "start_symbol": 0, "nof_cs": 0,
+                 "nof_fd_ra": 1, "start_preamble_index": 0, "nof_preamble_indexes": 64, **prach}
+        allocs = grid.allocations(slot(prachs=[prach]), self.cell)
+        return [(a["format"], a["occasion"], a["fd_ra"], a["sym_start"], a["sym_length"], a["crb_start"], a["crb_length"])
+                for a in allocs]
+
+    def test_short_format(self):
+        # Format A1: 2 symbols per occasion, 12 RBs per frequency occasion.
+        self.assertEqual(self.rects(format=4, nof_occasions=2, start_symbol=2, index_fd_ra=1, nof_fd_ra=2), [
+            ("A1", 0, 1, 2, 2, 15, 12), ("A1", 1, 1, 4, 2, 15, 12),
+            ("A1", 0, 2, 2, 2, 27, 12), ("A1", 1, 2, 4, 2, 27, 12),
+        ])
+
+    def test_long_format_lasts_past_its_slot(self):
+        # Format 0: 1.25 kHz, 3 RBs at 30 kHz, 1 ms, 2 slots of 14 symbols at 30 kHz.
+        (rect,) = self.rects(format=0)
+        self.assertEqual(rect, ("0", 0, 0, 0, 28, 3, 3))
+        rects = grid.allocations(slot(prachs=[{"pci": 1, "format": 0, "nof_occasions": 1, "index_fd_ra": 0,
+                                               "start_symbol": 0, "nof_cs": 0, "nof_fd_ra": 1,
+                                               "start_preamble_index": 0, "nof_preamble_indexes": 64}]), self.cell)
+        # Occupancy counts only its slot: the 3 CRBs of group 0 of 4 CRBs, all 14 symbols.
+        self.assertEqual(grid.occupancy(rects, 4), {(0, "PRACH"): 0.25, (1, "PRACH"): 0.5})

@@ -45,7 +45,7 @@ _FORMAT_NAMES = {"?": "bool", "b": "i8", "B": "u8", "h": "i16", "H": "u16", "i":
 GRID_FIELDS: dict[str, tuple[str, ...]] = {
     "CellSlotEvent": ("slot_tx", "latency_us", "inputs", "decision"),
     "SlotDecision": ("dl_pdcchs", "ul_pdcchs", "sib_pdschs", "rar_pdschs", "paging_pdschs", "ue_pdschs", "puschs",
-                     "pucchs", "ssbs", "csi_rs"),
+                     "pucchs", "ssbs", "csi_rs", "prachs"),
     "Pdsch": ("rnti", "rbs", "sym_start", "sym_length", "codewords", "harq_id", "ue_index", "nof_retxs", "k1"),
     "Pusch": ("rnti", "rbs", "sym_start", "sym_length", "rv_index", "harq_id", "tb_size_bytes", "ue_index", "nof_retxs",
               "k2"),

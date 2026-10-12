@@ -197,7 +197,7 @@ class GridTest(unittest.TestCase):
         self.assertEqual([(r["sym_start"], r["sym_length"], r["crb_start"], r["crb_length"]) for r in rects], [(12, 1, 40, 2), (13, 1, 7, 2)])
 
     def test_occupancy(self):
-        rects = [{"channel": "PDSCH", "crb_start": 2, "crb_length": 6, "sym_length": 7}]
+        rects = [{"channel": "PDSCH", "crb_start": 2, "crb_length": 6, "sym_start": 0, "sym_length": 7}]
         self.assertEqual(grid.occupancy(rects, 4), {(0, "PDSCH"): 0.25, (1, "PDSCH"): 0.5})
 
     def test_rbg_size(self):

@@ -8,22 +8,37 @@ Allocations are placed as the trace allows: VRBs map to PRBs one to one (non-int
 the BWP start, and RBGs have the size of TS 38.214 Table 5.1.2.2.1-1 configuration 1 for the size of the BWP. The VRBs
 of PDSCHs of DCI format 1_0 in a common search space (SIB, RAR, paging, fallback) count from the lowest CRB of the
 CORESET of their PDCCH, TS 38.214 5.1.2.2.2, those of the other PDSCHs from the BWP start. PDCCHs take the REG bundles
-of their CCEs in their CORESET, TS 38.211 7.3.2.2, from the first monitoring symbol of their search space. PRACH and
-SRS are left out. The UL allocations of a slot decision are those transmitted in its slot.
+of their CCEs in their CORESET, TS 38.211 7.3.2.2, from the first monitoring symbol of their search space. PRACH
+occasions take the RBs of TS 38.211 Table 6.3.3.2-1 from msg1-FrequencyStart and the duration of their format; when the
+PRACH and PUSCH subcarrier spacings differ their symbols are scaled, and long formats last past their slot, though
+occupancy() counts only their first slot. SRS is left out. The UL allocations of a slot decision are those transmitted in its slot.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
 NOF_SYMBOLS = 14
 # Channels of the allocations, DL then UL.
 DL_CHANNELS = ("PDSCH", "SIB", "RAR", "Paging", "SSB", "CSI-RS", "PDCCH")
-UL_CHANNELS = ("PUSCH", "PUCCH")
+UL_CHANNELS = ("PUSCH", "PUCCH", "PRACH")
 CHANNELS = DL_CHANNELS + UL_CHANNELS
 # Slot duration of each subcarrier spacing, in seconds.
 SLOT_DURATION_S = {"Khz15": 1e-3, "Khz30": 0.5e-3, "Khz60": 0.25e-3, "Khz120": 0.125e-3, "Khz240": 0.0625e-3}
+# Subcarrier spacing of each SubcarrierSpacing value, in kHz.
+SCS_KHZ = {"Khz15": 15, "Khz30": 30, "Khz60": 60, "Khz120": 120, "Khz240": 240}
+# Prach.format values, as prach_format_type of OCUDU; the first 4 are long formats.
+PRACH_FORMATS = ("0", "1", "2", "3", "A1", "A2", "A3", "B1", "B4", "C0", "C2", "A1/B1", "A2/B2", "A3/B3")
+# Duration of a short PRACH occasion in symbols of the PRACH subcarrier spacing, TS 38.211 Tables 6.3.3.2-2 to 4, and
+# of a long one in ms, as it occupies its subframes.
+_PRACH_SHORT_SYMBOLS = {"A1": 2, "B1": 2, "A1/B1": 2, "C0": 2, "A2": 4, "A2/B2": 4, "A3": 6, "A3/B3": 6, "C2": 6, "B4": 12}
+_PRACH_LONG_MS = {"0": 1, "1": 3, "2": 3.5, "3": 1}
+# RBs of a PRACH occasion in PUSCH RBs, by PRACH and PUSCH subcarrier spacing in kHz, TS 38.211 Table 6.3.3.2-1.
+_PRACH_RBS = {(1.25, 15): 6, (1.25, 30): 3, (1.25, 60): 2, (5, 15): 24, (5, 30): 12, (5, 60): 6, (15, 15): 12,
+              (15, 30): 6, (15, 60): 3, (30, 15): 24, (30, 30): 12, (30, 60): 6, (60, 60): 12, (60, 120): 6,
+              (120, 60): 24, (120, 120): 12}
 # DlPdcch.dci_type values, as dci_dl_rnti_config_type of OCUDU; all but C_RNTI_F1_1 are DCI format 1_0.
 SI_F1_0, RA_F1_0, C_RNTI_F1_0, TC_RNTI_F1_0, P_RNTI_F1_0, C_RNTI_F1_1 = range(6)
 
@@ -40,6 +55,8 @@ class Cell:
     # Coreset and SearchSpace tables of the DL BWP.
     coresets: list[dict[str, Any]] = field(default_factory=list)
     search_spaces: list[dict[str, Any]] = field(default_factory=list)
+    # PrachConfig table of the UL BWP, None without RACH.
+    prach: dict[str, Any] | None = None
 
     @property
     def nof_crbs(self) -> int:
@@ -55,7 +72,7 @@ def cell_of(start_event: dict[str, Any]) -> Cell:
     """The cell of a CellStartEvent of schedtrace.read()."""
     dl, ul = start_event["init_dl_bwp"], start_event["init_ul_bwp"]
     return Cell(_bwp(dl["generic_params"]), _bwp(ul["generic_params"]), ul.get("pucch_resources") or [],
-                dl.get("coresets") or [], dl.get("search_spaces") or [])
+                dl.get("coresets") or [], dl.get("search_spaces") or [], ul.get("prach"))
 
 
 def _bwp(params: dict[str, Any]) -> dict[str, Any]:
@@ -156,7 +173,35 @@ def allocations(slot_event: dict[str, Any], cell: Cell) -> list[dict[str, Any]]:
             if crbs is None:
                 crbs = pdcch_cache[key] = pdcch_crbs(cs, p["cce"], nof_cces)
             add("DL", "PDCCH", _first_symbol(ss), cs["duration"], crbs, info)
+    for i, p in enumerate(decision.get("prachs") or []):
+        _add_prach(add, i, p, cell)
     return out
+
+
+def _add_prach(add: Callable[..., None], index: int, prach: dict[str, Any], cell: Cell) -> None:
+    """Adds the occasions of a Prach of a slot decision, one rectangle per time and frequency occasion."""
+    if cell.prach is None or prach["format"] >= len(PRACH_FORMATS):
+        return
+    fmt = PRACH_FORMATS[prach["format"]]
+    pusch_khz = SCS_KHZ.get(cell.ul_bwp["scs"], 15)
+    if fmt in _PRACH_LONG_MS:
+        prach_khz = 5 if fmt == "3" else 1.25
+        start, length = prach["start_symbol"], round(_PRACH_LONG_MS[fmt] * NOF_SYMBOLS * pusch_khz / 15)
+        times = [(start, length)]
+    else:
+        prach_khz = SCS_KHZ.get(cell.prach.get("scs"), pusch_khz)
+        scale = pusch_khz / prach_khz
+        length = round(_PRACH_SHORT_SYMBOLS[fmt] * scale)
+        start = round(prach["start_symbol"] * scale)
+        times = [(start + t * length, length) for t in range(prach["nof_occasions"])]
+    nof_rbs = _PRACH_RBS.get((prach_khz, pusch_khz))
+    if nof_rbs is None:
+        return
+    first = cell.ul_bwp["crb_start"] + cell.prach["frequency_start"]
+    for fd in range(prach["index_fd_ra"], prach["index_fd_ra"] + prach["nof_fd_ra"]):
+        for t, (sym_start, sym_length) in enumerate(times):
+            info = {"item": ["prachs", index], "format": fmt, "occasion": t, "fd_ra": fd}
+            add("UL", "PRACH", sym_start, sym_length, [(first + fd * nof_rbs, nof_rbs)], info)
 
 
 def pdcch_crbs(coreset: dict[str, Any], cce: int, nof_cces: int) -> list[tuple[int, int]]:
@@ -263,5 +308,7 @@ def occupancy(rects: list[dict[str, Any]], group_size: int) -> dict[tuple[int, s
         for g in range(lo // group_size, (hi - 1) // group_size + 1):
             overlap = min(hi, (g + 1) * group_size) - max(lo, g * group_size)
             key = (g, r["channel"])
-            out[key] = out.get(key, 0.0) + overlap * r["sym_length"] / (group_size * NOF_SYMBOLS)
+            # Allocations that last past their slot, as long PRACH formats, count only in it.
+            nof_symbols = min(r["sym_start"] + r["sym_length"], NOF_SYMBOLS) - r["sym_start"]
+            out[key] = out.get(key, 0.0) + overlap * nof_symbols / (group_size * NOF_SYMBOLS)
     return out

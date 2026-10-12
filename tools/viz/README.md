@@ -103,7 +103,8 @@ In the page:
   with `trace.schedtrace.enabled`), on the time axis of the plots, labelled in SFN.slot: CRBs upwards, one grid for TDD, DL above UL for FDD
   (told from the trace: FDD cells have PDSCH and PUSCH in the same slots). Zoomed out, it shows the occupancy of each
   group of 4 CRBs per bin of slots, colored by its dominant channel; within 4000 slots, per slot; within 400 slots, the
-  allocations themselves with symbol resolution: PDSCH, SIB, RAR, paging, SSB, CSI-RS, PUSCH and PUCCH. Hover an
+  allocations themselves with symbol resolution: PDSCH, SIB, RAR, paging, SSB, CSI-RS, PDCCH, PUSCH, PUCCH and PRACH
+  occasions. Hover an
   allocation for its RNTI, CRBs, symbols, MCS, TBS, HARQ and timing, click it to see its slot event decoded, as tables
   of its decisions (one per kind of allocation), the allocation clicked highlighted, and of its events (HARQ-ACK, SR,
   CSI report, RACH), or as raw JSON, and click

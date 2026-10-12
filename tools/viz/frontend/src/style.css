@@ -50,6 +50,7 @@
   --ch-pusch: #4e79a7;
   --ch-pucch: #8e6bd6;
   --ch-pdcch: #ff9da7;
+  --ch-prach: #bab0ac;
   color-scheme: light;
 }
 
@@ -96,6 +97,7 @@
   --ch-pusch: #73a7ff;
   --ch-pucch: #b39cff;
   --ch-pdcch: #ffb3ba;
+  --ch-prach: #d7cfcb;
   color-scheme: dark;
 }
 

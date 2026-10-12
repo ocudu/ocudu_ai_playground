@@ -56,7 +56,7 @@ def _union_vector(buf, types_at, values_at, members):
         out.append(_union(buf, values_at + 4 * i, kind, members) if kind else None)
     return out
 
-SCHEMA_HASH = "ead572082fcc8b3b7aebec55c343d9c34a6943acb30922ffb741953e30cdb1fb"
+SCHEMA_HASH = "b74d7afe7f69cd80bf9e8f931f867cd99ce1a57316cb3273833e676809b07bea"
 FORMAT_VERSION = (1, 0)
 
 _ENUM_CyclicPrefix = {0: 'Normal', 1: 'Extended'}
@@ -1597,7 +1597,7 @@ def _grid_table_PagingPdsch(buf, pos):
 def _grid_table_SlotDecision(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[10](buf, vt + 4) if n >= 10 else _VTABLES[n](buf, vt + 4) + (0,) * (10 - n)
+    vo = _VTABLES[11](buf, vt + 4) if n >= 11 else _VTABLES[n](buf, vt + 4) + (0,) * (11 - n)
     o = vo[0]
     v0 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 12, _STRUCT_DlPdcch.iter_unpack, _build_DlPdcch) if o else None
     o = vo[1]
@@ -1618,6 +1618,8 @@ def _grid_table_SlotDecision(buf, pos):
     v8 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 8, _STRUCT_Ssb.iter_unpack, _build_Ssb) if o else None
     o = vo[9]
     v9 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 18, _STRUCT_CsiRs.iter_unpack, _build_CsiRs) if o else None
+    o = vo[10]
+    v10 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 12, _STRUCT_Prach.iter_unpack, _build_Prach) if o else None
     return {
         "dl_pdcchs": v0,
         "ul_pdcchs": v1,
@@ -1629,6 +1631,7 @@ def _grid_table_SlotDecision(buf, pos):
         "pucchs": v7,
         "ssbs": v8,
         "csi_rs": v9,
+        "prachs": v10,
     }
 
 

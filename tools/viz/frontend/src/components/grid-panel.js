@@ -18,7 +18,7 @@ const SYMBOLS_PER_SLOT = 14;
 // Channels in legend order, with their direction.
 const CHANNELS = [
   ["PDSCH", "DL"], ["SIB", "DL"], ["RAR", "DL"], ["Paging", "DL"], ["SSB", "DL"], ["CSI-RS", "DL"], ["PDCCH", "DL"],
-  ["PUSCH", "UL"], ["PUCCH", "UL"],
+  ["PUSCH", "UL"], ["PUCCH", "UL"], ["PRACH", "UL"],
 ];
 const UL_CHANNELS = new Set(CHANNELS.filter(([, d]) => d === "UL").map(([c]) => c));
 // Slots of the window around a clicked time that a click on the occupancy zooms to.
@@ -454,7 +454,7 @@ export default {
         `sym ${item.sym_start}+${item.sym_length}`,
       ];
       for (const key of ["mcs", "tbs", "harq_id", "rv", "nof_retxs", "k1", "k2", "format", "harq_bits", "sr_bits", "csi_bits", "ssb_index", "row", "grants", "paging_ues",
-        "coreset_id", "ss_id", "cce", "nof_cces"]) {
+        "coreset_id", "ss_id", "cce", "nof_cces", "occasion", "fd_ra"]) {
         if (item[key] != null) parts.push(`${key}=${item[key]}`);
       }
       return parts.filter(Boolean).join(" ");
