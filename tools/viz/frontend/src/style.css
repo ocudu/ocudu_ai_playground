@@ -41,16 +41,16 @@
   --ev-warning: #f57c00;
   --ev-error: #e53935;
   /* Resource grid colors, by channel. */
-  --ch-pdsch: #59a14f;
-  --ch-sib: #f28e2b;
-  --ch-rar: #edc948;
-  --ch-paging: #76b7b2;
-  --ch-ssb: #8e6bd6;
-  --ch-csi-rs: #e15759;
-  --ch-pusch: #4e79a7;
-  --ch-pucch: #9c755f;
-  --ch-pdcch: #ff9da7;
-  --ch-prach: #bab0ac;
+  --ch-pdsch: #99c693;
+  --ch-sib: #c3ab9d;
+  --ch-rar: #f7ba7d;
+  --ch-paging: #abd3cf;
+  --ch-ssb: #baa5e6;
+  --ch-csi-rs: #ec9899;
+  --ch-pusch: #92adc9;
+  --ch-pucch: #f4de90;
+  --ch-pdcch: #ffc4c9;
+  --ch-prach: #d5cfcd;
   color-scheme: light;
 }
 
@@ -88,16 +88,16 @@
   --ev-failure: #ffd84d;
   --ev-warning: #ff9a3c;
   --ev-error: #ff6b6b;
-  --ch-pdsch: #73d07a;
-  --ch-sib: #ffa94d;
-  --ch-rar: #f2d55c;
-  --ch-paging: #5fd3cb;
-  --ch-ssb: #b39cff;
-  --ch-csi-rs: #ff7b7b;
-  --ch-pusch: #73a7ff;
-  --ch-pucch: #c49a7e;
-  --ch-pdcch: #ffb3ba;
-  --ch-prach: #d7cfcb;
+  --ch-pdsch: #94db99;
+  --ch-sib: #d2b29c;
+  --ch-rar: #ffbd77;
+  --ch-paging: #85ddd7;
+  --ch-ssb: #c5b3ff;
+  --ch-csi-rs: #ff9a9a;
+  --ch-pusch: #94bcff;
+  --ch-pucch: #f5df82;
+  --ch-pdcch: #ffc5ca;
+  --ch-prach: #e0dad7;
   color-scheme: dark;
 }
 
