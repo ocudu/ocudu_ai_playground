@@ -41,16 +41,16 @@
   --ev-warning: #f57c00;
   --ev-error: #e53935;
   /* Resource grid colors, by channel. */
-  --ch-pdsch: #99c693;
-  --ch-sib: #c3ab9d;
-  --ch-rar: #f7ba7d;
-  --ch-paging: #abd3cf;
+  --ch-pdsch: #8cd17d;
+  --ch-sib: #d7b5a6;
+  --ch-rar: #ffbe7d;
+  --ch-paging: #86bcb6;
   --ch-ssb: #baa5e6;
-  --ch-csi-rs: #ec9899;
-  --ch-pusch: #92adc9;
-  --ch-pucch: #f4de90;
-  --ch-pdcch: #ffc4c9;
-  --ch-prach: #d5cfcd;
+  --ch-csi-rs: #ff9d9a;
+  --ch-pusch: #a0cbe8;
+  --ch-pucch: #f1ce63;
+  --ch-pdcch: #fabfd2;
+  --ch-prach: #bab0ac;
   color-scheme: light;
 }
 
