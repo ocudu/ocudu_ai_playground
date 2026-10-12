@@ -46,7 +46,7 @@ class SchedtraceSourceTest(unittest.TestCase):
     def test_grid_window(self):
         res = self.source.grid(self.path, self.store, None, None, 1000)
         self.assertEqual((res["mode"], res["nof_slots"]), ("rects", 1))
-        self.assertEqual(sorted({r["channel"] for r in res["rects"]}), ["PDSCH", "PUSCH", "SSB"])
+        self.assertEqual(sorted({r["channel"] for r in res["rects"]}), ["PDCCH", "PDSCH", "PUSCH", "SSB"])
         pdsch = next(r for r in res["rects"] if r["channel"] == "PDSCH")
         self.assertEqual((pdsch["record"], pdsch["t"], pdsch["t1"]), (2, 1700000000.0005, 1700000000.0015))
         self.assertEqual(res["anchors"], [[1700000000.0005, 12345]])

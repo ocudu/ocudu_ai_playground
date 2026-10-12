@@ -7,11 +7,11 @@
 schedtrace_collisions.py — Find colliding allocations in OCUDU scheduler event traces.
 
 Decodes schedtrace_cell<N>.bin with the `parsers` package of this repo and prints the pairs of allocations of a slot
-whose resources overlap: PDSCH with PDSCH (UE, SIB, RAR, paging), PUSCH with PUSCH, PUSCH with PUCCH, and PDCCH with
-PDCCH (CCEs shared in a CORESET).
+whose resources overlap: PDSCH with PDSCH (UE, SIB, RAR, paging), PUSCH with PUSCH, PUSCH with PUCCH, PDCCH with
+PDSCH, and PDCCH with PDCCH (CCEs shared in a CORESET).
 
 The VRBs of PDSCHs of DCI format 1_0 in a common search space (SIB, RAR, paging, fallback) count from their CORESET,
-the others from their BWP. PDCCHs are not checked against PDSCHs.
+the others from their BWP. PDCCHs take the CRBs of their CCEs in their CORESET.
 
 Usage:
   python3 schedtrace_collisions.py <path>                            # every collision, then counts per kind
@@ -21,7 +21,7 @@ Usage:
 <path>: a schedtrace_cell<N>.bin, or a directory, whose schedtrace_cell*.bin are all searched.
 
 Options:
-  --kinds <a,b,...>   Kinds to report: PDSCH-PDSCH, PUSCH-PUSCH, PUSCH-PUCCH, PDCCH-PDCCH (default: all).
+  --kinds <a,b,...>   Kinds to report: PDSCH-PDSCH, PUSCH-PUSCH, PUSCH-PUCCH, PDCCH-PDSCH, PDCCH-PDCCH (default: all).
   --rnti <R>          Keep collisions with an allocation of this RNTI, hex (0x4601) or decimal. Repeatable.
   --summary           Print only the counts per kind, with the first and last slot of each.
   --max-rows <N>      Collisions printed at most per trace (default: 200).

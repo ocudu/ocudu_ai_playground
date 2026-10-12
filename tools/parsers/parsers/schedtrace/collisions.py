@@ -4,9 +4,9 @@
 """Collisions in the decisions of the slots of a schedtrace: pairs of allocations of a slot whose resources overlap.
 
 Kinds of collisions, in KINDS: PDSCH with PDSCH (UE, SIB, RAR and paging PDSCHs), PUSCH with PUSCH, PUSCH with
-PUCCH, and PDCCH with PDCCH, whose CCEs overlap in their CORESET.
+PUCCH, PDCCH with PDSCH, and PDCCH with PDCCH, whose CCEs overlap in their CORESET.
 
-Allocations are placed as grid.allocations() places them. PDCCHs are not checked against PDSCHs.
+Allocations are placed as grid.allocations() places them.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from typing import Any
 from . import event_at, first_offset, offsets
 from .grid import Cell, allocations, cell_of
 
-KINDS = ("PDSCH-PDSCH", "PUSCH-PUSCH", "PUSCH-PUCCH", "PDCCH-PDCCH")
+KINDS = ("PDSCH-PDSCH", "PUSCH-PUSCH", "PUSCH-PUCCH", "PDCCH-PDSCH", "PDCCH-PDCCH")
 # Kind of the collision of two channels of grid.allocations(), by their pair, in both orders.
 _PDSCHS = ("PDSCH", "SIB", "RAR", "Paging")
 _KIND_OF = {
@@ -29,6 +29,7 @@ _KIND_OF = {
     ("PUSCH", "PUSCH"): "PUSCH-PUSCH",
     ("PUSCH", "PUCCH"): "PUSCH-PUCCH",
     ("PUCCH", "PUSCH"): "PUSCH-PUCCH",
+    **{(a, b): "PDCCH-PDSCH" for p in _PDSCHS for a, b in (("PDCCH", p), (p, "PDCCH"))},
 }
 
 
@@ -40,8 +41,8 @@ class Collision:
     slot_tx: int
     timestamp_us: int
     # The allocations, as grid.allocations() gives them, without "sym_start", "sym_length", "crb_start" and
-    # "crb_length" but with "rects", their (first symbol, symbols, first CRB, CRBs), one per frequency hop; or PDCCHs,
-    # with "item", "rnti", "dci_type", "coreset_id", "cce" and "nof_cces".
+    # "crb_length" but with "rects", their (first symbol, symbols, first CRB, CRBs), one per frequency hop or CRB range;
+    # or for PDCCH-PDCCH, PDCCHs with "item", "rnti", "dci_type", "coreset_id", "cce" and "nof_cces".
     a: dict[str, Any]
     b: dict[str, Any]
     # Overlapping resources: (first symbol, symbols, first CRB, CRBs) of each pair of overlapping rects, or for PDCCHs

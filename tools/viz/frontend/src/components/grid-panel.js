@@ -17,7 +17,7 @@ const FETCH_DELAY_MS = 120;
 const SYMBOLS_PER_SLOT = 14;
 // Channels in legend order, with their direction.
 const CHANNELS = [
-  ["PDSCH", "DL"], ["SIB", "DL"], ["RAR", "DL"], ["Paging", "DL"], ["SSB", "DL"], ["CSI-RS", "DL"],
+  ["PDSCH", "DL"], ["SIB", "DL"], ["RAR", "DL"], ["Paging", "DL"], ["SSB", "DL"], ["CSI-RS", "DL"], ["PDCCH", "DL"],
   ["PUSCH", "UL"], ["PUCCH", "UL"],
 ];
 const UL_CHANNELS = new Set(CHANNELS.filter(([, d]) => d === "UL").map(([c]) => c));
@@ -453,7 +453,8 @@ export default {
         `CRB ${item.crb_start}+${item.crb_length}`,
         `sym ${item.sym_start}+${item.sym_length}`,
       ];
-      for (const key of ["mcs", "tbs", "harq_id", "rv", "nof_retxs", "k1", "k2", "format", "harq_bits", "sr_bits", "csi_bits", "ssb_index", "row", "grants", "paging_ues"]) {
+      for (const key of ["mcs", "tbs", "harq_id", "rv", "nof_retxs", "k1", "k2", "format", "harq_bits", "sr_bits", "csi_bits", "ssb_index", "row", "grants", "paging_ues",
+        "coreset_id", "ss_id", "cce", "nof_cces"]) {
         if (item[key] != null) parts.push(`${key}=${item[key]}`);
       }
       return parts.filter(Boolean).join(" ");

@@ -44,8 +44,8 @@ _FORMAT_NAMES = {"?": "bool", "b": "i8", "B": "u8", "h": "i16", "H": "u16", "i":
 # event, and the type of each input. Tables not listed keep all their fields.
 GRID_FIELDS: dict[str, tuple[str, ...]] = {
     "CellSlotEvent": ("slot_tx", "latency_us", "inputs", "decision"),
-    "SlotDecision": ("dl_pdcchs", "sib_pdschs", "rar_pdschs", "paging_pdschs", "ue_pdschs", "puschs", "pucchs", "ssbs",
-                     "csi_rs"),
+    "SlotDecision": ("dl_pdcchs", "ul_pdcchs", "sib_pdschs", "rar_pdschs", "paging_pdschs", "ue_pdschs", "puschs",
+                     "pucchs", "ssbs", "csi_rs"),
     "Pdsch": ("rnti", "rbs", "sym_start", "sym_length", "codewords", "harq_id", "ue_index", "nof_retxs", "k1"),
     "Pusch": ("rnti", "rbs", "sym_start", "sym_length", "rv_index", "harq_id", "tb_size_bytes", "ue_index", "nof_retxs",
               "k2"),

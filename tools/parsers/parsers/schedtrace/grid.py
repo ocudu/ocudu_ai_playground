@@ -7,8 +7,9 @@ occupancy of groups of CRBs.
 Allocations are placed as the trace allows: VRBs map to PRBs one to one (non-interleaved), PRBs of a BWP to CRBs from
 the BWP start, and RBGs have the size of TS 38.214 Table 5.1.2.2.1-1 configuration 1 for the size of the BWP. The VRBs
 of PDSCHs of DCI format 1_0 in a common search space (SIB, RAR, paging, fallback) count from the lowest CRB of the
-CORESET of their PDCCH, TS 38.214 5.1.2.2.2, those of the other PDSCHs from the BWP start. PDCCH, PRACH and SRS are
-left out. The UL allocations of a slot decision are those transmitted in its slot.
+CORESET of their PDCCH, TS 38.214 5.1.2.2.2, those of the other PDSCHs from the BWP start. PDCCHs take the REG bundles
+of their CCEs in their CORESET, TS 38.211 7.3.2.2, from the first monitoring symbol of their search space. PRACH and
+SRS are left out. The UL allocations of a slot decision are those transmitted in its slot.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ from typing import Any
 
 NOF_SYMBOLS = 14
 # Channels of the allocations, DL then UL.
-DL_CHANNELS = ("PDSCH", "SIB", "RAR", "Paging", "SSB", "CSI-RS")
+DL_CHANNELS = ("PDSCH", "SIB", "RAR", "Paging", "SSB", "CSI-RS", "PDCCH")
 UL_CHANNELS = ("PUSCH", "PUCCH")
 CHANNELS = DL_CHANNELS + UL_CHANNELS
 # Slot duration of each subcarrier spacing, in seconds.
@@ -137,7 +138,69 @@ def allocations(slot_event: dict[str, Any], cell: Cell) -> list[dict[str, Any]]:
             half = res["sym_length"] // 2
             add("UL", "PUCCH", res["sym_start"], half, [(start, nof_prbs)], info)
             add("UL", "PUCCH", res["sym_start"] + half, res["sym_length"] - half, [(ul["crb_start"] + hop, nof_prbs)], info)
+    coresets = {cs["id"]: cs for cs in cell.coresets}
+    search_spaces = {ss["id"]: ss for ss in cell.search_spaces}
+    # PDCCHs repeat few CCE positions, so their CRBs are kept with the cell, outside its fields.
+    pdcch_cache = cell.__dict__.setdefault("_pdcch_crbs", {})
+    for key in ("dl_pdcchs", "ul_pdcchs"):
+        for i, p in enumerate(decision.get(key) or []):
+            cs, ss = coresets.get(p["coreset_id"]), search_spaces.get(p["ss_id"])
+            if cs is None or ss is None:
+                continue
+            # The aggregation level is written as its index: 0 is 1 CCE, 4 is 16 CCEs.
+            nof_cces = 1 << p["aggr_lvl"]
+            info = {"item": [key, i], "rnti": p["rnti"], "dci_type": p["dci_type"], "coreset_id": p["coreset_id"],
+                    "ss_id": p["ss_id"], "cce": p["cce"], "nof_cces": nof_cces}
+            key = (p["coreset_id"], p["cce"], nof_cces)
+            crbs = pdcch_cache.get(key)
+            if crbs is None:
+                crbs = pdcch_cache[key] = pdcch_crbs(cs, p["cce"], nof_cces)
+            add("DL", "PDCCH", _first_symbol(ss), cs["duration"], crbs, info)
     return out
+
+
+def pdcch_crbs(coreset: dict[str, Any], cce: int, nof_cces: int) -> list[tuple[int, int]]:
+    """CRB ranges of the CCEs [cce, cce + nof_cces) of a Coreset of the cell start event, merged where contiguous, with
+    the CCE-to-REG mapping of TS 38.211 7.3.2.2.
+    """
+    crbs = [c for r in coreset["crbs"] for c in range(r["start"], r["start"] + r["length"])]
+    nof_symbols = coreset["duration"]
+    nof_regs = len(crbs) * nof_symbols
+    interleaving = coreset.get("interleaving")
+    bundle_size = interleaving["reg_bundle_size"] if interleaving else 6
+    nof_bundles = nof_regs // bundle_size
+    if interleaving:
+        size = interleaving["interleaver_size"]
+        nof_cols = nof_regs // (bundle_size * size)
+
+        def bundle_of(x: int) -> int:
+            c, r = divmod(x, size)
+            return (r * nof_cols + c + interleaving["shift_index"]) % nof_bundles
+    else:
+        def bundle_of(x: int) -> int:
+            return x
+
+    per_cce = 6 // bundle_size
+    rbs = set()
+    for j in range(cce, cce + nof_cces):
+        for x in range(j * per_cce, (j + 1) * per_cce):
+            # REGs are numbered first in time, so a bundle spans all the symbols of the CORESET.
+            bundle = bundle_of(x)
+            first = bundle * bundle_size // nof_symbols
+            rbs.update(range(first, first + bundle_size // nof_symbols))
+    ranges: list[tuple[int, int]] = []
+    for crb in sorted(crbs[i] for i in rbs if i < len(crbs)):
+        if ranges and ranges[-1][0] + ranges[-1][1] == crb:
+            ranges[-1] = (ranges[-1][0], ranges[-1][1] + 1)
+        else:
+            ranges.append((crb, 1))
+    return ranges
+
+
+def _first_symbol(search_space: dict[str, Any]) -> int:
+    """First monitoring symbol of a SearchSpace of the cell start event, of its first entry for SearchSpace#0."""
+    bitmap = (search_space.get("monitoring_symbols") or [1])[0]
+    return (bitmap & -bitmap).bit_length() - 1 if bitmap else 0
 
 
 class _VrbOrigins:

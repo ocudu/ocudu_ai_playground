@@ -74,6 +74,13 @@ class CollisionsTest(unittest.TestCase):
         event = slot(dl_pdcchs=[pdcch(1, 1, 0, 2), pdcch(2, 0, 2, 2)], ul_pdcchs=[pdcch(3, 1, 2, 2), pdcch(4, 1, 6, 0)])
         self.assertEqual(self.kinds(event), [("PDCCH-PDCCH", ["dl_pdcchs", 0], ["ul_pdcchs", 0], [(2, 2)])])
 
+    def test_pdcchs_and_pdschs(self):
+        # CCE 1 of CORESET 1 is REG bundle 3, CRBs 38 to 43, in symbol 0 that search space 2 monitors. PDSCHs of DCI
+        # 1_1 count from the BWP start, CRB 2.
+        event = slot(ue_pdschs=[pdsch(1, vrbs(30, 10), sym_start=0, sym_length=14), pdsch(2, vrbs(0, 4), sym_start=1, sym_length=13)],
+                     dl_pdcchs=[pdcch(3, 1, 1, 0)])
+        self.assertEqual(self.kinds(event), [("PDCCH-PDSCH", ["ue_pdschs", 0], ["dl_pdcchs", 0], [(0, 1, 38, 4)])])
+
     def test_find(self):
         self.assertEqual(list(collisions.find(DATA / "schedtrace_cell0.bin")), [])
 
@@ -87,7 +94,7 @@ class VrbOriginTest(unittest.TestCase):
 
     def starts(self, **decision):
         allocs = grid.allocations(slot(**decision), self.cell)
-        return {tuple(a["item"]): a["crb_start"] for a in allocs}
+        return {tuple(a["item"]): a["crb_start"] for a in allocs if a["channel"] != "PDCCH"}
 
     def test_ue_pdschs(self):
         starts = self.starts(
@@ -108,3 +115,28 @@ class VrbOriginTest(unittest.TestCase):
         # SIBs by the order of their PDCCHs, the RAR by its RNTI, and paging, without a PDCCH, from CORESET 0.
         self.assertEqual(starts, {("sib_pdschs", 0): 10, ("sib_pdschs", 1): 12, ("rar_pdschs", 0): 8,
                                   ("paging_pdschs", 0): 10})
+
+
+class PdcchTest(unittest.TestCase):
+    """CRBs of the CCEs of PDCCHs, TS 38.211 7.3.2.2."""
+
+    def test_not_interleaved(self):
+        # 2 symbols: a CCE is 6 REGs, 3 RBs. The CRBs of the CORESET are 8 to 19 and 32 to 43.
+        coreset = {"id": 1, "crbs": [{"start": 8, "length": 12}, {"start": 32, "length": 12}], "duration": 2}
+        self.assertEqual(grid.pdcch_crbs(coreset, 0, 2), [(8, 6)])
+        self.assertEqual(grid.pdcch_crbs(coreset, 3, 2), [(17, 3), (32, 3)])
+
+    def test_interleaved(self):
+        # 24 RBs, 2 symbols: 48 REGs in 8 bundles of 6, interleaver size 2, so 4 columns, shift 1. CCEs 0 to 3 are
+        # bundles f(0..3) = 1, 5, 2, 6, of 3 RBs each.
+        coreset = {"id": 0, "crbs": [{"start": 3, "length": 24}], "duration": 2,
+                   "interleaving": {"reg_bundle_size": 6, "interleaver_size": 2, "shift_index": 1}}
+        self.assertEqual(grid.pdcch_crbs(coreset, 0, 4), [(6, 6), (18, 6)])
+
+    def test_allocations(self):
+        cell = grid.cell_of(next(schedtrace.read(DATA / "schedtrace_cell0.bin")))
+        allocs = grid.allocations(slot(ul_pdcchs=[pdcch(5, 1, 0, 1, ss_id=1)]), cell)
+        # Search space 1 monitors symbol 0. CORESET 1, 1 symbol, 24 RBs, has 4 bundles of 6 RBs, interleaver size 2, so
+        # 2 columns, shift 1: CCEs 0 and 1 are bundles 1 and 3, RBs 6 to 11 and 18 to 23 of CRBs 8 to 19 and 32 to 43.
+        self.assertEqual([(a["channel"], a["sym_start"], a["sym_length"], a["crb_start"], a["crb_length"], a["item"])
+                          for a in allocs], [("PDCCH", 0, 1, 14, 6, ["ul_pdcchs", 0]), ("PDCCH", 0, 1, 38, 6, ["ul_pdcchs", 0])])

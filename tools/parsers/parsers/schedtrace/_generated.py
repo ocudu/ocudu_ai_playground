@@ -56,7 +56,7 @@ def _union_vector(buf, types_at, values_at, members):
         out.append(_union(buf, values_at + 4 * i, kind, members) if kind else None)
     return out
 
-SCHEMA_HASH = "ea9eaf93535bf15ab8846a3ac75f50a755a4f465101a6a4b9ddc9eaadd48199e"
+SCHEMA_HASH = "ead572082fcc8b3b7aebec55c343d9c34a6943acb30922ffb741953e30cdb1fb"
 FORMAT_VERSION = (1, 0)
 
 _ENUM_CyclicPrefix = {0: 'Normal', 1: 'Extended'}
@@ -1600,32 +1600,35 @@ def _grid_table_SlotDecision(buf, pos):
     vo = _VTABLES[10](buf, vt + 4) if n >= 10 else _VTABLES[n](buf, vt + 4) + (0,) * (10 - n)
     o = vo[0]
     v0 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 12, _STRUCT_DlPdcch.iter_unpack, _build_DlPdcch) if o else None
+    o = vo[1]
+    v1 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 12, _STRUCT_UlPdcch.iter_unpack, _build_UlPdcch) if o else None
     o = vo[2]
-    v1 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_SibPdsch) if o else None
+    v2 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_SibPdsch) if o else None
     o = vo[3]
-    v2 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_RarPdsch) if o else None
+    v3 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_RarPdsch) if o else None
     o = vo[4]
-    v3 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_PagingPdsch) if o else None
+    v4 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_PagingPdsch) if o else None
     o = vo[5]
-    v4 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_Pdsch) if o else None
+    v5 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_Pdsch) if o else None
     o = vo[6]
-    v5 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_Pusch) if o else None
+    v6 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_Pusch) if o else None
     o = vo[7]
-    v6 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_Pucch) if o else None
+    v7 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_Pucch) if o else None
     o = vo[8]
-    v7 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 8, _STRUCT_Ssb.iter_unpack, _build_Ssb) if o else None
+    v8 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 8, _STRUCT_Ssb.iter_unpack, _build_Ssb) if o else None
     o = vo[9]
-    v8 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 18, _STRUCT_CsiRs.iter_unpack, _build_CsiRs) if o else None
+    v9 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 18, _STRUCT_CsiRs.iter_unpack, _build_CsiRs) if o else None
     return {
         "dl_pdcchs": v0,
-        "sib_pdschs": v1,
-        "rar_pdschs": v2,
-        "paging_pdschs": v3,
-        "ue_pdschs": v4,
-        "puschs": v5,
-        "pucchs": v6,
-        "ssbs": v7,
-        "csi_rs": v8,
+        "ul_pdcchs": v1,
+        "sib_pdschs": v2,
+        "rar_pdschs": v3,
+        "paging_pdschs": v4,
+        "ue_pdschs": v5,
+        "puschs": v6,
+        "pucchs": v7,
+        "ssbs": v8,
+        "csi_rs": v9,
     }
 
 

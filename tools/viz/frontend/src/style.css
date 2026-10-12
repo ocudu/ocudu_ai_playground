@@ -49,6 +49,7 @@
   --ch-csi-rs: #9c755f;
   --ch-pusch: #4e79a7;
   --ch-pucch: #8e6bd6;
+  --ch-pdcch: #ff9da7;
   color-scheme: light;
 }
 
@@ -94,6 +95,7 @@
   --ch-csi-rs: #c49a7e;
   --ch-pusch: #73a7ff;
   --ch-pucch: #b39cff;
+  --ch-pdcch: #ffb3ba;
   color-scheme: dark;
 }
 

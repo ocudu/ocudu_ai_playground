@@ -99,7 +99,7 @@ already does the common rollups of it.
 **Scheduler collisions** — for "does the scheduler allocate overlapping resources",
 search the scheduler event traces (`schedtrace_cell<N>.bin`, written when the
 `trace.schedtrace` option is on) for pairs of allocations of a slot that overlap:
-PDSCH/PDSCH, PUSCH/PUSCH, PUSCH/PUCCH and PDCCH/PDCCH (shared CCEs):
+PDSCH/PDSCH, PUSCH/PUSCH, PUSCH/PUCCH, PDCCH/PDSCH and PDCCH/PDCCH (shared CCEs):
 
 ```bash
 python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/schedtrace_collisions.py <trace or run dir> \
@@ -107,7 +107,8 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/schedtrace_collisions.py <trace or run
 ```
 
 PDSCHs of DCI format 1_0 in a common search space (SIB, RAR, paging, fallback) are
-placed from their CORESET, the others from the BWP. PDCCH/PDSCH is not checked.
+placed from their CORESET, the others from the BWP. PDCCHs take the CRBs of their
+CCEs in their CORESET.
 
 ## answer shape
 

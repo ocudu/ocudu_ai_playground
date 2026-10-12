@@ -8,9 +8,9 @@
        "interleaving": {"reg_bundle_size": 6, "interleaver_size": 2, "shift_index": 1}}
     ],
     "search_spaces": [
-      {"id": 0, "coreset_id": 0, "is_common": true, "monitoring_symbols": [8192, 64]},
-      {"id": 1, "coreset_id": 1, "is_common": true, "monitoring_symbols": [8192]},
-      {"id": 2, "coreset_id": 1, "is_common": false, "monitoring_symbols": [8192]}
+      {"id": 0, "coreset_id": 0, "is_common": true, "monitoring_symbols": [1, 1]},
+      {"id": 1, "coreset_id": 1, "is_common": true, "monitoring_symbols": [1]},
+      {"id": 2, "coreset_id": 1, "is_common": false, "monitoring_symbols": [1]}
     ],
     "pdsch_vrb_to_prb_bundle_size": 2},
   "init_ul_bwp": {
