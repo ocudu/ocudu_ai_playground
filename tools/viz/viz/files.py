@@ -17,8 +17,10 @@ class PathNotAllowed(ValueError):
 
 
 def resolve_within(path: str | Path, roots: list[Path]) -> Path:
-    """Resolves a path, following symlinks, and checks that it lies within one of the roots."""
-    p = Path(path)
+    """Resolves a path, with ~ for the home directory and following symlinks, and checks that it lies within one of the
+    roots.
+    """
+    p = Path(path).expanduser()
     if not p.is_absolute():
         raise PathNotAllowed(f"{path}: not an absolute path.")
     try:

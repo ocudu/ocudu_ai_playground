@@ -198,7 +198,7 @@ open_url() {
   xdg-open "$url" >/dev/null 2>&1 || open "$url" >/dev/null 2>&1 || true
 }
 
-run_args=(--rm --init --user "$(id -u):$(id -g)" -p "127.0.0.1:$port:$port"
+run_args=(--rm --init --user "$(id -u):$(id -g)" -e "HOME=$HOME" -p "127.0.0.1:$port:$port"
   --label "$NAME_LABEL=$name" --label "$PORT_LABEL=$port" --label "$FILES_LABEL=${abs_files[*]}")
 [[ -z "$name" ]] || run_args+=(--name "$(container_of "$name")")
 image_args=("$IMAGE" --port "$port" --cache-dir "$cache_dir" "${server_args[@]}" "${abs_files[@]}")

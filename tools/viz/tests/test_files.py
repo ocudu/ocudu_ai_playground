@@ -4,6 +4,7 @@
 import os
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from viz.files import PathNotAllowed, list_dir, resolve_within
@@ -29,6 +30,10 @@ class FilesTest(unittest.TestCase):
 
     def test_resolve_within_roots(self):
         self.assertEqual(resolve_within(self.root / "logs" / "gnb.log", [self.root]), self.root / "logs" / "gnb.log")
+
+    def test_resolve_home_directory(self):
+        with unittest.mock.patch.dict(os.environ, {"HOME": str(self.root)}):
+            self.assertEqual(resolve_within("~/logs/gnb.log", [self.root]), self.root / "logs" / "gnb.log")
 
     def test_rejects_paths_outside_roots(self):
         for path in [
