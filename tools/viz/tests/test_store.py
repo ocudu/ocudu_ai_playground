@@ -339,6 +339,21 @@ class StoreCacheTest(unittest.TestCase):
         store = cache.open(self.log, LogMetricsSource())
         self.assertEqual(store.meta["t_max"] - store.meta["t_min"], 15)
 
+    def test_overlapping_builds(self):
+        # Two servers, e.g. in separate containers, building the same cache file at once.
+        cache, other = StoreCache(self.dir / "cache"), StoreCache(self.dir / "cache")
+        nested = []
+
+        def progress(done, total):
+            if not nested:
+                nested.append(other.open(self.log, LogMetricsSource()))
+
+        store = cache.open(self.log, LogMetricsSource(), progress=progress)
+        self.assertEqual(len(nested), 1)
+        self.assertEqual(len(store.series("mac", "nof_slots")["series"][0]["v"]), 10)
+        self.assertEqual(len(list((self.dir / "cache").glob("*.sqlite"))), 1)
+        self.assertEqual(list((self.dir / "cache").glob("*.tmp")), [])
+
     def test_cache_dir_is_private(self):
         cache = StoreCache(self.dir / "cache")
         cache.open(self.log, LogMetricsSource())

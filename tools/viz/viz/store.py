@@ -13,6 +13,7 @@ import os
 import sqlite3
 import tempfile
 import urllib.parse
+import uuid
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from contextlib import closing, contextmanager
 from pathlib import Path
@@ -1032,14 +1033,17 @@ class StoreCache:
         """Builds a cache file, unless it is complete already, and marks its use."""
         if not self._is_complete(db):
             # Built aside and renamed, so that readers never see a partial database.
-            tmp = db.with_suffix(f".{os.getpid()}.tmp")
-            tmp.unlink(missing_ok=True)
-            conn = sqlite3.connect(tmp)
+            # Unique per build: servers in separate containers share the cache directory and may share a PID.
+            tmp = db.with_suffix(f".{uuid.uuid4().hex}.tmp")
             try:
-                build(conn)
+                conn = sqlite3.connect(tmp)
+                try:
+                    build(conn)
+                finally:
+                    conn.close()
+                os.replace(tmp, db)
             finally:
-                conn.close()
-            os.replace(tmp, db)
+                tmp.unlink(missing_ok=True)
         # The mtime of a cache file marks its last use, for eviction.
         os.utime(db)
 
