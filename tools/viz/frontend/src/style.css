@@ -45,10 +45,10 @@
   --ch-sib: #f28e2b;
   --ch-rar: #edc948;
   --ch-paging: #76b7b2;
-  --ch-ssb: #e15759;
-  --ch-csi-rs: #9c755f;
+  --ch-ssb: #8e6bd6;
+  --ch-csi-rs: #e15759;
   --ch-pusch: #4e79a7;
-  --ch-pucch: #8e6bd6;
+  --ch-pucch: #9c755f;
   --ch-pdcch: #ff9da7;
   --ch-prach: #bab0ac;
   color-scheme: light;
@@ -92,10 +92,10 @@
   --ch-sib: #ffa94d;
   --ch-rar: #f2d55c;
   --ch-paging: #5fd3cb;
-  --ch-ssb: #ff7b7b;
-  --ch-csi-rs: #c49a7e;
+  --ch-ssb: #b39cff;
+  --ch-csi-rs: #ff7b7b;
   --ch-pusch: #73a7ff;
-  --ch-pucch: #b39cff;
+  --ch-pucch: #c49a7e;
   --ch-pdcch: #ffb3ba;
   --ch-prach: #d7cfcb;
   color-scheme: dark;
