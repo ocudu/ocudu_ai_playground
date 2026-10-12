@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import mmap
 import re
@@ -50,7 +51,7 @@ class SchedtraceSource:
 
     name = "schedtrace"
     # The schema hash invalidates the parses of the trace when the schemas change.
-    version = f"5+parsers-{_parsers_version()}+schema-{schedtrace.schema_hash()[:12]}"
+    version = f"6+parsers-{_parsers_version()}+schema-{schedtrace.schema_hash()[:12]}"
 
     def accepts(self, path: Path) -> bool:
         if not _NAME_RE.fullmatch(path.name):
@@ -144,7 +145,7 @@ class SchedtraceSource:
         slot_tx, see _slot_times(), rather than at their timestamps, which jitter with the time the events were made.
         """
         meta = store.meta["grid"]
-        cell = grid_util.Cell(meta["dl_bwp"], meta["ul_bwp"], meta["pucch_resources"])
+        cell = grid_util.Cell(**{f.name: meta[f.name] for f in dataclasses.fields(grid_util.Cell)})
         duration = meta["slot_duration_s"]
         out: dict[str, Any] = {"cell": meta}
         count, rows = store.grid_slots(t0, t1, SLOT_HEAT_MAX)
@@ -195,7 +196,7 @@ def _slot_times(slots: list[tuple[float, int]], duration: float, wrap: int) -> l
 
 
 def _cell_dict(cell: grid_util.Cell) -> dict[str, Any]:
-    return {"dl_bwp": cell.dl_bwp, "ul_bwp": cell.ul_bwp, "pucch_resources": cell.pucch_resources}
+    return dataclasses.asdict(cell)
 
 
 def _event_size(path: Path, offset: int) -> int:

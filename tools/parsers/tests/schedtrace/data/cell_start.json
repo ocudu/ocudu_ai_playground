@@ -3,12 +3,13 @@
   "init_dl_bwp": {
     "generic_params": {"cp": "Extended", "scs": "Khz15", "crbs": {"start": 2, "length": 52}},
     "coresets": [
-      {"id": 0, "crbs": [{"start": 2, "length": 48}], "duration": 2},
-      {"id": 1, "crbs": [{"start": 2, "length": 24}, {"start": 32, "length": 12}], "duration": 1,
+      {"id": 0, "crbs": [{"start": 10, "length": 24}], "duration": 2},
+      {"id": 1, "crbs": [{"start": 8, "length": 12}, {"start": 32, "length": 12}], "duration": 1,
        "interleaving": {"reg_bundle_size": 6, "interleaver_size": 2, "shift_index": 1}}
     ],
     "search_spaces": [
       {"id": 0, "coreset_id": 0, "is_common": true, "monitoring_symbols": [8192, 64]},
+      {"id": 1, "coreset_id": 1, "is_common": true, "monitoring_symbols": [8192]},
       {"id": 2, "coreset_id": 1, "is_common": false, "monitoring_symbols": [8192]}
     ],
     "pdsch_vrb_to_prb_bundle_size": 2},

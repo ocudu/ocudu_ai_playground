@@ -6,9 +6,7 @@
 Kinds of collisions, in KINDS: PDSCH with PDSCH (UE, SIB, RAR and paging PDSCHs), PUSCH with PUSCH, PUSCH with
 PUCCH, and PDCCH with PDCCH, whose CCEs overlap in their CORESET.
 
-The trace does not have the resources of the CORESETs, so PDCCHs are not checked against PDSCHs, and PDSCHs are only
-compared when their VRBs count from the same CRB: the PDSCHs of DCI format 1_0 (SIB, RAR, paging, fallback) count
-them from the first CRB of the CORESET of their PDCCH, TS 38.214 5.1.2.2.2, the others from the start of the BWP.
+Allocations are placed as grid.allocations() places them. PDCCHs are not checked against PDSCHs.
 """
 
 from __future__ import annotations
@@ -24,8 +22,6 @@ from . import event_at, first_offset, offsets
 from .grid import Cell, allocations, cell_of
 
 KINDS = ("PDSCH-PDSCH", "PUSCH-PUSCH", "PUSCH-PUCCH", "PDCCH-PDCCH")
-# DCI types of DlPdcch.dci_type of format 1_1, as dci_dl_rnti_config_type of OCUDU; the others are of format 1_0.
-_DCI_F1_1 = {5}
 # Kind of the collision of two channels of grid.allocations(), by their pair, in both orders.
 _PDSCHS = ("PDSCH", "SIB", "RAR", "Paging")
 _KIND_OF = {
@@ -57,11 +53,9 @@ def slot_collisions(event: dict[str, Any], cell: Cell) -> list[Collision]:
     """The collisions of a CellSlotEvent of schedtrace.read()."""
     out: list[Collision] = []
     pdcchs = _pdcchs(event)
-    items = _items(allocations(event, cell))
-    origins = [_vrb_origin(item, pdcchs) for item in items]
-    for (a, oa), (b, ob) in combinations(zip(items, origins), 2):
+    for a, b in combinations(_items(allocations(event, cell)), 2):
         kind = _KIND_OF.get((a["channel"], b["channel"]))
-        if kind is None or oa != ob:
+        if kind is None:
             continue
         overlap = [o for ra in a["rects"] for rb in b["rects"] if (o := _rect_overlap(ra, rb))]
         if overlap:
@@ -103,20 +97,6 @@ def _items(allocs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         info = {k: v for k, v in a.items() if k not in ("sym_start", "sym_length", "crb_start", "crb_length")}
         items[key] = {**info, "rects": [rect]}
     return list(items.values())
-
-
-def _vrb_origin(item: dict[str, Any], pdcchs: list[dict[str, Any]]) -> int | None:
-    """The CORESET from whose first CRB the VRBs of a PDSCH count, or None for the start of the BWP, as for PUSCHs and
-    PUCCHs. The PDSCH of a UE is of DCI format 1_0 when its PDCCH is, and SIB and paging PDSCHs are taken as scheduled
-    in CORESET 0 when their PDCCH is not in the trace.
-    """
-    channel = item["channel"]
-    if channel not in _PDSCHS:
-        return None
-    pdcch = next((p for p in pdcchs if p["item"][0] == "dl_pdcchs" and p["rnti"] == item.get("rnti")), None)
-    if channel == "PDSCH":
-        return pdcch["coreset_id"] if pdcch and pdcch["dci_type"] not in _DCI_F1_1 else None
-    return pdcch["coreset_id"] if pdcch else 0
 
 
 def _rect_overlap(a: tuple[int, int, int, int], b: tuple[int, int, int, int]) -> tuple[int, int, int, int] | None:

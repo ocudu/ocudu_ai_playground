@@ -202,9 +202,10 @@ stale. The tests compare the decoder with flatc on a trace that `tests/schedtrac
 the generated decoder with `schedtrace.flatbuf`. It decodes about 18k slots per second of busy slots.
 
 `schedtrace.collisions` finds the allocations of a slot whose resources overlap: PDSCH with PDSCH, PUSCH with PUSCH,
-PUSCH with PUCCH, and PDCCH with PDCCH, by their CCEs in a CORESET. The traces lack the resources of the CORESETs, so
-PDCCHs are not checked against PDSCHs, and PDSCHs of DCI format 1_0, whose VRBs count from their CORESET, are only
-compared with each other. `skills/analyze-ran-log/scripts/ocudu/schedtrace_collisions.py` prints them.
+PUSCH with PUCCH, and PDCCH with PDCCH, by their CCEs in a CORESET. PDSCHs are placed as `grid.allocations()` places
+them: those of DCI format 1_0 in a common search space (SIB, RAR, paging, fallback), matched to their PDCCH in the slot,
+from the lowest CRB of its CORESET (TS 38.214 5.1.2.2.2), the others from the BWP start. PDCCHs are not checked against
+PDSCHs. `skills/analyze-ran-log/scripts/ocudu/schedtrace_collisions.py` prints them.
 
 ### Log search, summary and UE procedure latencies
 

@@ -24,8 +24,12 @@ def pusch(rnti, rbs, sym_start=0, sym_length=14):
             "rv_index": 0, "nof_retxs": 0, "k2": 4, "ue_index": 0}
 
 
-def pdcch(rnti, coreset_id, cce, aggr_lvl, dci_type=5):
-    return {"rnti": rnti, "dci_type": dci_type, "coreset_id": coreset_id, "cce": cce, "aggr_lvl": aggr_lvl}
+def pdcch(rnti, coreset_id, cce, aggr_lvl, dci_type=grid.C_RNTI_F1_1, ss_id=2):
+    return {"rnti": rnti, "dci_type": dci_type, "coreset_id": coreset_id, "ss_id": ss_id, "cce": cce, "aggr_lvl": aggr_lvl}
+
+
+def common_pdsch(rbs, **fields):
+    return {"rbs": rbs, "sym_start": 2, "sym_length": 12, **fields}
 
 
 def slot(**decision):
@@ -45,13 +49,11 @@ class CollisionsTest(unittest.TestCase):
         # The DL BWP starts at CRB 2: VRBs 8 and 9 are CRBs 10 and 11, in symbols 10 to 13.
         self.assertEqual(self.kinds(event), [("PDSCH-PDSCH", ["ue_pdschs", 0], ["ue_pdschs", 1], [(10, 4, 10, 2)])])
 
-    def test_pdschs_of_other_vrb_origins_are_not_compared(self):
-        # The PDSCH of DCI format 1_0 counts its VRBs from its CORESET, whose CRBs the trace does not have.
-        event = slot(ue_pdschs=[pdsch(1, vrbs(0, 2)), pdsch(2, vrbs(0, 2))],
-                     dl_pdcchs=[pdcch(1, 0, 0, 2, dci_type=2), pdcch(2, 1, 0, 2)])
-        self.assertEqual(self.kinds(event), [])
-        event["decision"]["dl_pdcchs"][1] = pdcch(2, 0, 4, 2, dci_type=2)
-        self.assertEqual([k[0] for k in self.kinds(event)], ["PDSCH-PDSCH"])
+    def test_pdschs_of_dci_1_0_count_vrbs_from_their_coreset(self):
+        # UE 2 is of DCI format 1_0 in common search space 1 of CORESET 1, which starts at CRB 8, the BWP at CRB 2.
+        event = slot(ue_pdschs=[pdsch(1, vrbs(0, 2)), pdsch(2, vrbs(0, 2)), pdsch(3, vrbs(6, 2))],
+                     dl_pdcchs=[pdcch(1, 1, 0, 2), pdcch(2, 1, 4, 2, dci_type=grid.C_RNTI_F1_0, ss_id=1), pdcch(3, 1, 8, 2)])
+        self.assertEqual(self.kinds(event), [("PDSCH-PDSCH", ["ue_pdschs", 1], ["ue_pdschs", 2], [(2, 12, 8, 2)])])
 
     def test_puschs_and_pucchs(self):
         # PUCCH resource 1: 2 PRBs at PRB 40 in symbol 12, hopping to PRB 7 in symbol 13.
@@ -74,3 +76,35 @@ class CollisionsTest(unittest.TestCase):
 
     def test_find(self):
         self.assertEqual(list(collisions.find(DATA / "schedtrace_cell0.bin")), [])
+
+
+class VrbOriginTest(unittest.TestCase):
+    """VRBs of PDSCHs of DCI format 1_0 in a common search space count from their CORESET, the others from the BWP."""
+
+    def setUp(self):
+        # DL BWP from CRB 2; CORESET 0 from CRB 10, CORESET 1 from CRB 8; search spaces 0 and 1 common, 2 UE-specific.
+        self.cell = grid.cell_of(next(schedtrace.read(DATA / "schedtrace_cell0.bin")))
+
+    def starts(self, **decision):
+        allocs = grid.allocations(slot(**decision), self.cell)
+        return {tuple(a["item"]): a["crb_start"] for a in allocs}
+
+    def test_ue_pdschs(self):
+        starts = self.starts(
+            ue_pdschs=[pdsch(1, vrbs(0, 2)), pdsch(2, vrbs(0, 2)), pdsch(3, vrbs(0, 2)), pdsch(4, vrbs(0, 2))],
+            dl_pdcchs=[pdcch(1, 1, 0, 0), pdcch(2, 1, 1, 0, dci_type=grid.C_RNTI_F1_0, ss_id=1),
+                       pdcch(3, 1, 2, 0, dci_type=grid.TC_RNTI_F1_0, ss_id=2)])
+        # DCI 1_1, DCI 1_0 in a common search space, DCI 1_0 in a UE-specific one, and no PDCCH in the slot.
+        self.assertEqual(starts, {("ue_pdschs", 0): 2, ("ue_pdschs", 1): 8, ("ue_pdschs", 2): 2, ("ue_pdschs", 3): 2})
+
+    def test_common_pdschs(self):
+        starts = self.starts(
+            sib_pdschs=[common_pdsch(vrbs(0, 4), is_sib1=True), common_pdsch(vrbs(4, 4), is_sib1=False)],
+            rar_pdschs=[common_pdsch(vrbs(0, 4), rnti=7, grants=[])],
+            paging_pdschs=[common_pdsch(vrbs(0, 4), paging_ues=[])],
+            dl_pdcchs=[pdcch(0xFFFF, 0, 0, 2, dci_type=grid.SI_F1_0, ss_id=0),
+                       pdcch(0xFFFF, 1, 0, 2, dci_type=grid.SI_F1_0, ss_id=1),
+                       pdcch(7, 1, 4, 2, dci_type=grid.RA_F1_0, ss_id=1)])
+        # SIBs by the order of their PDCCHs, the RAR by its RNTI, and paging, without a PDCCH, from CORESET 0.
+        self.assertEqual(starts, {("sib_pdschs", 0): 10, ("sib_pdschs", 1): 12, ("rar_pdschs", 0): 8,
+                                  ("paging_pdschs", 0): 10})

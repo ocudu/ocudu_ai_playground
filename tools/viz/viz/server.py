@@ -112,7 +112,7 @@ def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
     info["event_type_counts"] = s.event_type_counts
     info["notes"] = s.meta.get("notes") or []
     if grid := s.meta.get("grid"):
-        info["grid"] = {k: v for k, v in grid.items() if k != "pucch_resources"}
+        info["grid"] = {k: v for k, v in grid.items() if k not in ("pucch_resources", "coresets", "search_spaces")}
     info["datasets"] = [
         {
             "name": ds["name"],

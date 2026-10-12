@@ -17,8 +17,8 @@
           "id": 0,
           "crbs": [
             {
-              "start": 2,
-              "length": 48
+              "start": 10,
+              "length": 24
             }
           ],
           "duration": 2
@@ -27,8 +27,8 @@
           "id": 1,
           "crbs": [
             {
-              "start": 2,
-              "length": 24
+              "start": 8,
+              "length": 12
             },
             {
               "start": 32,
@@ -51,6 +51,14 @@
           "monitoring_symbols": [
             8192,
             64
+          ]
+        },
+        {
+          "id": 1,
+          "coreset_id": 1,
+          "is_common": true,
+          "monitoring_symbols": [
+            8192
           ]
         },
         {

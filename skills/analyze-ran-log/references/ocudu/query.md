@@ -106,8 +106,8 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/schedtrace_collisions.py <trace or run
   [--kinds PUSCH-PUCCH,PDCCH-PDCCH] [--rnti 0x4601] [--summary] [-j <workers>]
 ```
 
-The traces lack the CORESET resources, so PDCCH/PDSCH is not checked, and PDSCHs
-of DCI format 1_0 (SIB, RAR, paging, fallback) are only compared with each other.
+PDSCHs of DCI format 1_0 in a common search space (SIB, RAR, paging, fallback) are
+placed from their CORESET, the others from the BWP. PDCCH/PDSCH is not checked.
 
 ## answer shape
 

@@ -162,7 +162,7 @@ class GeneratedTest(unittest.TestCase):
         self.assertEqual(grid.allocations(brief[1], cell), grid.allocations(full[1], cell))
         self.assertEqual([i["type"] for i in brief[1]["inputs"]], [i["type"] for i in full[1]["inputs"]])
         self.assertEqual((brief[1]["slot_tx"], brief[1]["latency_us"]), (full[1]["slot_tx"], full[1]["latency_us"]))
-        self.assertNotIn("dl_pdcchs", brief[1]["decision"])
+        self.assertNotIn("ul_pdcchs", brief[1]["decision"])
         self.assertEqual(brief[2], full[2])
 
     def test_grid_fields_exist(self):

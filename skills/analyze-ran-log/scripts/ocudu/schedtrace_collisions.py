@@ -10,9 +10,8 @@ Decodes schedtrace_cell<N>.bin with the `parsers` package of this repo and print
 whose resources overlap: PDSCH with PDSCH (UE, SIB, RAR, paging), PUSCH with PUSCH, PUSCH with PUCCH, and PDCCH with
 PDCCH (CCEs shared in a CORESET).
 
-The trace has no CORESET resources, so PDCCHs are not checked against PDSCHs, and PDSCHs are only compared when their
-VRBs count from the same CRB: those of DCI format 1_0 (SIB, RAR, paging, fallback) from their CORESET, the others
-from their BWP.
+The VRBs of PDSCHs of DCI format 1_0 in a common search space (SIB, RAR, paging, fallback) count from their CORESET,
+the others from their BWP. PDCCHs are not checked against PDSCHs.
 
 Usage:
   python3 schedtrace_collisions.py <path>                            # every collision, then counts per kind
