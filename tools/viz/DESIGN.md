@@ -39,8 +39,8 @@ updated as they are agreed.
 - **F10. Live tail:** follow a file that is still being written.
 - **F11. Shareable state:** the current view (sources, datasets, fields, filters, time range) is encoded in
   the URL.
-- **F12. Multiple sources:** `ocudu-viz cu.log du.log`. Each source is shown in its own tab, with its own
-  plots and zoom range; one tab is shown at a time.
+- **F12. Multiple sources:** `ocudu-viz cu.log du.log`. Each run, a file or the artifacts of one directory (D16), is
+  shown in its own tab, with its own plots and zoom range; one tab is shown at a time.
 - **F13. Time modes:** absolute (log wall clock, default) or relative (time since the start of the log).
 - **F14. Events overlay:** event datasets drawn on top of the time series plots.
 - **F15. Open files from the page:** start without files and open them from a file browser in the page.
@@ -114,7 +114,7 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 ### D4. First version scope
 
 - In: CLI, log metrics source type, F1, F2, F6, F7, F8, F9, F12, F13, D1, D2.
-- Deferred: F10 live tail, F14 events, Docker.
+- Deferred: F10 live tail, F14 events (since done, D14), Docker (since done, D12).
 - Without explicit split values, only the first 256 series are returned, since sparse splits
   (e.g. ~1000 short-lived UEs) cannot be reduced by downsampling, and the statistics of the first 16, which the
   legends list too.
@@ -160,10 +160,13 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 
 - The view (F11) is encoded as base64url JSON in the URL fragment (`#v=...`), updated in place with
   `history.replaceState` shortly after each change, and restored on load.
-- Saved: time mode, the selected tab, and per tab its source, zoom range and plots, each with its dataset,
-  instance, field, split, selected split values, filter and view mode. The state carries a version number.
-- Tabs are saved by source display name and matched by name to the open sources. Tabs of sources that are
-  not open, and plots of missing datasets, are skipped with a warning. No file paths are put in the URL.
+- Saved: time mode, the selected tab, and per tab its run, zoom range, shown event categories, the answer to whether
+  to open the rest of its run (D16) and its widgets, each with its kind, source and settings: dataset, instance,
+  field, second field, split, selected split values, filter, view mode, column filter, and for traces the joined
+  sources and row identifier. The state carries a version number; a state of another version is ignored.
+- Tabs are saved by run name and matched by name to the open runs, and widgets by the file name of their source.
+  Tabs of runs that are not open, and widgets of missing sources or datasets, are skipped with a warning. No file
+  paths are put in the URL.
 
 ### D10. Themes
 
@@ -196,7 +199,8 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   the directory of any file outside them and any `--root DIR`, so files and links keep their host paths.
   The temp dir is included because gnb logs are often written there. The parse cache, under the temp dir,
   is mounted writable on top.
-- The container runs as the host user, so that it can read the user's files and owns the cache it writes.
+- The container runs as the host user, so that it can read the user's files and owns the cache it writes. It gets
+  the host `HOME`, since that user has no home in the image, so that `~` in paths typed in the page is the host home.
 - The server listens on all interfaces inside the container, and the port is published on the host
   loopback only (`127.0.0.1`), never on other interfaces.
 - The wrapper opens the browser once the server listens, since a container cannot open the host browser.
@@ -207,12 +211,14 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 ### D13. Opening files from the page
 
 - The server only lists and opens files under allowed roots: the directories given with `--root`, the
-  home and temp directories by default. The wrapper passes the directories it mounts. Paths are resolved, following
-  symlinks, before checking them against the roots.
-- `GET /api/roots` and `GET /api/fs?path&hidden` list directories. `POST /api/sources {path}` opens a file:
-  parsing runs in a background thread, and `/api/sources` reports each source's status (`parsing`, `ready`,
-  `error`, `closed`) and progress, which the page polls while a source is parsing. Opening an open file
-  selects its tab. `DELETE /api/sources/{id}` closes a source and releases its store; ids are not reused.
+  home and temp directories by default. The wrapper passes the directories it mounts. Paths are resolved, with `~`
+  for the home directory and following symlinks, before checking them against the roots.
+- `GET /api/roots` and `GET /api/fs?path&hidden` list directories. `POST /api/runs {path}` opens a file or a
+  directory as a run (D16): parsing runs in a background thread, and `/api/sources` reports each source's status
+  (`deferred`, `parsing`, `ready`, `error`, `closed`) and progress, which the page polls while a source is parsing.
+  Opening an open file selects its tab. `DELETE /api/runs/{id}` closes a run and releases the stores of its sources
+  that no other run uses; `POST` and `DELETE /api/runs/{id}/sources` add and remove files of a run. Ids are not
+  reused.
 - Opened sources stay in the server for as long as it runs, so reloads keep them. The URL view state still
   contains no file paths.
 - The file dialog has a `Recent` view with the last 15 files opened, kept in browser storage, so that it
@@ -302,7 +308,8 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - Each source keeps its own parse, cache database, status and id. A run lists its sources, and the page polls them as
   today.
 - Plots name their source: the dataset picker groups datasets by source, e.g. `du.log › sched_ue`, so one tab can
-  plot metrics of several sources. The URL view state lists the files of each run.
+  plot metrics of several sources. The URL view state names the run of each tab and the source file of each widget
+  (D9).
 - Events and the trace merge the events of all the sources of a run. Pcaps give the protocol messages, i.e. F1AP,
   NGAP and E1AP messages, the RRC and NAS messages that F1AP carries, and failures, independently of log levels and
   log wording. Logs give what pcaps do not show, e.g. PRACH, contention resolution timeouts, RLF, warnings and errors.
@@ -395,17 +402,28 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   pcaps (traces of a few minutes are hundreds of MB). Its records are the events, the text a summary line and the
   detail the decoded event, and it has no datasets: its view is the `grid` panel.
 - `parsers.schedtrace.grid` places the allocations of a slot as rectangles of symbols and CRBs. The trace has no
-  VRB-to-PRB interleaving, RBG configuration, CORESET#0 or PRACH and SRS frequency resources, so VRBs map to PRBs one
-  to one, RBGs have the configuration 1 size of the BWP, common PDSCHs are placed in the initial DL BWP, and PDCCH,
-  PRACH and SRS are left out. The UL allocations of a slot decision are transmitted in its slot.
+  VRB-to-PRB interleaving, RBG configuration or SRS frequency resources, so VRBs map to PRBs one to one, RBGs have the
+  configuration 1 size of the BWP, and SRS is left out. PDSCHs of DCI format 1_0 in a common search space are placed
+  from the CORESET of their PDCCH, matched to it in the slot, PDCCHs from the REG bundles of their CCEs, and PRACH
+  occasions from msg1-FrequencyStart and their format; long PRACH formats last past their slot, counted in the
+  occupancy only in their first. The UL allocations of a slot decision are transmitted in its slot.
 - The grid shares the time axis of the plots, at which allocations are sub-pixel, so it changes its level of detail
   with the window (`/api/grid`): within 400 slots the allocations, decoded on demand from the file offsets of the
   slots (`grid_slots`); within 4000 slots their occupancy per slot, decoded too; beyond, the occupancy stored at
   parse time (`grid_cells`) per bins of 20, 100, 400 or 2000 slots, the finest with at most one bin per pixel. Cells
   are groups of 4 CRBs, shown in the color of their dominant channel, shaded by their total occupancy, since TDD bins
   mix DL and UL.
-- Parsing splits the trace at event boundaries, from the size prefixes, into chunks of 20000 events parsed in the
-  worker pool; bins split between chunks are summed. Two traces of 325 and 73 MB parse in 18 s.
+- Channel colors are `--ch-<channel>` of the theme. The light theme takes the light half of Tableau 20, but for a
+  bluer purple for SSBs, apart from the pink of PDCCHs; the dark theme takes the muted tones of gruvbox, with beige
+  SIBs and faded orange CSI-RS. Allocations are filled with their channel color, as in the legend, and outlined with
+  it darkened, so that adjacent allocations of a channel stay apart.
+- Traces start with the header of their file format version (`parsers.schedtrace`): traces of another major version,
+  or written before OCUDU versioned the format, fail to parse with that error, shown on the page.
+- Parsing splits the trace at event boundaries, from the size prefixes, into about 4 chunks per worker of at least
+  2000 events, parsed in the worker pool with the decoder generated from the schemas, decoding only the fields that
+  placing allocations needs (`grid_only`). Workers return the grid occupancy of the bins within their chunk ready to
+  store, one row per bin, and the parts of the bins that span chunks, which the server process merges. A 325 MB trace
+  parses in 3.2 s and a 73 MB one in 1.4 s with 12 workers.
 - Slots are placed on a grid of slot duration by their `slot_tx`, unwrapped across SFN wraps, at the median
   difference between their timestamps and that grid, rather than at their timestamps: these are stamped when each event
   is made and jitter by up to a few hundred µs, which made the allocations of consecutive slots overlap or leave gaps.
