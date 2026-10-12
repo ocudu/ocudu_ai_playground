@@ -88,16 +88,16 @@
   --ev-failure: #ffd84d;
   --ev-warning: #ff9a3c;
   --ev-error: #ff6b6b;
-  --ch-pdsch: #94db99;
-  --ch-sib: #d2b29c;
-  --ch-rar: #ffbd77;
-  --ch-paging: #85ddd7;
-  --ch-ssb: #c5b3ff;
-  --ch-csi-rs: #ff9a9a;
-  --ch-pusch: #94bcff;
-  --ch-pucch: #f5df82;
-  --ch-pdcch: #ffc5ca;
-  --ch-prach: #e0dad7;
+  --ch-pdsch: #98971a;
+  --ch-sib: #bdae93;
+  --ch-rar: #d65d0e;
+  --ch-paging: #689d6a;
+  --ch-ssb: #b16286;
+  --ch-csi-rs: #af3a03;
+  --ch-pusch: #458588;
+  --ch-pucch: #d79921;
+  --ch-pdcch: #d3869b;
+  --ch-prach: #928374;
   color-scheme: dark;
 }
 
