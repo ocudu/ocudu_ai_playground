@@ -56,11 +56,14 @@ def _union_vector(buf, types_at, values_at, members):
         out.append(_union(buf, values_at + 4 * i, kind, members) if kind else None)
     return out
 
-SCHEMA_HASH = "09d44a2fcc263615a6a8b8a5b346ac45713a7adff3fffe2c9a3f9578bdd58d38"
+SCHEMA_HASH = "f15a1120ee42b2f1a6297e3397215b7e8a9b570ab46e9a40e5f8f008a539c619"
+FORMAT_VERSION = (1, 0)
 
 _ENUM_CyclicPrefix = {0: 'Normal', 1: 'Extended'}
 _ENUM_SubcarrierSpacing = {0: 'Khz15', 1: 'Khz30', 2: 'Khz60', 3: 'Khz120', 4: 'Khz240'}
 _ENUM_HarqAckReportStatus = {0: 'Nack', 1: 'Ack', 2: 'Dtx'}
+_ENUM_FileFormatVersionMajor = {1: 'Value'}
+_ENUM_FileFormatVersionMinor = {0: 'Value'}
 _s_bool = struct.Struct("<?").unpack_from
 _s_u8 = struct.Struct("<B").unpack_from
 _s_u16 = struct.Struct("<H").unpack_from

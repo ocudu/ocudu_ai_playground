@@ -4,8 +4,8 @@
 """Scheduler event traces of OCUDU (schedtrace): the schedtrace_cell<N>.bin files that the scheduler event tracer
 writes, one per cell: a header with the version of the file format, then size-prefixed FlatBuffers CellEvent buffers.
 
-The schemas in fbs/ and the file format version in fbs/trace_file_format.h are copies of those of OCUDU; copy them again
-and regenerate the decoder compiled from them, _generated.py, with python -m parsers.schedtrace.codegen --ocudu <dir>.
+The schemas in fbs/, which hold the file format version, are copies of those of OCUDU; copy them again and regenerate
+the decoder compiled from them, _generated.py, with python -m parsers.schedtrace.codegen --ocudu <dir>.
 Traces of another major version, or without a header, are rejected. Fields that traces of a newer minor version append
 are ignored.
 """
@@ -13,7 +13,6 @@ are ignored.
 from __future__ import annotations
 
 import os
-import re
 import struct
 import warnings
 from collections.abc import Callable, Iterator
@@ -35,14 +34,9 @@ class FormatError(ValueError):
     """A trace without a header or of a file format version that the decoder does not support."""
 
 
-def _format_version() -> tuple[int, int]:
-    text = (FBS_DIR / "trace_file_format.h").read_text()
-    major, minor = (re.search(rf"trace_file_version_{part}\s*=\s*(\d+);", text) for part in ("major", "minor"))
-    return int(major.group(1)), int(minor.group(1))
-
-
 # File format version of the schemas of fbs/, as (major, minor).
-FORMAT_VERSION = _format_version()
+# Absent only from a _generated.py older than it, so that codegen, which imports this package, can still replace it.
+FORMAT_VERSION: tuple[int, int] = getattr(_generated, "FORMAT_VERSION", (0, 0))
 
 
 def version(data: bytes | memoryview) -> tuple[int, int] | None:

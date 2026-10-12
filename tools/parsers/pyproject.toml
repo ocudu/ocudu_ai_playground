@@ -20,4 +20,4 @@ include = ["parsers*"]
 
 [tool.setuptools.package-data]
 # The FlatBuffers schemas that decoding schedtrace files needs.
-parsers = ["schedtrace/fbs/*.fbs", "schedtrace/fbs/*.h"]
+parsers = ["schedtrace/fbs/*.fbs"]

@@ -101,6 +101,9 @@ class FormatVersionTest(unittest.TestCase):
     def with_version(self, major, minor):
         return schedtrace.HEADER.pack(schedtrace.MAGIC, major, minor) + self.data[schedtrace.HEADER.size :]
 
+    def test_format_version_of_the_schemas(self):
+        self.assertEqual(codegen.format_version(schedtrace.decoder().schema), schedtrace.FORMAT_VERSION)
+
     def test_version(self):
         self.assertEqual(schedtrace.version(self.data), schedtrace.FORMAT_VERSION)
         self.assertIsNone(schedtrace.version(self.data[schedtrace.HEADER.size :]))

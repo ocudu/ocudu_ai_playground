@@ -179,8 +179,8 @@ size-prefixed FlatBuffers `CellEvent` buffers. `read()` and `events()` yield eac
 by name, unions with their member as `type`, absent optional fields as `None`. An incomplete last event, e.g. of a
 trace being written, is left out.
 
-`schedtrace.FORMAT_VERSION` is the version of the schemas of `schedtrace/fbs/`, read from its copy of OCUDU's
-`trace_file_format.h`. Traces of another major version, and traces without a header, written before OCUDU versioned the
+`schedtrace.FORMAT_VERSION` is the version of the schemas of `schedtrace/fbs/`, from their `FileFormatVersionMajor`
+and `FileFormatVersionMinor` enums. Traces of another major version, and traces without a header, written before OCUDU versioned the
 format, raise `schedtrace.FormatError`; traces of a newer minor version decode with a warning, without the fields they
 append. `schedtrace.version()` reads the version of a trace.
 
@@ -190,14 +190,14 @@ generator does not support the vectors of unions of the schemas (`CellSlotEvent.
 `schedtrace/_generated.py`, which `schedtrace.codegen` compiles from the schemas into one function per table and
 struct, about 2.3 times faster than `schedtrace.flatbuf`. With `grid_only=True`, `read()`, `events()` and `event_at()`
 decode only the fields of `codegen.GRID_FIELDS`, those that `grid.allocations()` needs and the slot, latency and input
-types, 1.6 times faster again. When OCUDU changes the schemas, copy them with `trace_file_format.h` from an OCUDU
-tree, its working tree or a revision, and regenerate it:
+types, 1.6 times faster again. When OCUDU changes the schemas, copy them from an OCUDU tree, its working tree or a
+revision, and regenerate it:
 
 ```bash
 python -m parsers.schedtrace.codegen --ocudu ~/srs/ocudu [--rev origin/dev]
 ```
 
-`_generated.py` holds the hash of the schemas, the file format header and the generator, and a test fails when it is
+`_generated.py` holds the file format version and the hash of the schemas and the generator, and a test fails when it is
 stale. The tests compare the decoder with flatc on a trace that `tests/schedtrace/data/make_fixtures.sh` builds, and
 the generated decoder with `schedtrace.flatbuf`. It decodes about 18k slots per second of busy slots.
 

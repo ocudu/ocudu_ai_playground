@@ -5,7 +5,7 @@
 
 # Builds the schedtrace test trace from the JSON events with flatc, the FlatBuffers reference compiler, and decodes it
 # back with flatc, as the reference the tests compare the decoder with. Traces start with the file format header of
-# fbs/trace_file_format.h.
+# the version of the schemas.
 # Usage: make_fixtures.sh <flatc>, e.g. the one of an OCUDU build, build/_deps/flatbuffers-build/flatc.
 set -euo pipefail
 flatc=$1
@@ -13,9 +13,10 @@ here=$(cd "$(dirname "$0")" && pwd)
 fbs="$here/../../../parsers/schedtrace/fbs/cell_event.fbs"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-version() { sed -n "s/.*trace_file_version_$1 = \([0-9]*\);.*/\1/p" "$(dirname "$fbs")/trace_file_format.h"; }
-major=$(version major)
-minor=$(version minor)
+# The Value of the FileFormatVersion<Part> enum of the schemas.
+version() { sed -n "/^enum FileFormatVersion$1 /,/}/s/^ *Value = \([0-9]*\).*/\1/p" "$fbs"; }
+major=$(version Major)
+minor=$(version Minor)
 # The header of a trace of version major.minor: magic, then both as little-endian uint16.
 header() { printf "SCHT$(printf '\\%03o\\%03o\\%03o\\%03o' $(($1 & 255)) $(($1 >> 8)) $(($2 & 255)) $(($2 >> 8)))"; }
 events=(cell_start cell_slot cell_stop)
