@@ -17,6 +17,16 @@ tools/viz/ocudu-viz du1/du.log du2/du.log    # several files, one tab each
 tools/viz/ocudu-viz run_dir/                 # the gNB artifacts of a directory, in one tab
 ```
 
+Several servers can run at once, each on its own port. Name a session with `--name` to manage it: starting a session
+with the name of a running one replaces it, keeping its port, while unnamed sessions are never touched. `--detach`
+returns once the server is up:
+
+```bash
+tools/viz/ocudu-viz --name test --detach --no-browser run_dir/   # prints the URL and returns
+tools/viz/ocudu-viz --list                                       # running sessions, named or not
+tools/viz/ocudu-viz --stop test
+```
+
 Each tab shows a run: a single file, or the supported files of one directory, e.g. the `gnb.log` (or `du.log` and
 `cu.log`) and the `mac`, `rlc`, `f1ap`, `e1ap` and `ngap` pcaps of a test run. Opening a file opens it alone; when
 other files of its directory come from the same run, i.e. logs of the same build (named on their first line) and logs

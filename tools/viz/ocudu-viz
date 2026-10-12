@@ -10,8 +10,12 @@
 set -euo pipefail
 
 readonly IMAGE="ocudu-viz:latest"
-# Label of the images built from the Dockerfile.
+# Label of the images built from the Dockerfile, inherited by their containers.
 readonly IMAGE_LABEL="org.ocudu.tool=ocudu-viz"
+# Labels of a server container: its session name, port and opened files.
+readonly NAME_LABEL="org.ocudu.viz.name"
+readonly PORT_LABEL="org.ocudu.viz.port"
+readonly FILES_LABEL="org.ocudu.viz.files"
 readonly DOCKER="${OCUDU_VIZ_DOCKER:-docker}"
 script_dir="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 readonly script_dir
@@ -26,6 +30,9 @@ directories.
 
 Options:
   --port N          Host port to serve on, or the next free one (default: 8765).
+  --name NAME       Name this session, so it can be stopped by name. Starting a session with the name
+                    of a running one replaces it. Sessions without a name are never replaced.
+  --detach          Run in the background: return once the server listens, printing its URL.
   --root DIR        Also mount DIR read-only and allow opening its files from the page, e.g. a shared
                     artifacts directory. Repeatable. The home and temp (\$TMPDIR or /tmp)
                     directories are always mounted read-only.
@@ -36,6 +43,8 @@ Options:
   --clear-cache     Remove all parse caches, and pcaps staged for tshark, before starting.
   -j K, --jobs K    Worker processes that parse large logs, 1 to parse in the server process
                     (default: one per CPU, up to 12).
+  --list            List the running sessions, then exit.
+  --stop NAME       Stop the session NAME, then exit.
   --clean           Remove the ocudu-viz images and parse caches, then exit.
   -h, --help        Show this help.
 
@@ -50,6 +59,10 @@ die() {
 }
 
 port=8765
+name=""
+detach=0
+stop_name=""
+list=0
 open_browser=1
 rebuild=0
 clean=0
@@ -62,6 +75,10 @@ files=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --port) port="${2:?--port needs a value}"; shift 2 ;;
+    --name) name="${2:?--name needs a value}"; shift 2 ;;
+    --detach) detach=1; shift ;;
+    --stop) stop_name="${2:?--stop needs a value}"; shift 2 ;;
+    --list) list=1; shift ;;
     --root) roots+=("$(readlink -f "${2:?--root needs a value}")"); shift 2 ;;
     --no-browser) open_browser=0; shift ;;
     --rebuild) rebuild=1; shift ;;
@@ -77,6 +94,30 @@ while [[ $# -gt 0 ]]; do
 done
 
 command -v "$DOCKER" >/dev/null || die "$DOCKER not found. Install Docker, or set OCUDU_VIZ_DOCKER (e.g. to podman)."
+
+for n in "$name" "$stop_name"; do
+  [[ -z "$n" || "$n" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]] || die "invalid session name $n: letters, digits, _ . - only"
+done
+
+# Container of the session NAME.
+container_of() {
+  echo "ocudu-viz-$1"
+}
+
+if [[ $list -eq 1 ]]; then
+  "$DOCKER" ps --filter "label=$IMAGE_LABEL" \
+    --format "table {{.Label \"$NAME_LABEL\"}}\t{{.Label \"$PORT_LABEL\"}}\t{{.RunningFor}}\t{{.Label \"$FILES_LABEL\"}}" |
+    sed '1s/.*/NAME\tPORT\tSTARTED\tFILES/'
+  exit 0
+fi
+
+if [[ -n "$stop_name" ]]; then
+  c="$(container_of "$stop_name")"
+  "$DOCKER" ps -q --filter "name=^${c}\$" | grep -q . || die "no session named $stop_name"
+  "$DOCKER" stop "$c" >/dev/null
+  echo "Stopped session $stop_name." >&2
+  exit 0
+fi
 
 cache_dir="${TMPDIR:-/tmp}/ocudu-viz-$(id -u)"
 
@@ -133,18 +174,54 @@ mkdir -p -m 700 "$cache_dir"
 port_busy() {
   (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null
 }
+# True once the server answers HTTP. The container engine accepts connections on the published port before
+# the server inside listens, so an open port alone does not mean the server is up.
+server_up() {
+  (
+    exec 3<>"/dev/tcp/127.0.0.1/$1"
+    printf 'GET /api/runs HTTP/1.0\r\n\r\n' >&3
+    IFS= read -r -t 2 line <&3
+    [[ "$line" == HTTP/* ]]
+  ) 2>/dev/null
+}
+# Replaced before picking the port, so that a replacement keeps the port of the session it replaces.
+if [[ -n "$name" ]] && "$DOCKER" ps -aq --filter "name=^$(container_of "$name")\$" | grep -q .; then
+  echo "Replacing the running session $name." >&2
+  "$DOCKER" rm -f "$(container_of "$name")" >/dev/null
+fi
 while port_busy "$port"; do
   port=$((port + 1))
 done
 url="http://127.0.0.1:$port/"
 
+open_url() {
+  xdg-open "$url" >/dev/null 2>&1 || open "$url" >/dev/null 2>&1 || true
+}
+
+run_args=(--rm --init --user "$(id -u):$(id -g)" -p "127.0.0.1:$port:$port"
+  --label "$NAME_LABEL=$name" --label "$PORT_LABEL=$port" --label "$FILES_LABEL=${abs_files[*]}")
+[[ -z "$name" ]] || run_args+=(--name "$(container_of "$name")")
+image_args=("$IMAGE" --port "$port" --cache-dir "$cache_dir" "${server_args[@]}" "${abs_files[@]}")
+
+if [[ $detach -eq 1 ]]; then
+  id="$("$DOCKER" run -d "${run_args[@]}" "${mounts[@]}" -v "$cache_dir:$cache_dir" "${image_args[@]}")"
+  # Waits for the server, which listens once the given files are parsed.
+  until server_up "$port"; do
+    "$DOCKER" ps -q --filter "id=$id" | grep -q . || die "the server exited while starting; run without --detach to see why"
+    sleep 1
+  done
+  echo "Serving${name:+ session $name} at $url" >&2
+  [[ $open_browser -eq 0 ]] || open_url
+  exit 0
+fi
+
 if [[ $open_browser -eq 1 ]]; then
   # Opens the browser once the server listens, which is after the given files are parsed.
   (
-    until port_busy "$port"; do
+    until server_up "$port"; do
       sleep 1
     done
-    xdg-open "$url" >/dev/null 2>&1 || open "$url" >/dev/null 2>&1 || true
+    open_url
   ) &
   browser_pid=$!
   trap 'kill "$browser_pid" 2>/dev/null || true' EXIT
@@ -152,9 +229,4 @@ fi
 
 tty_args=()
 [[ -t 0 && -t 1 ]] && tty_args=(-it)
-"$DOCKER" run --rm --init "${tty_args[@]}" \
-  --user "$(id -u):$(id -g)" \
-  -p "127.0.0.1:$port:$port" \
-  "${mounts[@]}" \
-  -v "$cache_dir:$cache_dir" \
-  "$IMAGE" --port "$port" --cache-dir "$cache_dir" "${server_args[@]}" "${abs_files[@]}"
+"$DOCKER" run "${run_args[@]}" "${tty_args[@]}" "${mounts[@]}" -v "$cache_dir:$cache_dir" "${image_args[@]}"
