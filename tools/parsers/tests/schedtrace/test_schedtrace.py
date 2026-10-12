@@ -4,6 +4,7 @@
 import json
 import tempfile
 import unittest
+import warnings
 from pathlib import Path
 from unittest import mock
 
@@ -13,6 +14,10 @@ from parsers.schedtrace import _generated, codegen, grid
 # Trace built by data/make_fixtures.sh with flatc from the JSON events, and flatc's decoding of it.
 DATA = Path(__file__).parent / "data"
 EVENTS = ("cell_start", "cell_slot", "cell_stop")
+# Hash of the schemas of fbs/, codegen.fbs_hash(), of each file format version.
+SCHEMA_HASHES = {
+    (1, 0): "6d7243ad03a3afcb1c055bbaad68de7cc29a96e71bcca6da45acee4b752d5aa3",
+}
 
 
 def from_flatc(value):
@@ -82,7 +87,8 @@ class SchedtraceTest(unittest.TestCase):
         self.assertEqual(list(schedtrace.read(DATA / "schedtrace_cell0.bin")), list(schedtrace.events(data)))
 
     def test_fields_of_newer_schemas_are_ignored(self):
-        (stop,) = schedtrace.read(DATA / "cell_stop_newer.bin")
+        with self.assertWarnsRegex(UserWarning, "format 1.1 is newer than 1.0"):
+            (stop,) = schedtrace.read(DATA / "cell_stop_newer.bin")
         self.assertEqual(stop, {"timestamp_us": 1, "type": "CellStopEvent", "cell_idx": 3})
 
     def test_schema(self):
@@ -91,6 +97,51 @@ class SchedtraceTest(unittest.TestCase):
         self.assertEqual([(f.name, f.slot) for f in tables["CellSlotEvent"].fields],
                          [("slot_tx", 0), ("latency_us", 1), ("inputs", 3), ("decision", 4)])
         self.assertIsNone(next(f for f in tables["VrbAlloc"].fields if f.name == "vrb_second_hop_start").default)
+
+
+class FormatVersionTest(unittest.TestCase):
+    def setUp(self):
+        self.data = (DATA / "schedtrace_cell0.bin").read_bytes()
+
+    def with_version(self, major, minor):
+        return schedtrace.HEADER.pack(schedtrace.MAGIC, major, minor) + self.data[schedtrace.HEADER.size :]
+
+    def test_schemas_match_the_version(self):
+        self.assertEqual(SCHEMA_HASHES.get(schedtrace.FORMAT_VERSION), codegen.fbs_hash(),
+                         "fbs/ differs from the schemas of its file format version in fbs/trace_file_format.h. Copy both "
+                         "from OCUDU with python -m parsers.schedtrace.codegen --ocudu <dir>, then add the hash of the "
+                         "version to SCHEMA_HASHES.")
+
+    def test_version(self):
+        self.assertEqual(schedtrace.version(self.data), schedtrace.FORMAT_VERSION)
+        self.assertIsNone(schedtrace.version(self.data[schedtrace.HEADER.size :]))
+        self.assertIsNone(schedtrace.version(b"SCHT"))
+
+    def test_trace_without_header_is_rejected(self):
+        with self.assertRaisesRegex(schedtrace.FormatError, "header is missing"):
+            list(schedtrace.events(self.data[schedtrace.HEADER.size :]))
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "schedtrace_cell0.bin"
+            path.write_bytes(self.data[schedtrace.HEADER.size :])
+            with self.assertRaises(schedtrace.FormatError):
+                list(schedtrace.read(path))
+
+    def test_other_major_is_rejected(self):
+        major, minor = schedtrace.FORMAT_VERSION
+        for version in [(major + 1, 0), *([(major - 1, minor)] if major > 0 else [])]:
+            with self.assertRaisesRegex(schedtrace.FormatError, "is not supported"):
+                schedtrace.offsets(self.with_version(*version))
+
+    def test_older_minor_is_accepted(self):
+        major, minor = schedtrace.FORMAT_VERSION
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            self.assertEqual(len(list(schedtrace.events(self.with_version(major, max(0, minor - 1))))), 3)
+
+    def test_partial_header_has_no_events(self):
+        for head in (b"", b"S", b"SCHT\x01"):
+            self.assertEqual(list(schedtrace.events(head)), [])
+            self.assertEqual(schedtrace.offsets(head), [])
 
 
 class GeneratedTest(unittest.TestCase):
@@ -105,7 +156,10 @@ class GeneratedTest(unittest.TestCase):
         dec = schedtrace.decoder()
         for name in ("schedtrace_cell0.bin", "cell_stop_newer.bin"):
             data = memoryview((DATA / name).read_bytes())
-            for offset in schedtrace.offsets(data):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                offsets = schedtrace.offsets(data)
+            for offset in offsets:
                 size = int.from_bytes(data[offset : offset + 4], "little")
                 buf = data[offset + 4 : offset + 4 + size]
                 # Compared as lists of items, so that the order of the fields matters too.

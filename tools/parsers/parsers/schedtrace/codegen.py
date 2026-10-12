@@ -9,12 +9,19 @@ Run it after changing fbs/ or this file:
 
     python -m parsers.schedtrace.codegen
 
+or to copy the schemas and the file format version of an OCUDU tree into fbs/ first, of its working tree or of a
+revision:
+
+    python -m parsers.schedtrace.codegen --ocudu ~/srs/ocudu [--rev origin/dev]
+
 The generated module holds the hash of its sources, SCHEMA_HASH, which the decoder checks against source_hash().
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +31,9 @@ from .schema import SCALARS, Schema, Struct, Table
 HERE = Path(__file__).parent
 FBS_DIR = HERE / "fbs"
 OUTPUT = HERE / "_generated.py"
+# Directory of the schemas and of the file format header in an OCUDU tree.
+OCUDU_TRACE_DIR = "lib/scheduler/trace"
+FORMAT_HEADER = "trace_file_format.h"
 # Names of the scalar unpackers of the generated module, by struct format character.
 _FORMAT_NAMES = {"?": "bool", "b": "i8", "B": "u8", "h": "i16", "H": "u16", "i": "i32", "I": "u32", "q": "i64", "Q": "u64",
                  "f": "f32", "d": "f64"}
@@ -101,8 +111,17 @@ def source_hash() -> str:
     """Hash of the sources of the generated decoder: the schemas of fbs/ and this file, without their license headers,
     which the header annotator rewrites.
     """
+    return _hash([*sorted(FBS_DIR.glob("*.fbs")), Path(__file__)])
+
+
+def fbs_hash() -> str:
+    """Hash of the schemas of fbs/, without their license headers."""
+    return _hash(sorted(FBS_DIR.glob("*.fbs")))
+
+
+def _hash(paths: list[Path]) -> str:
     h = hashlib.sha256()
-    for path in [*sorted(FBS_DIR.glob("*.fbs")), Path(__file__)]:
+    for path in paths:
         h.update(path.name.encode() + b"\0")
         for line in path.read_text().splitlines():
             if "SPDX-" not in line:
@@ -362,7 +381,42 @@ class _Generator:
         return f"_tables(buf, {at}, {self._name('table', tname)})"
 
 
+def sync(ocudu: Path, rev: str | None = None) -> None:
+    """Replaces the schemas and the file format header of fbs/ with those of an OCUDU tree, of a revision or its working
+    tree.
+    """
+    root = ocudu / OCUDU_TRACE_DIR
+    if rev is None:
+        names = [f"fbs/{p.name}" for p in (root / "fbs").glob("*.fbs")]
+        read = lambda name: (root / name).read_bytes()
+    else:
+        listing = _git(ocudu, "ls-tree", "--name-only", f"{rev}:{OCUDU_TRACE_DIR}/fbs").decode().split()
+        names = [f"fbs/{n}" for n in listing if n.endswith(".fbs")]
+        read = lambda name: _git(ocudu, "show", f"{rev}:{OCUDU_TRACE_DIR}/{name}")
+    if not names:
+        raise SystemExit(f"No schemas in {root / 'fbs'}{f' at {rev}' if rev else ''}.")
+    # Read all before writing any, so that a missing file leaves fbs/ as it was.
+    files = {Path(name).name: read(name) for name in [*names, FORMAT_HEADER]}
+    for old in FBS_DIR.glob("*.fbs"):
+        old.unlink()
+    for name, content in files.items():
+        (FBS_DIR / name).write_bytes(content)
+    print(f"Copied {len(files)} files into {FBS_DIR}.")
+
+
+def _git(repo: Path, *args: str) -> bytes:
+    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True).stdout
+
+
 def main() -> None:
+    ap = argparse.ArgumentParser(description="Generates the schedtrace decoder from the schemas of fbs/.")
+    ap.add_argument("--ocudu", type=Path, help="OCUDU tree to copy the schemas and the file format header from first")
+    ap.add_argument("--rev", help="revision of the OCUDU tree to copy from, instead of its working tree")
+    args = ap.parse_args()
+    if args.rev and not args.ocudu:
+        ap.error("--rev needs --ocudu")
+    if args.ocudu:
+        sync(args.ocudu.expanduser(), args.rev)
     OUTPUT.write_text(generate(fbs.load(FBS_DIR / "cell_event.fbs"), source_hash()))
     print(f"Wrote {OUTPUT}.")
 

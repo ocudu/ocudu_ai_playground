@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -38,6 +39,16 @@ class SchedtraceCollisionsTest(unittest.TestCase):
         res = run(str(TRACE.parent), "--summary")
         self.assertEqual(res.returncode, 0, res.stderr)
         self.assertIn("0 collisions", res.stdout)
+
+    def test_trace_without_header(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "schedtrace_cell0.bin"
+            # The 8-byte header of the file format left out, as in traces written before OCUDU versioned it.
+            path.write_bytes(TRACE.read_bytes()[8:])
+            res = run(str(path))
+        self.assertEqual(res.returncode, 1)
+        self.assertIn("ERROR:", res.stderr)
+        self.assertIn("header is missing", res.stderr)
 
     def test_unknown_kind(self):
         res = run(str(TRACE), "--kinds", "PUSCH-PDSCH")

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 // SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
+include "common.fbs";
+
 namespace ocudu.schedtrace.fbs;
 
 /// Type-0 (RBG bitmap) resource allocation.
@@ -176,16 +178,14 @@ table PagingPdsch {
 /// Information about an SSB allocation.
 struct Ssb {
   ssb_index: uint8;
-  crb_start: uint16;
-  crb_length: uint16;
+  crbs: CrbInterval;
   sym_start: uint8;
   sym_length: uint8;
 }
 
 /// Information about a CSI-RS allocation.
 struct CsiRs {
-  crb_start: uint16;
-  crb_length: uint16;
+  crbs: CrbInterval;
   type: uint8;
   row: uint8;
   freq_domain: uint16;

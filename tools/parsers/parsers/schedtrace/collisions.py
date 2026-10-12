@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from itertools import combinations
 from typing import Any
 
-from . import event_at, offsets
+from . import event_at, first_offset, offsets
 from .grid import Cell, allocations, cell_of
 
 KINDS = ("PDSCH-PDSCH", "PUSCH-PUSCH", "PUSCH-PUCCH", "PDCCH-PDCCH")
@@ -75,12 +75,13 @@ def slot_collisions(event: dict[str, Any], cell: Cell) -> list[Collision]:
     return out
 
 
-def find(path: str | os.PathLike[str], start: int = 0, end: int | None = None) -> Iterator[Collision]:
+def find(path: str | os.PathLike[str], start: int | None = None, end: int | None = None) -> Iterator[Collision]:
     """The collisions of the slots of a trace, of the events from the byte offset start, which must be the offset of an
-    event, up to end. The cell is read from the first event of the trace.
+    event, or the first one, up to end. The cell is read from the first event of the trace.
     """
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-        first = event_at(mm, 0) if len(mm) >= 4 else None
+        pos = first_offset(mm, os.fspath(path))
+        first = event_at(mm, pos) if len(mm) >= pos + 4 else None
         if first is None or first["type"] != "CellStartEvent":
             raise ValueError(f"{path}: the trace does not start with the start event of its cell.")
         cell = cell_of(first)

@@ -58,7 +58,8 @@ class SchedtraceSource:
         try:
             with path.open("rb") as f:
                 head = f.read(4)
-            return len(head) == 4 and _U32.unpack(head)[0] <= path.stat().st_size
+            # Traces without the header of the file format are accepted too, so that parsing tells why they fail.
+            return head == schedtrace.MAGIC or (len(head) == 4 and _U32.unpack(head)[0] <= path.stat().st_size)
         except OSError:
             return False
 
@@ -68,7 +69,11 @@ class SchedtraceSource:
 
     def run_identity(self, path: Path) -> RunIdentity | None:
         with path.open("rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-            offsets = schedtrace.offsets(mm)
+            try:
+                offsets = schedtrace.offsets(mm)
+            except schedtrace.FormatError:
+                # Left to parse(), whose error the page shows.
+                return None
             if not offsets:
                 return None
             first = schedtrace.event_at(mm, offsets[0])["timestamp_us"] / 1e6

@@ -56,7 +56,7 @@ def _union_vector(buf, types_at, values_at, members):
         out.append(_union(buf, values_at + 4 * i, kind, members) if kind else None)
     return out
 
-SCHEMA_HASH = "526e92f86e162866148d2bc2ff0c6ea96cc2a0eb50dc275987b1a9bbaac3383b"
+SCHEMA_HASH = "f830f2702b1a0dbc2469cac3adb3ea6e81acdb4ccf2ea1e36c634a4fb5aeefc7"
 
 _ENUM_CyclicPrefix = {0: 'Normal', 1: 'Extended'}
 _ENUM_SubcarrierSpacing = {0: 'Khz15', 1: 'Khz30', 2: 'Khz60', 3: 'Khz120', 4: 'Khz240'}
@@ -66,6 +66,7 @@ _s_u8 = struct.Struct("<B").unpack_from
 _s_u16 = struct.Struct("<H").unpack_from
 _s_u32 = struct.Struct("<I").unpack_from
 _s_i64 = struct.Struct("<q").unpack_from
+_STRUCT_CrbInterval = struct.Struct("<HH")
 _STRUCT_BwpConfiguration = struct.Struct("<BBHH")
 _STRUCT_RachPreamble = struct.Struct("<B1xH4xq")
 _STRUCT_PdschCodeword = struct.Struct("<BB2xI?3x")
@@ -82,8 +83,16 @@ _VTABLES = [struct.Struct("<%dH" % n).unpack_from for n in range(15)]
 
 
 
+def _build_CrbInterval(v):
+    return {"start": v[0], "length": v[1]}
+
+
+def _struct_CrbInterval(buf, at):
+    return _build_CrbInterval(_STRUCT_CrbInterval.unpack_from(buf, at))
+
+
 def _build_BwpConfiguration(v):
-    return {"cp": _ENUM_CyclicPrefix.get(v[0], v[0]), "scs": _ENUM_SubcarrierSpacing.get(v[1], v[1]), "crb_start": v[2], "crb_length": v[3]}
+    return {"cp": _ENUM_CyclicPrefix.get(v[0], v[0]), "scs": _ENUM_SubcarrierSpacing.get(v[1], v[1]), "crbs": {"start": v[2], "length": v[3]}}
 
 
 def _struct_BwpConfiguration(buf, at):
@@ -123,7 +132,7 @@ def _struct_PagingUe(buf, at):
 
 
 def _build_Ssb(v):
-    return {"ssb_index": v[0], "crb_start": v[1], "crb_length": v[2], "sym_start": v[3], "sym_length": v[4]}
+    return {"ssb_index": v[0], "crbs": {"start": v[1], "length": v[2]}, "sym_start": v[3], "sym_length": v[4]}
 
 
 def _struct_Ssb(buf, at):
@@ -131,7 +140,7 @@ def _struct_Ssb(buf, at):
 
 
 def _build_CsiRs(v):
-    return {"crb_start": v[0], "crb_length": v[1], "type": v[2], "row": v[3], "freq_domain": v[4], "freq_domain_nof_bits": v[5], "symbol0": v[6], "symbol1": v[7], "cdm_type": v[8], "freq_density": v[9], "scrambling_id": v[10], "power_ctrl_offset": v[11], "power_ctrl_offset_ss": v[12]}
+    return {"crbs": {"start": v[0], "length": v[1]}, "type": v[2], "row": v[3], "freq_domain": v[4], "freq_domain_nof_bits": v[5], "symbol0": v[6], "symbol1": v[7], "cdm_type": v[8], "freq_density": v[9], "scrambling_id": v[10], "power_ctrl_offset": v[11], "power_ctrl_offset_ss": v[12]}
 
 
 def _struct_CsiRs(buf, at):
@@ -288,24 +297,132 @@ def _table_PucchResource(buf, pos):
     }
 
 
-def _member_CellStartEvent(buf, pos):
+def _table_CoresetInterleaving(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = buf[pos + o] if o else 0
+    o = vo[2]
+    v2 = _s_u16(buf, pos + o)[0] if o else 0
+    return {
+        "reg_bundle_size": v0,
+        "interleaver_size": v1,
+        "shift_index": v2,
+    }
+
+
+def _table_Coreset(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
     vo = _VTABLES[4](buf, vt + 4) if n >= 4 else _VTABLES[n](buf, vt + 4) + (0,) * (4 - n)
     o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 4, _STRUCT_CrbInterval.iter_unpack, _build_CrbInterval) if o else None
+    o = vo[2]
+    v2 = buf[pos + o] if o else 0
+    o = vo[3]
+    v3 = _table_CoresetInterleaving(buf, pos + o + _u32(buf, pos + o)[0]) if o else None
+    return {
+        "id": v0,
+        "crbs": v1,
+        "duration": v2,
+        "interleaving": v3,
+    }
+
+
+def _table_SearchSpace(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[4](buf, vt + 4) if n >= 4 else _VTABLES[n](buf, vt + 4) + (0,) * (4 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = buf[pos + o] if o else 0
+    o = vo[2]
+    v2 = _s_bool(buf, pos + o)[0] if o else False
+    o = vo[3]
+    v3 = _scalars(buf, pos + o + _u32(buf, pos + o)[0], "H") if o else None
+    return {
+        "id": v0,
+        "coreset_id": v1,
+        "is_common": v2,
+        "monitoring_symbols": v3,
+    }
+
+
+def _table_PrachConfig(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[2]
+    v2 = _ENUM_SubcarrierSpacing.get(x := _s_u8(buf, pos + o)[0], x) if o else None
+    return {
+        "config_index": v0,
+        "frequency_start": v1,
+        "scs": v2,
+    }
+
+
+def _table_DlBwp(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[4](buf, vt + 4) if n >= 4 else _VTABLES[n](buf, vt + 4) + (0,) * (4 - n)
+    o = vo[0]
+    v0 = _struct_BwpConfiguration(buf, pos + o) if o else None
+    o = vo[1]
+    v1 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _table_Coreset) if o else None
+    o = vo[2]
+    v2 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _table_SearchSpace) if o else None
+    o = vo[3]
+    v3 = buf[pos + o] if o else 0
+    return {
+        "generic_params": v0,
+        "coresets": v1,
+        "search_spaces": v2,
+        "pdsch_vrb_to_prb_bundle_size": v3,
+    }
+
+
+def _table_UlBwp(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[0]
+    v0 = _struct_BwpConfiguration(buf, pos + o) if o else None
+    o = vo[1]
+    v1 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _table_PucchResource) if o else None
+    o = vo[2]
+    v2 = _table_PrachConfig(buf, pos + o + _u32(buf, pos + o)[0]) if o else None
+    return {
+        "generic_params": v0,
+        "pucch_resources": v1,
+        "prach": v2,
+    }
+
+
+def _member_CellStartEvent(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[0]
     v0 = _s_u16(buf, pos + o)[0] if o else 0
     o = vo[1]
-    v1 = _struct_BwpConfiguration(buf, pos + o) if o else None
+    v1 = _table_DlBwp(buf, pos + o + _u32(buf, pos + o)[0]) if o else None
     o = vo[2]
-    v2 = _struct_BwpConfiguration(buf, pos + o) if o else None
-    o = vo[3]
-    v3 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _table_PucchResource) if o else None
+    v2 = _table_UlBwp(buf, pos + o + _u32(buf, pos + o)[0]) if o else None
     return {
         "type": "CellStartEvent",
         "pci": v0,
-        "init_ul_bwp": v1,
-        "init_dl_bwp": v2,
-        "pucch_resources": v3,
+        "init_dl_bwp": v1,
+        "init_ul_bwp": v2,
     }
 
 
@@ -1099,24 +1216,132 @@ def _grid_table_PucchResource(buf, pos):
     }
 
 
-def _grid_member_CellStartEvent(buf, pos):
+def _grid_table_CoresetInterleaving(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = buf[pos + o] if o else 0
+    o = vo[2]
+    v2 = _s_u16(buf, pos + o)[0] if o else 0
+    return {
+        "reg_bundle_size": v0,
+        "interleaver_size": v1,
+        "shift_index": v2,
+    }
+
+
+def _grid_table_Coreset(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
     vo = _VTABLES[4](buf, vt + 4) if n >= 4 else _VTABLES[n](buf, vt + 4) + (0,) * (4 - n)
     o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 4, _STRUCT_CrbInterval.iter_unpack, _build_CrbInterval) if o else None
+    o = vo[2]
+    v2 = buf[pos + o] if o else 0
+    o = vo[3]
+    v3 = _grid_table_CoresetInterleaving(buf, pos + o + _u32(buf, pos + o)[0]) if o else None
+    return {
+        "id": v0,
+        "crbs": v1,
+        "duration": v2,
+        "interleaving": v3,
+    }
+
+
+def _grid_table_SearchSpace(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[4](buf, vt + 4) if n >= 4 else _VTABLES[n](buf, vt + 4) + (0,) * (4 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = buf[pos + o] if o else 0
+    o = vo[2]
+    v2 = _s_bool(buf, pos + o)[0] if o else False
+    o = vo[3]
+    v3 = _scalars(buf, pos + o + _u32(buf, pos + o)[0], "H") if o else None
+    return {
+        "id": v0,
+        "coreset_id": v1,
+        "is_common": v2,
+        "monitoring_symbols": v3,
+    }
+
+
+def _grid_table_PrachConfig(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[0]
+    v0 = buf[pos + o] if o else 0
+    o = vo[1]
+    v1 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[2]
+    v2 = _ENUM_SubcarrierSpacing.get(x := _s_u8(buf, pos + o)[0], x) if o else None
+    return {
+        "config_index": v0,
+        "frequency_start": v1,
+        "scs": v2,
+    }
+
+
+def _grid_table_DlBwp(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[4](buf, vt + 4) if n >= 4 else _VTABLES[n](buf, vt + 4) + (0,) * (4 - n)
+    o = vo[0]
+    v0 = _struct_BwpConfiguration(buf, pos + o) if o else None
+    o = vo[1]
+    v1 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_Coreset) if o else None
+    o = vo[2]
+    v2 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_SearchSpace) if o else None
+    o = vo[3]
+    v3 = buf[pos + o] if o else 0
+    return {
+        "generic_params": v0,
+        "coresets": v1,
+        "search_spaces": v2,
+        "pdsch_vrb_to_prb_bundle_size": v3,
+    }
+
+
+def _grid_table_UlBwp(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[0]
+    v0 = _struct_BwpConfiguration(buf, pos + o) if o else None
+    o = vo[1]
+    v1 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_PucchResource) if o else None
+    o = vo[2]
+    v2 = _grid_table_PrachConfig(buf, pos + o + _u32(buf, pos + o)[0]) if o else None
+    return {
+        "generic_params": v0,
+        "pucch_resources": v1,
+        "prach": v2,
+    }
+
+
+def _grid_member_CellStartEvent(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[0]
     v0 = _s_u16(buf, pos + o)[0] if o else 0
     o = vo[1]
-    v1 = _struct_BwpConfiguration(buf, pos + o) if o else None
+    v1 = _grid_table_DlBwp(buf, pos + o + _u32(buf, pos + o)[0]) if o else None
     o = vo[2]
-    v2 = _struct_BwpConfiguration(buf, pos + o) if o else None
-    o = vo[3]
-    v3 = _tables(buf, pos + o + _u32(buf, pos + o)[0], _grid_table_PucchResource) if o else None
+    v2 = _grid_table_UlBwp(buf, pos + o + _u32(buf, pos + o)[0]) if o else None
     return {
         "type": "CellStartEvent",
         "pci": v0,
-        "init_ul_bwp": v1,
-        "init_dl_bwp": v2,
-        "pucch_resources": v3,
+        "init_dl_bwp": v1,
+        "init_ul_bwp": v2,
     }
 
 

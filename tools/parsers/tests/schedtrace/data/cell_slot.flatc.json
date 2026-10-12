@@ -159,8 +159,10 @@
       "ssbs": [
         {
           "ssb_index": 0,
-          "crb_start": 10,
-          "crb_length": 20,
+          "crbs": {
+            "start": 10,
+            "length": 20
+          },
           "sym_start": 2,
           "sym_length": 4
         }

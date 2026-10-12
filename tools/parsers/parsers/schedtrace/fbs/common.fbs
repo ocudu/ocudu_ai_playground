@@ -16,10 +16,15 @@ enum SubcarrierSpacing : uint8 {
   Khz240 = 4,
 }
 
+/// Contiguous range of CRBs, relative to Point A.
+struct CrbInterval {
+  start: uint16;
+  length: uint16;
+}
+
 /// Generic parameters of a bandwidth part.
 struct BwpConfiguration {
   cp: CyclicPrefix;
   scs: SubcarrierSpacing;
-  crb_start: uint16;
-  crb_length: uint16;
+  crbs: CrbInterval;
 }

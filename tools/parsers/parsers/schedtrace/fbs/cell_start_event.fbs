@@ -49,13 +49,81 @@ table PucchResource {
   rep_factor: uint8;
 }
 
-/// Event sent on cell start, containing information about the cell configuration.
-table CellStartEvent {
-  /// Physical Cell Identity.
-  pci: uint16;
-  init_ul_bwp: BwpConfiguration;
-  init_dl_bwp: BwpConfiguration;
+/// Interleaved CCE-to-REG mapping of a CORESET, as per TS 38.211, clause 7.3.2.2.
+table CoresetInterleaving {
+  /// REG bundle size L. Values: {2, 3, 6}.
+  reg_bundle_size: uint8;
+  /// Interleaver size R. Values: {2, 3, 6}.
+  interleaver_size: uint8;
+  /// Shift index n_shift.
+  shift_index: uint16;
+}
+
+/// Information about a CORESET.
+table Coreset {
+  id: uint8;
+  /// CRBs of the CORESET, as contiguous ranges in increasing order. For CORESET#0, a single range. For other CORESETs,
+  /// the frequencyDomainResources bitmap applied in groups of 6 RBs from the start of the DL BWP.
+  crbs: [CrbInterval];
+  /// Duration in symbols. Values: {1, 2, 3}.
+  duration: uint8;
+  /// Absent for the non-interleaved CCE-to-REG mapping.
+  interleaving: CoresetInterleaving;
+}
+
+/// Information about a search space.
+table SearchSpace {
+  id: uint8;
+  coreset_id: uint8;
+  /// Whether the search space is a CSS, rather than a USS.
+  is_common: bool;
+  /// monitoringSymbolsWithinSlot, bit n being symbol n of the slot. SearchSpace#0 has one entry per SSB index, as per
+  /// TS 38.213, clause 13. Other search spaces have a single entry.
+  monitoring_symbols: [uint16];
+}
+
+/// PRACH configuration of the initial UL BWP.
+table PrachConfig {
+  /// prach-ConfigurationIndex.
+  config_index: uint8;
+  /// msg1-FrequencyStart, the PRB offset of the lowest PRACH occasion in the initial UL BWP.
+  frequency_start: uint16;
+  /// msg1-SubcarrierSpacing. Absent if derived from the prach-ConfigurationIndex, as with long preambles.
+  scs: SubcarrierSpacing = null;
+}
+
+/// Initial DL BWP of the cell.
+table DlBwp {
+  generic_params: BwpConfiguration;
+  /// CORESETs that PDCCHs of the trace may refer to: CORESET#0, the common CORESET and the UE-dedicated CORESETs.
+  /// If CORESETs with the same ID differ across UEs or with the common CORESET, only the first one is listed.
+  coresets: [Coreset];
+  /// Search spaces that PDCCHs of the trace may refer to, common and UE-dedicated. If search spaces with the same ID
+  /// differ across UEs or with a common search space, only the first one is listed.
+  search_spaces: [SearchSpace];
+  /// vrb-ToPRB-Interleaver bundle size of UE PDSCHs scheduled with DCI format 1_1. Values: {0, 2, 4}, 0 being
+  /// non-interleaved. Whether a given PDSCH uses it is not traced. PDSCHs scheduled with DCI format 1_0 are always
+  /// non-interleaved.
+  pdsch_vrb_to_prb_bundle_size: uint8;
+}
+
+/// Initial UL BWP of the cell.
+table UlBwp {
+  generic_params: BwpConfiguration;
   /// List of PUCCH resources configured for the cell.
   /// The list contains first the 16 common resources, followed by the UE-specific resources (if any).
   pucch_resources: [PucchResource];
+  /// Absent if the cell has no RACH configuration.
+  prach: PrachConfig;
+}
+
+/// Event sent on cell start, containing information about the cell configuration.
+///
+/// UEs are only scheduled in the initial DL and UL BWPs. The SRS CRBs are derived from the SRS allocation fields, as
+/// per TS 38.211, clause 6.4.1.4.3, without cell configuration.
+table CellStartEvent {
+  /// Physical Cell Identity.
+  pci: uint16;
+  init_dl_bwp: DlBwp;
+  init_ul_bwp: UlBwp;
 }

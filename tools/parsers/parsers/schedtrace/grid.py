@@ -27,7 +27,9 @@ SLOT_DURATION_S = {"Khz15": 1e-3, "Khz30": 0.5e-3, "Khz60": 0.25e-3, "Khz120": 0
 
 @dataclass
 class Cell:
-    """What placing the allocations of a cell needs, from its start event."""
+    """What placing the allocations of a cell needs, from its start event. BWPs have "cp", "scs", "crb_start" and
+    "crb_length".
+    """
 
     dl_bwp: dict[str, Any]
     ul_bwp: dict[str, Any]
@@ -45,7 +47,13 @@ class Cell:
 
 def cell_of(start_event: dict[str, Any]) -> Cell:
     """The cell of a CellStartEvent of schedtrace.read()."""
-    return Cell(start_event["init_dl_bwp"], start_event["init_ul_bwp"], start_event.get("pucch_resources") or [])
+    dl, ul = start_event["init_dl_bwp"], start_event["init_ul_bwp"]
+    return Cell(_bwp(dl["generic_params"]), _bwp(ul["generic_params"]), ul.get("pucch_resources") or [])
+
+
+def _bwp(params: dict[str, Any]) -> dict[str, Any]:
+    crbs = params["crbs"]
+    return {"cp": params["cp"], "scs": params["scs"], "crb_start": crbs["start"], "crb_length": crbs["length"]}
 
 
 def rbg_size(nof_prbs: int) -> int:
@@ -96,9 +104,9 @@ def allocations(slot_event: dict[str, Any], cell: Cell) -> list[dict[str, Any]]:
     for i, p in enumerate(decision.get("paging_pdschs") or []):
         shared("DL", "Paging", p, dl, {"item": ["paging_pdschs", i], "paging_ues": len(p.get("paging_ues") or [])})
     for i, s in enumerate(decision.get("ssbs") or []):
-        add("DL", "SSB", s["sym_start"], s["sym_length"], [(s["crb_start"], s["crb_length"])], {"item": ["ssbs", i], "ssb_index": s["ssb_index"]})
+        add("DL", "SSB", s["sym_start"], s["sym_length"], [(s["crbs"]["start"], s["crbs"]["length"])], {"item": ["ssbs", i], "ssb_index": s["ssb_index"]})
     for i, c in enumerate(decision.get("csi_rs") or []):
-        add("DL", "CSI-RS", c["symbol0"], 1, [(c["crb_start"], c["crb_length"])], {"item": ["csi_rs", i], "row": c["row"]})
+        add("DL", "CSI-RS", c["symbol0"], 1, [(c["crbs"]["start"], c["crbs"]["length"])], {"item": ["csi_rs", i], "row": c["row"]})
     for i, p in enumerate(decision.get("puschs") or []):
         shared("UL", "PUSCH", p, ul, {"item": ["puschs", i], "rnti": p["rnti"], "harq_id": p["harq_id"], "tbs": p["tb_size_bytes"],
                                       "rv": p["rv_index"], "nof_retxs": p["nof_retxs"], "k2": p["k2"], "ue_index": p["ue_index"]})

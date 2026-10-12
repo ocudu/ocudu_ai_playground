@@ -172,11 +172,17 @@ for ev in schedtrace.read("schedtrace_cell0.bin"):
         print(ev["timestamp_us"], ev["slot_tx"], ev["latency_us"], len(ev["decision"]["ue_pdschs"] or []), harq)
 ```
 
-OCUDU writes one `schedtrace_cell<N>.bin` per cell when the `trace.schedtrace` option is enabled: a series of
+OCUDU writes one `schedtrace_cell<N>.bin` per cell when the `trace.schedtrace` option is enabled: an 8-byte header
+(magic `SCHT`, then the major and minor version of the file format as little-endian `uint16`) and a series of
 size-prefixed FlatBuffers `CellEvent` buffers. `read()` and `events()` yield each as a dict with `timestamp_us`,
 `type` (`CellStartEvent`, `CellSlotEvent` or `CellStopEvent`) and its fields: tables as dicts, vectors as lists, enums
 by name, unions with their member as `type`, absent optional fields as `None`. An incomplete last event, e.g. of a
 trace being written, is left out.
+
+`schedtrace.FORMAT_VERSION` is the version of the schemas of `schedtrace/fbs/`, read from its copy of OCUDU's
+`trace_file_format.h`. Traces of another major version, and traces without a header, written before OCUDU versioned the
+format, raise `schedtrace.FormatError`; traces of a newer minor version decode with a warning, without the fields they
+append. `schedtrace.version()` reads the version of a trace.
 
 The decoder is standard-library only: `schedtrace.schema` reads the FlatBuffers schemas of `schedtrace/fbs/`, copies of
 `lib/scheduler/trace/fbs` of OCUDU, and `schedtrace.flatbuf` decodes buffers with them. FlatBuffers' Python code
@@ -184,11 +190,15 @@ generator does not support the vectors of unions of the schemas (`CellSlotEvent.
 `schedtrace/_generated.py`, which `schedtrace.codegen` compiles from the schemas into one function per table and
 struct, about 2.3 times faster than `schedtrace.flatbuf`. With `grid_only=True`, `read()`, `events()` and `event_at()`
 decode only the fields of `codegen.GRID_FIELDS`, those that `grid.allocations()` needs and the slot, latency and input
-types, 1.6 times faster again. Copy the schemas again when OCUDU changes them, then regenerate it:
+types, 1.6 times faster again. When OCUDU changes the schemas, copy them with `trace_file_format.h` from an OCUDU
+tree, its working tree or a revision, and regenerate it:
 
 ```bash
-python -m parsers.schedtrace.codegen
+python -m parsers.schedtrace.codegen --ocudu ~/srs/ocudu [--rev origin/dev]
 ```
+
+Then add the hash of the schemas of the new version to `SCHEMA_HASHES` of `tests/schedtrace/test_schedtrace.py`: a
+test fails when the schemas differ from those recorded for their version, as when they change without a version bump.
 
 `_generated.py` holds the hash of the schemas and of the generator; when it is stale, decoding warns and falls back to
 `schedtrace.flatbuf`, and a test fails. Fields that newer traces append are ignored. The tests compare the decoder with

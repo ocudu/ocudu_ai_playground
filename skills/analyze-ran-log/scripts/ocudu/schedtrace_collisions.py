@@ -128,11 +128,17 @@ def main() -> int:
         ap.error(f"unknown kinds {sorted(unknown)}, expected some of {', '.join(collisions.KINDS)}")
     rntis = set(args.rnti)
 
+    status = 0
     for path in traces_in(args.path):
         workers = args.j
         if workers is None:
             workers = min(MAX_DEFAULT_WORKERS, os.cpu_count() or 1) if path.stat().st_size >= PARALLEL_MIN_SIZE else 1
-        cell = grid.cell_of(next(schedtrace.read(path)))
+        try:
+            cell = grid.cell_of(next(schedtrace.read(path)))
+        except schedtrace.FormatError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            status = 1
+            continue
         slots_per_frame = round(0.01 / cell.slot_duration_s)
         found = [
             c for c in find_all(path, workers)
@@ -151,7 +157,7 @@ def main() -> int:
             if of_kind:
                 print(f"{kind}: {len(of_kind)}, first {time_text(of_kind[0].timestamp_us)}, "
                       f"last {time_text(of_kind[-1].timestamp_us)}")
-    return 0
+    return status
 
 
 if __name__ == "__main__":

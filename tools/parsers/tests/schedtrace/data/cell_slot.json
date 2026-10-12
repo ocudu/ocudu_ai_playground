@@ -15,6 +15,6 @@
     "puschs": [{"rnti": 17922, "rbs_type": "VrbAlloc", "rbs": {"vrb_start": 5, "vrb_length": 20}, "sym_start": 0, "sym_length": 14, "tb_size_bytes": 900, "ue_index": 1, "k2": 4}],
     "rar_pdschs": [{"rnti": 267, "rbs_type": "VrbAlloc", "rbs": {"vrb_start": 0, "vrb_length": 4, "vrb_second_hop_start": 30},
                     "grants": [{"temp_crnti": 17922, "rapid": 23, "ta": 5, "time_resource_assignment": 1, "freq_hop_flag": true, "freq_resource_assignment": 300, "mcs": 4, "tpc": -1, "csi_req": false, "grant_type": 0, "harq_feedback_timing_indicator": 2, "pucch_resource_indicator": 3}]}],
-    "ssbs": [{"ssb_index": 0, "crb_start": 10, "crb_length": 20, "sym_start": 2, "sym_length": 4}],
+    "ssbs": [{"ssb_index": 0, "crbs": {"start": 10, "length": 20}, "sym_start": 2, "sym_length": 4}],
     "failed_attempts": {"dl_pdcch": 1, "ul_pdcch": 0, "common_dl_pdcch": 0, "common_ul_pdcch": 0, "uci": 2, "fallback_uci_allocs": 0}
   }}}
