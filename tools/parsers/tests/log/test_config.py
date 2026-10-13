@@ -60,6 +60,34 @@ class ConfigTest(unittest.TestCase):
     def test_no_echo(self):
         self.assertIsNone(config.from_log([LOG[0], LOG[-1]]))
 
+    def test_echo_headers(self):
+        for header in ("Input configuration (all values):", "DU input configuration (only non-default values):"):
+            cfg = config.from_log([LOG[0], f"2026-08-07T08:46:25.253965 [CONFIG  ] [D] {header}\n", *LOG[2:]])
+            self.assertEqual(cfg.levels["mac"], "debug", header)
+
+    def test_amf_of_an_echo(self):
+        # The echo writes address lists in block style, and other sections have ports and addresses too.
+        echo = """remote_control:
+  port: 8001
+cu_cp:
+  amf:
+    no_core: false
+    amf:
+      addrs:
+        - 172.116.30.81
+      port: 38412
+      bind_addrs:
+        - 172.116.30.51
+      bind_interface: auto
+  max_nof_dus: 6
+e2:
+  addrs:
+    - 10.0.0.9
+  port: 36421
+"""
+        cfg = config.parse_config(echo)
+        self.assertEqual((cfg.amf_addrs, cfg.amf_bind_addrs, cfg.amf_port), (["172.116.30.81"], ["172.116.30.51"], 38412))
+
 
 if __name__ == "__main__":
     unittest.main()

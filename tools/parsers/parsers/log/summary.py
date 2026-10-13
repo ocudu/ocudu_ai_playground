@@ -25,6 +25,7 @@ _UE_RE = re.compile(r"\bue=(\d+)\b")
 _PCI_RE = re.compile(r"\bpci=(\d+)\b")
 _CRNTI_RE = re.compile(r"c-rnti=0x([0-9a-fA-F]+)")
 _BUILD_RE = re.compile(r"commit (\S+) on branch (\S+)")
+_NGAP_HO_RE = re.compile(r"\bHandoverRe(?:quired|quest)\b")
 # Warnings expected in healthy runs: per-UE creation latency instrumentation and host notes.
 BENIGN_WARNINGS = (
     "DRM KMS polling is enabled",
@@ -103,6 +104,9 @@ def summarize(lines: Iterable[str]) -> LogSummary:
     for raw in lines:
         # The configuration echo and continuation lines do not start with a timestamp, so skip them before matching.
         if not raw or raw[0] not in "0123456789":
+            # The handover marker is the ASN.1 or JSON brace of the reconfigurationWithSync of an RRC body.
+            if "reconfigurationWithSync" in raw and "{" in raw:
+                out.ho_count += 1
             continue
         m = _LINE_RE.match(raw)
         if not m:
@@ -132,7 +136,7 @@ def summarize(lines: Iterable[str]) -> LogSummary:
                 out.ng_setup = "success"
             elif "NGSetupFailure" in msg:
                 out.ng_setup = "failure"
-            if "HandoverRequired" in msg or "HandoverRequest" in msg:
+            if _NGAP_HO_RE.search(msg):
                 out.ngap_handover_count += 1
 
         if layer == "CU-CP" and "Connection to AMF" in msg and "established" in msg:
@@ -170,10 +174,6 @@ def summarize(lines: Iterable[str]) -> LogSummary:
                 out.reest_count += 1
             if any(k in msg for k in _KEPT_RRC) and len(out.rrc_msgs) < MAX_RRC_LINES:
                 out.rrc_msgs.append((ts, layer, msg.strip()))
-
-        # The handover marker is the ASN.1 brace of the reconfigurationWithSync of an RRC reconfiguration body.
-        if "reconfigurationWithSync" in msg and "{" in msg:
-            out.ho_count += 1
 
         # Bearer procedures are logged by both the CU-CP and the CU-UP: count them once.
         if layer == "CU-CP-E1":

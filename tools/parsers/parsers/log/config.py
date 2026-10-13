@@ -66,11 +66,11 @@ PCAP_PROTOCOLS = ("ngap", "f1ap", "e1ap", "mac", "rlc", "n3", "f1u", "xnap", "e2
 _VALUE_RES = {key: re.compile(rf"^\s*{re.escape(key)}\s*:\s*(.+?)\s*(?:#.*)?$", re.MULTILINE) for key in VALUE_KEYS}
 _PCAP_RE = re.compile(r"^\s*(\w+)_enable\s*:\s*true\s*$", re.MULTILINE)
 _TDD_RE = re.compile(r"^\s*duplex\s*:\s*tdd\b", re.MULTILINE)
-_ADDRS_RE = re.compile(r"^\s+addrs\s*:\s*(.+?)\s*$", re.MULTILINE)
-_BIND_ADDRS_RE = re.compile(r"^\s+bind_addrs\s*:\s*(.+?)\s*$", re.MULTILINE)
-_PORT_RE = re.compile(r"^\s+port\s*:\s*(\d+)\s*$", re.MULTILINE)
+_AMF_RE = re.compile(r"^(?P<indent>\s*)amf\s*:\s*(?:#.*)?$")
+_KEY_VALUE_RE = re.compile(r"^\s*(?P<key>\w+)\s*:\s*(?P<value>[^#]*?)\s*(?:#.*)?$")
+_LIST_ITEM_RE = re.compile(r"^\s*-\s*(?P<value>[^#]*?)\s*(?:#.*)?$")
 _IPV4_RE = re.compile(r"\d+\.\d+\.\d+\.\d+")
-_ECHO_HEADER_RE = re.compile(r"input configuration \((?P<scope>all values|only non-default values)\)")
+_ECHO_HEADER_RE = re.compile(r"input configuration \((?P<scope>all values|only non-default values)\)", re.IGNORECASE)
 _LEVEL_RE = re.compile(r"^\s+(?P<option>\w+)_level\s*:\s*(?P<level>\w+)")
 # Lines searched for the echo header before giving up.
 _MAX_HEADER_LINES = 1000
@@ -144,12 +144,42 @@ def parse_config(text: str, complete: bool = True) -> AppConfig:
         if proto in PCAP_PROTOCOLS and proto not in cfg.pcaps:
             cfg.pcaps.append(proto)
     cfg.tdd = "tdd_ul_dl_cfg" in text or _TDD_RE.search(text) is not None
-    # The addresses of the AMF section, wherever it is nested, e.g. under cu_cp.
-    cfg.amf_addrs = [v for v in (a.strip().strip('"') for a in _ADDRS_RE.findall(text)) if _IPV4_RE.match(v)]
-    cfg.amf_bind_addrs = [v for v in (a.strip().strip('"') for a in _BIND_ADDRS_RE.findall(text)) if _IPV4_RE.match(v)]
-    if m := _PORT_RE.search(text):
-        cfg.amf_port = int(m.group(1))
+    _parse_amf(text, cfg)
     return cfg
+
+
+def _parse_amf(text: str, cfg: AppConfig) -> None:
+    """Sets the AMF addresses and port of the amf sections, wherever they are nested, e.g. under cu_cp."""
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        m = _AMF_RE.match(lines[i])
+        i += 1
+        if not m:
+            continue
+        indent = len(m.group("indent"))
+        key = None
+        # The section ends at the first line indented as much as its header, and holds nested amf sections.
+        while i < len(lines) and (not lines[i].strip() or len(lines[i]) - len(lines[i].lstrip()) > indent):
+            line = lines[i]
+            i += 1
+            if km := _KEY_VALUE_RE.match(line):
+                key, value = km.group("key"), km.group("value")
+            elif (lm := _LIST_ITEM_RE.match(line)) and key is not None:
+                value = lm.group("value")
+            else:
+                continue
+            if key in ("addrs", "addr"):
+                cfg.amf_addrs += [a for a in _IPV4_RE.findall(value) if a not in cfg.amf_addrs]
+            elif key in ("bind_addrs", "bind_addr"):
+                cfg.amf_bind_addrs += [a for a in _IPV4_RE.findall(value) if a not in cfg.amf_bind_addrs]
+            elif key == "port" and value.isdigit() and cfg.amf_port is None:
+                cfg.amf_port = int(value)
+
+
+def is_echo_header(line: str) -> bool:
+    """Whether a CONFIG log line is the header of the configuration echo, e.g. "Input configuration (all values):"."""
+    return _ECHO_HEADER_RE.search(line) is not None
 
 
 def extract_echo(lines: Iterable[str]) -> tuple[str, bool] | None:

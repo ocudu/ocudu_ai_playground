@@ -32,6 +32,10 @@ class SearchTest(unittest.TestCase):
         self.assertEqual(entries[1][1:], ["  rrcReconfiguration {", "    reconfigurationWithSync", "  }"])
         self.assertEqual(len(list(search.entries(LOG, include_config_echo=True))), 5)
 
+    def test_echo_of_other_nodes_is_left_out(self):
+        header = "2026-07-27T15:44:57.315000 [CONFIG  ] [I] Input configuration (only non-default values):"
+        self.assertEqual(len(list(search.entries([LOG[0], header, *LOG[2:]]))), 4)
+
     def test_filters(self):
         self.assertEqual(found(search.Filter(layer="rrc")), ["[RRC     ]"])
         self.assertEqual(found(search.Filter(level="W|E")), ["[SCHED   ]"])

@@ -13,6 +13,8 @@ import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
+from . import config
+
 # Entry lines start with an ISO 8601 timestamp, unlike continuation lines and the body of the configuration echo.
 _HEADER_RE = re.compile(
     r"^(?P<ts>\d{4}-\d{2}-\d{2}T(?P<time>\d{2}:\d{2}:\d{2}\.\d{6}))\s+"
@@ -98,7 +100,7 @@ def search(lines: Iterable[str], flt: Filter, include_config_echo: bool = False)
 
 def _is_config_echo(m: re.Match, line: str) -> bool:
     """Whether an entry line is the header of the configuration echo, whose body is the effective configuration."""
-    return m.group("layer").strip() == "CONFIG" and m.group("lvl") == "D" and "gnb input configuration" in line.lower()
+    return m.group("layer").strip() == "CONFIG" and config.is_echo_header(line)
 
 
 def _at_or_after(ts: str, time: str, ref: str) -> bool:

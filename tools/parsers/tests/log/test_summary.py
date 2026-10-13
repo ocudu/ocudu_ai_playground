@@ -59,6 +59,19 @@ class SummaryTest(unittest.TestCase):
         self.assertEqual(len(s.rrc_msgs), 2)
         self.assertEqual((s.metrics_rows, s.clean_shutdown, s.shutdown_signal_ts), (1, True, "2026-07-27T15:45:05.000000"))
 
+    def test_handovers(self):
+        log = [
+            "2026-07-27T15:45:01.100000 [RRC     ] [I] ue=0 c-rnti=0x4601: Tx DL-DCCH rrcReconfiguration\n",
+            "{\n",
+            '  "reconfigurationWithSync": {\n',
+            "}\n",
+            "2026-07-27T15:45:01.200000 [NGAP    ] [I] Tx PDU ue=0: HandoverRequired\n",
+            "2026-07-27T15:45:01.300000 [NGAP    ] [I] Rx PDU ue=1: HandoverRequest\n",
+            "2026-07-27T15:45:01.400000 [NGAP    ] [I] Tx PDU ue=1: HandoverRequestAcknowledge\n",
+        ]
+        s = summary.summarize(log)
+        self.assertEqual((s.ho_count, s.ngap_handover_count), (1, 2))
+
     def test_console(self):
         c = console.summarize(STDOUT.splitlines(keepends=True))
         self.assertEqual(c.banner_commit, "404c93d34d")
