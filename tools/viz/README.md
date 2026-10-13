@@ -117,7 +117,9 @@ In the page:
 - `⛶` maximizes a plot, table, trace or grid: it fills the window, alone with the log pane, its chart taller (a trace
   showing more UE rows). `🗗` or Esc restores it.
 - Click a point to see its log line and the lines around it; scrolling the log pane loads the lines before or after
-  them as it nears its first or last line. Drag the top edge of the log pane to resize it, double-click it to reset
+  them as it nears its first or last line. Clicking a line of the log pane, or finding one with its search, marks its
+  time on the plots, the trace and the grid with a gray dashed line, and the points of that line on the plots with a ring;
+  the view pans to it when it is out of view. Drag the top edge of the log pane to resize it, double-click it to reset
   the height. Its `⛶` fills the window with it, e.g. to read a long decoded slot event; `🗗` or Esc restores it. Its
   search box finds text in the whole file, case-insensitive, from the highlighted line: Enter or `↓` goes to the next
   match, Shift+Enter or `↑` to the previous one, wrapping around the file, and the matches in view are highlighted.

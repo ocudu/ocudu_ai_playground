@@ -41,6 +41,8 @@
   --ev-warning: #f57c00;
   --ev-error: #e53935;
   --ev-adhoc: #37474f;
+  /* The record highlighted in the log pane, marked on the charts. */
+  --focus: #6b7280;
   /* Resource grid colors, by channel. */
   --ch-pdsch: #8cd17d;
   --ch-sib: #d7b5a6;
@@ -90,6 +92,7 @@
   --ev-warning: #ff9a3c;
   --ev-error: #ff6b6b;
   --ev-adhoc: #cfd8dc;
+  --focus: #9aa3ad;
   --ch-pdsch: #98971a;
   --ch-sib: #bdae93;
   --ch-rar: #d65d0e;

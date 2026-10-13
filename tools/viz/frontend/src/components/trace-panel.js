@@ -3,7 +3,7 @@
 
 import uPlot from "uplot";
 import { getJSON } from "../api.js";
-import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, eventText, fitHeight, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
+import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, drawFocus, eventText, fitHeight, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
 
 // Height of a row of the trace in CSS pixels, and of the space taken by the time axis.
 const ROW_HEIGHT = 18;
@@ -141,6 +141,8 @@ function axisLabel(lane, by) {
 export default {
   name: "TracePanel",
   props: {
+    // Record highlighted in the log pane, as {source, record, t} in display time.
+    focus: { type: Object, default: null },
     panel: { type: Object, required: true },
     sources: { type: Array, required: true },
     view: { type: Object, default: null },
@@ -264,6 +266,9 @@ export default {
     },
   },
   watch: {
+    focus() {
+      this.chart?.redraw(false, false);
+    },
     view: { handler() { this.scheduleFetch(); }, deep: true },
     eventsStatus() {
       this.scheduleFetch();
@@ -493,7 +498,7 @@ export default {
         hooks: {
           setSelect: [selectToZoom((range) => this.$emit("zoom", range))],
           setCursor: [(u) => this.updateCursorReadout(u)],
-          draw: [(u) => this.drawTrace(u)],
+          draw: [(u) => this.drawTrace(u), (u) => drawFocus(u, this.focus)],
         },
       };
       const chart = new uPlot(opts, [[this.view.min, this.view.max], [null, null]], this.$refs.chart);

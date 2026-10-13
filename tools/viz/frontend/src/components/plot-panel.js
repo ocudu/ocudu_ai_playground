@@ -5,7 +5,7 @@ import uPlot from "uplot";
 import { buildQuery, getJSON } from "../api.js";
 import ExportDialog from "./export-dialog.js";
 import { displayUnit, formatStat } from "../units.js";
-import { CURSOR_SYNC_KEY, MAX_LEGEND_SERIES, TIME_TICK_SPACE, attachZoomPan, capLegend, chartSeries, cssVar, eventText, fitHeight, fmtFull, formatTime, plotData, selectToZoom, seriesColor, timeTicks, utcDate, valueAxes } from "./chart-utils.js";
+import { CURSOR_SYNC_KEY, MAX_LEGEND_SERIES, TIME_TICK_SPACE, attachZoomPan, capLegend, chartSeries, cssVar, drawFocus, eventText, fitHeight, fmtFull, formatTime, logOf, plotData, selectToZoom, seriesColor, timeTicks, utcDate, valueAxes } from "./chart-utils.js";
 
 // Distance in pixels within which the cursor is on an event marker.
 const EVENT_HIT_PX = 5;
@@ -41,6 +41,8 @@ export default {
   name: "PlotPanel",
   props: {
     plot: { type: Object, required: true },
+    // Record highlighted in the log pane, as {source, record, t} in display time.
+    focus: { type: Object, default: null },
     sources: { type: Array, required: true },
     view: { type: Object, default: null },
     shifts: { type: Array, required: true },
@@ -195,6 +197,9 @@ export default {
     view: { handler() { this.applyView(); this.scheduleFetch(false); }, deep: true },
     events() {
       // Markers are drawn by the chart, which only needs a redraw.
+      this.chart?.redraw(false, false);
+    },
+    focus() {
       this.chart?.redraw(false, false);
     },
     themeVersion() {
@@ -544,7 +549,7 @@ export default {
           setSelect: [selectToZoom((range) => this.$emit("zoom", range))],
           setSeries: [(u, idx) => { this.focusedSeries = idx ?? -1; }],
           setCursor: [(u) => this.updateCursorReadout(u)],
-          draw: [(u) => this.drawEvents(u)],
+          draw: [(u) => this.drawEvents(u), (u) => drawFocus(u, this.focus, this.focusPoints(u))],
         },
       };
       const chart = new uPlot(opts, data, this.$refs.chart);
@@ -570,6 +575,21 @@ export default {
         }
       }
       return best;
+    },
+
+    /**
+     * Points of the plot of the focused record, as [x, y, scale key]: those of its series from the same log, e.g. of a
+     * plot of one of its ad-hoc metrics.
+     */
+    focusPoints(u) {
+      const focus = this.focus;
+      if (!focus || logOf(this.sources, focus.source) !== logOf(this.sources, this.plot.source)) return [];
+      const points = [];
+      this.records.forEach((records, si) => {
+        const idx = records?.indexOf(focus.record) ?? -1;
+        if (idx >= 0 && u.data[si + 1]?.[idx] != null) points.push([u.data[0][idx], u.data[si + 1][idx], u.series[si + 1].scale]);
+      });
+      return points;
     },
 
     /** Draws the event markers as dashed vertical lines over the plot area, colored by category. */

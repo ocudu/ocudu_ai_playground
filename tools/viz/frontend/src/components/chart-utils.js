@@ -15,6 +15,45 @@ export const MAX_LEGEND_SERIES = 16;
  * Text of an event under the cursor: its type and message, and for an event of repeated lines, their count and span.
  * @param {{type: string, text: string, count?: number | null, span?: number | null}} ev
  */
+/**
+ * Draws the focused record of the log pane over a chart: a vertical line at its time and a ring around each of points,
+ * given as [x, y, scale key].
+ * @param {uPlot} u
+ * @param {{t: number} | null} focus
+ * @param {Array<[number, number, string]>} points
+ */
+export function drawFocus(u, focus, points = []) {
+  if (!focus) return;
+  const { ctx, bbox } = u;
+  const x = Math.round(u.valToPos(focus.t, "x", true));
+  if (x < bbox.left || x > bbox.left + bbox.width) return;
+  ctx.save();
+  ctx.strokeStyle = cssVar("--focus");
+  ctx.lineWidth = 1.5 * devicePixelRatio;
+  // Longer dashes than the event markers, which are dashed too.
+  ctx.setLineDash([8 * devicePixelRatio, 4 * devicePixelRatio]);
+  ctx.beginPath();
+  ctx.moveTo(x, bbox.top);
+  ctx.lineTo(x, bbox.top + bbox.height);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  for (const [px, py, scale] of points) {
+    ctx.beginPath();
+    ctx.arc(u.valToPos(px, "x", true), u.valToPos(py, scale, true), 6 * devicePixelRatio, 0, 2 * Math.PI);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/**
+ * The log of a source: the source itself, or the log an ad-hoc metric or mark comes from.
+ * @param {Array<{parent?: number | null}>} sources
+ * @param {number} id
+ */
+export function logOf(sources, id) {
+  return sources[id]?.parent ?? id;
+}
+
 export function eventText(ev) {
   const span = ev.span ?? 0;
   const over = span < 1 ? `${Math.round(span * 1000)} ms` : `${span.toFixed(1)} s`;

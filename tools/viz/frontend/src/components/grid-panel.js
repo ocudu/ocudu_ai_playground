@@ -3,7 +3,7 @@
 
 import uPlot from "uplot";
 import { getJSON } from "../api.js";
-import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, fitHeight, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
+import { CURSOR_SYNC_KEY, TIME_TICK_SPACE, attachZoomPan, cssVar, drawFocus, fitHeight, formatTime, selectToZoom, timeTicks, utcDate } from "./chart-utils.js";
 
 // Height of the chart, in CSS pixels, of one grid (TDD) and of the DL and UL grids (FDD).
 const TDD_HEIGHT = 320;
@@ -53,6 +53,8 @@ function hexRnti(rnti) {
 export default {
   name: "GridPanel",
   props: {
+    // Record highlighted in the log pane, as {source, record, t} in display time.
+    focus: { type: Object, default: null },
     panel: { type: Object, required: true },
     sources: { type: Array, required: true },
     // Sources of the tab, among which those with a resource grid.
@@ -100,6 +102,9 @@ export default {
     },
   },
   watch: {
+    focus() {
+      this.chart?.redraw(false, false);
+    },
     // A trace left to parse on request is parsed once a grid shows it.
     "source.status": {
       handler(status) {
@@ -258,7 +263,7 @@ export default {
         hooks: {
           setSelect: [selectToZoom((range) => this.$emit("zoom", range))],
           setCursor: [(u) => this.updateCursor(u)],
-          draw: [(u) => this.drawGrid(u)],
+          draw: [(u) => this.drawGrid(u), (u) => drawFocus(u, this.focus)],
         },
       };
       const chart = new uPlot(opts, [[this.view.min, this.view.max], [null, null]], this.$refs.chart);

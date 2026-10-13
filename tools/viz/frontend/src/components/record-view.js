@@ -10,6 +10,8 @@ const WINDOW = 61;
 // from the scrolled end dropped, so that the page holds a bounded part of the file.
 const PAGE = 200;
 const MAX_RECORDS = 1000;
+// Time at the start of a record: whole seconds, then their fraction, UTC.
+const RECORD_TIME_RE = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(\.\d+)?/;
 // Characters of a selection that its lines can be marked by.
 const MAX_MARK_TEXT = 200;
 // Distance from the first or last line, in pixels, at which the next records are loaded.
@@ -48,7 +50,7 @@ export default {
     sources: { type: Array, required: true },
   },
   components: { EventTables },
-  emits: ["close", "select-record", "plot-key", "mark-lines"],
+  emits: ["close", "select-record", "plot-key", "mark-lines", "focus"],
   data() {
     // current is the highlighted record, the selected one until another record is clicked, and detail its decoding.
     return {
@@ -122,11 +124,25 @@ export default {
     window.removeEventListener("pointerdown", this.pointerListener, true);
   },
   methods: {
-    /** Highlights a record and shows its decoding, for sources whose records decode. */
+    /** Highlights a record, focuses its time on the plots, and shows its decoding, for sources whose records decode. */
     select(record) {
-      if (!this.hasDetail) return;
+      // Selecting text in a line is not a click on it.
+      if (!window.getSelection()?.isCollapsed) return;
       this.current = record;
-      this.loadDetail();
+      this.emitFocus();
+      if (this.hasDetail) this.loadDetail();
+    },
+
+    /** Focuses the highlighted record on the plots, at the time of its line or of the entry it continues. */
+    emitFocus() {
+      const index = this.records.findIndex((r) => r.record === this.current);
+      for (let i = index; i >= 0; i--) {
+        const m = RECORD_TIME_RE.exec(this.records[i].text);
+        if (!m) continue;
+        const t = Date.parse(m[1] + "Z") / 1000 + Number(m[2] ?? 0);
+        this.$emit("focus", { source: this.selection.source, record: this.current, t });
+        return;
+      }
     },
 
     async loadDetail() {
@@ -393,6 +409,7 @@ export default {
         this.error = e.message;
       }
       await this.$nextTick();
+      this.emitFocus();
       // Only the log lines scroll: scrollIntoView would also scroll the page, moving the clicked plot away.
       this.centerCurrent();
       const lines = this.$refs.lines;
@@ -433,7 +450,7 @@ export default {
       <div :class="['record-body', { split: hasDetail }]">
         <div ref="lines" class="record-lines" @scroll.passive="onScroll" @contextmenu="onContextMenu" :style="height && !maximized ? { height: height + 'px' } : null">
           <div v-for="r in records" :key="r.record"
-               :class="['record-line', { selected: r.record === current, clickable: hasDetail }]" @click="select(r.record)">
+               :class="['record-line', 'clickable', { selected: r.record === current }]" @click="select(r.record)">
             <span class="lineno">{{ r.record }}</span><span class="text"><template v-for="(part, i) in segments(r)" :key="i"><mark v-if="part.mark">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>
           </div>
         </div>

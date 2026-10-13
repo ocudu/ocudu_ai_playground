@@ -408,6 +408,14 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - The server reads a page of a log from the nearest record offset of the store at or before its first record, one
   every 1000 lines, so a page reads at most about 1200 lines of the file.
 
+### D19a2. Focus on a record
+
+- The record highlighted in the log pane, clicked, found or opened from a point, is the focus of the tab: the time
+  plots, the trace and the grid draw a gray dashed line at its time (`--focus`), and plots of the same log, or of its
+  ad-hoc metrics, a ring around its points. Its time is the timestamp at the start of its text, or of the entry it
+  continues, so that it works for every source, whose records all start with one. When it is out of the view, the
+  view pans to center it, keeping the zoom. Closing the pane clears it.
+
 ### D19b. Ad-hoc metrics of logs
 
 - Right-clicking a `key=value` field with a numeric value in a line of the log pane, e.g. `tbs=5889` of a slot decision

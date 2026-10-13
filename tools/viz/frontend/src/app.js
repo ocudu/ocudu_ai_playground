@@ -92,6 +92,8 @@ const App = {
       activeId: null,
       timeMode: "absolute",
       selection: null,
+      // Record highlighted in the log pane, as {source, record, t} in display time, which the panels mark.
+      focus: null,
       error: "",
       warnings: [],
       themePref: loadThemePreference(),
@@ -558,6 +560,17 @@ const App = {
       this.maximizedHeight = Math.max(200, window.innerHeight - bar - pane - 24);
     },
 
+    /** Marks a record of the log pane on the panels, panning the view to it when it is out of the view. */
+    focusRecord({ source, record, t }) {
+      const shown = t + (this.shifts[source] ?? 0);
+      this.focus = { source, record, t: shown };
+      const view = this.view;
+      if (view && (shown < view.min || shown > view.max)) {
+        const half = (view.max - view.min) / 2;
+        this.zoom({ min: shown - half, max: shown + half });
+      }
+    },
+
     zoom(range) {
       if (this.activeTab) this.activeTab.userRange = range && range.max > range.min ? range : null;
     },
@@ -788,11 +801,11 @@ const App = {
             <span v-for="n in activeNotes" :key="n" class="muted event-note">{{ n }}</span>
           </div>
           <template v-for="p in activeTab.plots" :key="p.id">
-            <trace-panel v-if="p.kind === 'trace'" v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
+            <trace-panel v-if="p.kind === 'trace'" :focus="focus" v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
                          :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :panel="p" :sources="sources" :choices="runSources" :run-id="activeId" :view="view" :shifts="shifts"
                          :time-mode="timeMode" :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)"
                          @select-record="selection = $event" />
-            <grid-panel v-else-if="p.kind === 'grid'" v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
+            <grid-panel v-else-if="p.kind === 'grid'" :focus="focus" v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
                          :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
                         :time-mode="timeMode" :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)"
                         @select-record="selection = $event" @parse-source="parseSource" />
@@ -800,7 +813,7 @@ const App = {
                          :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :panel="p" :sources="sources" :choices="panelSources" :view="view" :shifts="shifts"
                          :show-source="panelSources.length > 1" @remove="removePlot(p.id)" @select-record="selection = $event"
                          @parse-source="parseSource" />
-            <plot-panel v-else v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
+            <plot-panel v-else :focus="focus" v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
                          :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :plot="p" :sources="sources" :choices="panelSources" :view="view" :shifts="shifts" :time-mode="timeMode"
                         :theme-version="themeVersion" :show-source="panelSources.length > 1" :events="events"
                         @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" @parse-source="parseSource" @adhoc="plotAdhoc($event, p)" />
@@ -816,7 +829,7 @@ const App = {
         </template>
       </template>
     </main>
-    <record-view v-if="selection" :selection="selection" :sources="sources" @close="selection = null"
+    <record-view v-if="selection" :selection="selection" :sources="sources" @close="selection = null; focus = null" @focus="focusRecord"
                  @select-record="selection = $event" @plot-key="plotAdhoc($event)" @mark-lines="markLines($event)" />
     <file-browser v-if="browserOpen" :roots="roots" @open="openPath" @close="browserOpen = false" />
     <div v-if="relatedQuestion" class="modal-backdrop">
