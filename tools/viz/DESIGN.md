@@ -443,6 +443,14 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - Duplex is not in the trace: a cell is FDD when at least 5% of its slots with PDSCH, PUSCH or PUCCH have DL and UL
   together, which TDD cells only have in special slots, without PDSCH and PUSCH together.
 
+### D21. Maximized panels and log pane
+
+- A panel's `⛶` hides the other panels of its tab and fills the space the app bar and the log pane leave, its chart or
+  rows taller; the log pane stays, since clicking the panel opens records in it.
+- The log pane's `⛶` fills the whole window, over the app bar, with its lines and the decoded record taking the height
+  below its bar; it keeps the highlighted line in view. Its drag-resized height is kept for when it is restored.
+- `🗗` or Esc restores either. Esc restores the log pane first, when both are maximized.
+
 ## Open questions
 
 None yet.

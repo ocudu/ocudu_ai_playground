@@ -49,6 +49,8 @@ export default {
       detailData: null, detailTab: "decisions",
       // Search of the records: its text, whether it is a regular expression, and its outcome, e.g. "no match".
       query: "", regex: false, searchNote: "", searching: false,
+      // Whether the pane fills the window.
+      maximized: false,
     };
   },
   computed: {
@@ -85,6 +87,14 @@ export default {
       immediate: true,
       deep: true,
     },
+  },
+  mounted() {
+    // In the capture phase, so that it runs before the app's own Esc handling.
+    this.keyListener = (e) => this.onKey(e);
+    window.addEventListener("keydown", this.keyListener, true);
+  },
+  beforeUnmount() {
+    window.removeEventListener("keydown", this.keyListener, true);
   },
   methods: {
     /** Highlights a record and shows its decoding, for sources whose records decode. */
@@ -186,6 +196,27 @@ export default {
       }
     },
 
+    /** Fills the window with the pane, or restores it, keeping the highlighted record in view. */
+    async toggleMaximized() {
+      this.maximized = !this.maximized;
+      await this.$nextTick();
+      this.centerCurrent();
+    },
+
+    /** Restores the maximized pane on Esc, before the app restores a maximized panel behind it. */
+    onKey(e) {
+      if (e.key !== "Escape" || !this.maximized) return;
+      e.stopPropagation();
+      this.toggleMaximized();
+    },
+
+    /** Scrolls the log lines to the highlighted record. */
+    centerCurrent() {
+      const lines = this.$refs.lines;
+      const selected = lines?.querySelector(".record-line.selected");
+      if (selected) lines.scrollTop = selected.offsetTop - (lines.clientHeight - selected.offsetHeight) / 2;
+    },
+
     resetHeight() {
       this.height = null;
       saveHeight(null);
@@ -202,9 +233,9 @@ export default {
       }
       await this.$nextTick();
       // Only the log lines scroll: scrollIntoView would also scroll the page, moving the clicked plot away.
+      this.centerCurrent();
       const lines = this.$refs.lines;
       const selected = lines?.querySelector(".record-line.selected");
-      if (selected) lines.scrollTop = selected.offsetTop - (lines.clientHeight - selected.offsetHeight) / 2;
       const mark = selected?.querySelector("mark");
       if (mark) {
         // Marks near the end of long lines would be out of view.
@@ -216,8 +247,8 @@ export default {
     },
   },
   template: `
-    <aside class="records">
-      <div class="resize-handle" title="Drag to resize, double-click to reset" @pointerdown="startResize" @dblclick="resetHeight"></div>
+    <aside :class="['records', { maximized }]">
+      <div v-if="!maximized" class="resize-handle" title="Drag to resize, double-click to reset" @pointerdown="startResize" @dblclick="resetHeight"></div>
       <header class="panel-bar">
         <strong>{{ sourceName }}</strong>
         <span class="muted">{{ hasDetail ? "frame" : "line" }} {{ current }}</span>
@@ -235,16 +266,17 @@ export default {
         <span v-if="searching" class="muted">searching</span>
         <span v-else-if="searchNote" :class="searchNote === 'no match' || searchNote.startsWith('wrapped') ? 'muted' : 'error'">{{ searchNote }}</span>
         <span class="status"><span v-if="error" class="error">{{ error }}</span></span>
+        <button class="icon" :title="maximized ? 'Restore (Esc)' : 'Maximize'" @click="toggleMaximized">{{ maximized ? "🗗" : "⛶" }}</button>
         <button class="icon" title="Close" @click="$emit('close')">✕</button>
       </header>
       <div :class="['record-body', { split: hasDetail }]">
-        <div ref="lines" class="record-lines" :style="height ? { height: height + 'px' } : null">
+        <div ref="lines" class="record-lines" :style="height && !maximized ? { height: height + 'px' } : null">
           <div v-for="r in records" :key="r.record"
                :class="['record-line', { selected: r.record === current, clickable: hasDetail }]" @click="select(r.record)">
             <span class="lineno">{{ r.record }}</span><span class="text"><template v-for="(part, i) in segments(r)" :key="i"><mark v-if="part.mark">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>
           </div>
         </div>
-        <div v-if="hasDetail && detailData" class="record-detail record-detail-tabs" :style="height ? { height: height + 'px' } : null">
+        <div v-if="hasDetail && detailData" class="record-detail record-detail-tabs" :style="height && !maximized ? { height: height + 'px' } : null">
           <div class="detail-tabs">
             <button v-for="tab in ['decisions', 'events', 'raw']" :key="tab" :class="{ active: detailTab === tab }" @click="detailTab = tab">{{ tab }}</button>
           </div>
@@ -252,7 +284,7 @@ export default {
           <event-tables v-else :event="detailData" :view="detailTab" :slots-per-frame="source?.grid?.slots_per_frame ?? null"
                         :highlight="current === selection.record ? selection.item ?? null : null" />
         </div>
-        <pre v-else-if="hasDetail" class="record-detail" :style="height ? { height: height + 'px' } : null"><span v-if="detailError" class="error">{{ detailError }}</span>{{ detail || (detailError ? "" : "decoding…") }}</pre>
+        <pre v-else-if="hasDetail" class="record-detail" :style="height && !maximized ? { height: height + 'px' } : null"><span v-if="detailError" class="error">{{ detailError }}</span>{{ detail || (detailError ? "" : "decoding…") }}</pre>
       </div>
     </aside>
   `,

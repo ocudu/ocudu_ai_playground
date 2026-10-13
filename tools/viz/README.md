@@ -117,7 +117,8 @@ In the page:
 - `⛶` maximizes a plot, table, trace or grid: it fills the window, alone with the log pane, its chart taller (a trace
   showing more UE rows). `🗗` or Esc restores it.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,
-  double-click it to reset the height. Its search box finds text in the whole file, case-insensitive, from the
+  double-click it to reset the height. Its `⛶` fills the window with it, e.g. to read a long decoded slot event; `🗗` or
+  Esc restores it. Its search box finds text in the whole file, case-insensitive, from the
   highlighted line: Enter or `↓` goes to the next match, Shift+Enter or `↑` to the previous one, wrapping around the
   file, and the matches in view are highlighted. With `regex`, the text is a regular expression (Python syntax).
 - The top-right corner of a plot shows the time and value under the mouse. The legend below shows the time under

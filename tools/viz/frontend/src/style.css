@@ -364,6 +364,20 @@ main { flex: 1 0 auto; padding: 8px 16px 16px; }
   background: var(--bg);
 }
 
+/* The log pane filling the window, its lines and decoded record taking the height below its bar. */
+.records.maximized {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  border-top: none;
+}
+.records.maximized .record-body { flex: 1 1 auto; min-height: 0; display: flex; }
+.records.maximized .record-lines { flex: 1 1 50%; min-width: 0; }
+.records.maximized .record-lines,
+.records.maximized .record-detail { height: auto; }
+
 .resize-handle {
   height: 6px;
   margin-top: -3px;
