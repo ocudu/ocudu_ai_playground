@@ -122,7 +122,7 @@ def ue_traces(ues: list[Ue], cores: list[Context] = ()) -> list[UeTrace]:
     A UE context joins the one that named its C-RNTI as the target of a handover (newUE-Identity), created within
     CREATION_SLACK_S of that message, and the one whose C-RNTI it reestablishes, and the ones of the same CU-CP UE index ("cu_ue")
     whose lifetimes overlap, since that index is soon reused. An NGAP context joins the UE contexts of the same NAS
-    PDUs, the one created within CREATION_SLACK_S of the NGAP handover naming its C-RNTI, or else the one created nearest
+    PDUs, of no other UE or NGAP context, the one created within CREATION_SLACK_S of the NGAP handover naming its C-RNTI, or else the one created nearest
     it within CREATION_SLACK_S, and an E1AP context the NGAP one of the same UPF TEID in a message within
     CREATION_SLACK_S. Each UE context gets "ue_trace", the trace number, and the identifiers of the NGAP and E1AP contexts of its
     trace.
@@ -167,12 +167,19 @@ def ue_traces(ues: list[Ue], cores: list[Context] = ()) -> list[UeTrace]:
             if ues[a].t_start <= ues[b].t_end and ues[b].t_start <= ues[a].t_end:
                 union(a, b)
 
-    by_nas: dict[str, int] = {}
+    # UEs can send byte-identical NAS PDUs, e.g. the authentication of test UEs of the same key, so only the PDUs of
+    # one UE and one NGAP context link them.
+    nas_ues: dict[str, set[int]] = {}
     for i, ue in enumerate(ues):
         for nas in ue.links.get("nas", {}):
-            by_nas.setdefault(nas, i)
-    by_teid: dict[str, list[tuple[int, float]]] = {}
+            nas_ues.setdefault(nas, set()).add(find(i))
     ngap = [(len(ues) + k, c) for k, c in enumerate(cores) if "ran_ngap" in c.ids or "amf_ngap" in c.ids]
+    nas_cores: dict[str, int] = {}
+    for _, core in ngap:
+        for nas in core.links.get("nas", {}):
+            nas_cores[nas] = nas_cores.get(nas, 0) + 1
+    by_nas = {nas: next(iter(roots)) for nas, roots in nas_ues.items() if len(roots) == 1 and nas_cores.get(nas) == 1}
+    by_teid: dict[str, list[tuple[int, float]]] = {}
     unmatched = []
     with_ngap: set[int] = set()
     for node, core in ngap:

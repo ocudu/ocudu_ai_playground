@@ -74,6 +74,19 @@ class UeTracesTest(unittest.TestCase):
         # Each UE context gets its trace and the identifiers of its NGAP and E1AP contexts.
         self.assertEqual({k: ues[1].ids[k] for k in ("ue_trace", "ran_ngap", "cu_cp_e1ap")}, {"ue_trace": ["0"], "ran_ngap": ["0"], "cu_cp_e1ap": ["0"]})
 
+    def test_nas_pdus_of_several_ues_link_none(self):
+        # Both UEs send the same authentication response, "auth", but registration requests of their own.
+        f1ap = [
+            Context("f1ap", 0, 10.0, 20.0, {"rnti": "0x4601"}, links={"nas": {"reg1": 10.1, "auth": 10.2}}),
+            Context("f1ap", 1, 10.0, 20.0, {"rnti": "0x4602"}, links={"nas": {"reg2": 10.1, "auth": 10.2}}),
+        ]
+        cores = [
+            Context("ngap", 0, 10.1, 20.0, {"ran_ngap": "0"}, links={"nas": {"reg1": 10.1, "auth": 10.2}}),
+            Context("ngap", 1, 10.1, 20.0, {"ran_ngap": "1"}, links={"nas": {"reg2": 10.1, "auth": 10.2}}),
+        ]
+        self.assertEqual([(t.ues, t.cores) for t in ue_traces(combine(f1ap), cores)],
+                         [(["f1ap:0"], [("ngap", 0)]), (["f1ap:1"], [("ngap", 1)])])
+
     def test_reestablishment_and_cu_ue(self):
         f1ap = [
             Context("f1ap", 0, 10.0, 15.0, {"rnti": "0x4601"}),
