@@ -18,7 +18,11 @@ class ProceduresTest(unittest.TestCase):
 class NasTest(unittest.TestCase):
     def test_nas_name(self):
         self.assertEqual(nas.nas_name("0x41", ""), "RegistrationRequest")
-        self.assertEqual(nas.nas_name("0x68", "0xc1"), "PDUSessionEstablishmentRequest")
+        self.assertEqual(nas.nas_name("0x67", "0xc1"), "PDUSessionEstablishmentRequest")
+        self.assertEqual(nas.nas_name("0x67", ""), "ULNASTransport")
+        self.assertEqual(nas.nas_name("0x68", ""), "DLNASTransport")
+        self.assertEqual(nas.nas_name("0x68", "0xc5"), "PDUSessionAuthenticationCommand")
+        self.assertEqual(nas.nas_name("0x67", "0xc7"), "PDUSessionAuthenticationResult")
         self.assertEqual(nas.nas_name("0x7f", None), "5GMM(0x7f)")
         self.assertIsNone(nas.nas_name("", ""))
 

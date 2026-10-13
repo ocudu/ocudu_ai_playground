@@ -16,13 +16,13 @@ NAS_5GMM_TYPES: dict[int, str] = {
     0x59: "AuthenticationFailure", 0x5a: "AuthenticationResult", 0x5b: "IdentityRequest",
     0x5c: "IdentityResponse", 0x5d: "SecurityModeCommand", 0x5e: "SecurityModeComplete",
     0x5f: "SecurityModeReject", 0x64: "5GMMStatus", 0x65: "Notification",
-    0x66: "NotificationResponse", 0x67: "DLNASTransport", 0x68: "ULNASTransport",
+    0x66: "NotificationResponse", 0x67: "ULNASTransport", 0x68: "DLNASTransport",
 }
 # NAS 5GSM message type to name (TS 24.501 9.7).
 NAS_5GSM_TYPES: dict[int, str] = {
     0xc1: "PDUSessionEstablishmentRequest", 0xc2: "PDUSessionEstablishmentAccept",
-    0xc3: "PDUSessionEstablishmentReject", 0xc4: "PDUSessionAuthenticationCommand",
-    0xc5: "PDUSessionAuthenticationComplete", 0xc6: "PDUSessionAuthenticationResult",
+    0xc3: "PDUSessionEstablishmentReject", 0xc5: "PDUSessionAuthenticationCommand",
+    0xc6: "PDUSessionAuthenticationComplete", 0xc7: "PDUSessionAuthenticationResult",
     0xc9: "PDUSessionModificationRequest", 0xca: "PDUSessionModificationReject",
     0xcb: "PDUSessionModificationCommand", 0xcc: "PDUSessionModificationComplete",
     0xcd: "PDUSessionModificationCommandReject", 0xd1: "PDUSessionReleaseRequest",
