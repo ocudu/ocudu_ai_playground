@@ -110,6 +110,10 @@ In the page:
   CSI report, RACH), or as raw JSON, and click
   the occupancy to zoom to 40 slots around it. Traces are parsed on request, like MAC and RLC pcaps: a grid parses its
   trace when it opens.
+- A scheduler event trace also gives plots and tables per UE: `ue_metrics`, per UE and 10 ms (throughput as METRICS
+  `dl_brate`, from the ACKed TBS, scheduled DL and UL throughput, MCS, PRBs, new and retransmissions, ACK/NACK/DTX
+  and error rate, CQI, RI, RSRP, SRs); `cell_metrics`, the scheduler latency, PRBs and UEs per 10 ms; and the grants
+  and reports themselves (`dl_grants`, `ul_grants`, `harq_acks`, `csi_reports`). Click a point to see its slot event.
 - `⛶` maximizes a plot, table, trace or grid: it fills the window, alone with the log pane, its chart taller (a trace
   showing more UE rows). `🗗` or Esc restores it.
 - Click a point to see its log line and the lines around it. Drag the top edge of the log pane to resize it,

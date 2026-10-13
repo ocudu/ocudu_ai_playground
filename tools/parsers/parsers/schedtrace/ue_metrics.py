@@ -1,0 +1,211 @@
+# SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
+# SPDX-License-Identifier: BSD-3-Clause-Open-MPI
+
+"""Per-UE metrics of a schedtrace: the grants and reports of each UE in a slot, and their aggregates per bin of time,
+named as the fields of the METRICS "Scheduler UE" lines of OCUDU where they mean the same.
+
+The trace has no UL CRC, buffer status or power headroom, so UL rates are of the scheduled TBS of new transmissions,
+not of the decoded ones. A HARQ-ACK report of DTX counts as not ok.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from ..ran.rnti import normalize
+from .grid import Cell, rbg_crbs
+
+# Duration of an aggregation bin, in seconds.
+BIN_S = 0.01
+# Fields of the rows of each kind of grant or report of slot_items(), all with "rnti" and "ue_index" first.
+ITEM_FIELDS: dict[str, tuple[str, ...]] = {
+    "dl_grants": ("rnti", "ue_index", "harq_id", "mcs", "tbs", "nof_prbs", "new_data", "nof_retxs", "k1"),
+    "ul_grants": ("rnti", "ue_index", "harq_id", "tbs", "nof_prbs", "nof_layers", "rv", "nof_retxs", "k2"),
+    "harq_acks": ("rnti", "ue_index", "harq_id", "status", "tbs"),
+    "csi_reports": ("rnti", "ue_index", "cqi", "ri", "rsrp"),
+}
+# Units of the fields of slot_items() and of the aggregates.
+ITEM_UNITS = {"tbs": "B", "rsrp": "dBm"}
+UE_FIELDS = ("rnti", "ue_index", "dl_brate", "dl_sched_brate", "dl_mcs", "dl_nof_prbs", "dl_nof_newtx", "dl_nof_retx",
+             "dl_nof_ok", "dl_nof_nok", "dl_nof_dtx", "dl_error_rate", "ul_sched_brate", "ul_nof_prbs", "ul_nof_newtx",
+             "ul_nof_retx", "ul_ri", "cqi", "dl_ri", "rsrp", "sr_count")
+UE_UNITS = {"dl_brate": "bps", "dl_sched_brate": "bps", "ul_sched_brate": "bps", "dl_error_rate": "%", "rsrp": "dBm"}
+CELL_FIELDS = ("latency_avg", "latency_max", "nof_slots", "dl_nof_prbs", "ul_nof_prbs", "dl_nof_ues", "ul_nof_ues",
+               "failed_attempts")
+CELL_UNITS = {"latency_avg": "us", "latency_max": "us"}
+_STATUS = ("Nack", "Ack", "Dtx")
+
+
+def nof_prbs(rbs: dict[str, Any] | None, bwp: dict[str, Any]) -> int:
+    """PRBs of the RbAlloc of a grant in a BWP of grid.Cell."""
+    if not rbs:
+        return 0
+    if rbs.get("type") == "VrbAlloc":
+        return rbs["vrb_length"]
+    if rbs.get("type") == "RbgAlloc":
+        return sum(n for _, n in rbg_crbs(rbs["bitmap"], rbs["nof_rbgs"], bwp))
+    return 0
+
+
+def slot_items(event: dict[str, Any], cell: Cell) -> dict[str, list[tuple]]:
+    """The grants and reports of the UEs of a CellSlotEvent of schedtrace.read(), as rows of the fields of
+    ITEM_FIELDS by kind, RNTIs as OCUDU logs print them.
+    """
+    decision = event.get("decision") or {}
+    dl = []
+    for p in decision.get("ue_pdschs") or []:
+        cw = (p.get("codewords") or [{}])[0]
+        dl.append((normalize(p["rnti"]), p["ue_index"], p["harq_id"], cw.get("mcs_index"), cw.get("tb_size_bytes"),
+                   nof_prbs(p.get("rbs"), cell.dl_bwp), cw.get("new_data"), p["nof_retxs"], p["k1"]))
+    ul = [(normalize(p["rnti"]), p["ue_index"], p["harq_id"], p["tb_size_bytes"], nof_prbs(p.get("rbs"), cell.ul_bwp),
+           p.get("nof_layers"), p["rv_index"], p["nof_retxs"], p["k2"]) for p in decision.get("puschs") or []]
+    acks, csis, srs = [], [], []
+    for i in event.get("inputs") or []:
+        kind = i and i.get("type")
+        if kind == "HarqAckEvent":
+            status = i["status"] if isinstance(i["status"], str) else _STATUS[i["status"]]
+            acks.append((normalize(i["rnti"]), i["ue_idx"], i["harq_id"], status, i["tbs"]))
+        elif kind == "CsiReportEvent":
+            rsrp = i.get("rsrp_dbm") or []
+            csis.append((normalize(i["rnti"]), i["ue_idx"], i.get("first_tb_wb_cqi"), i.get("ri"),
+                         rsrp[0] if rsrp else None))
+        elif kind == "SrEvent":
+            srs.append((normalize(i["rnti"]), i["ue_idx"]))
+    return {"dl_grants": dl, "ul_grants": ul, "harq_acks": acks, "csi_reports": csis, "srs": srs}
+
+
+class Aggregator:
+    """Sums of the grants and reports of each UE, and of each cell slot, per bin of BIN_S. Aggregators of parts of a
+    trace merge into the one of the whole.
+    """
+
+    def __init__(self) -> None:
+        # Sums of each (bin, RNTI), and of each bin for the cell, with the first record of the bin.
+        self.ues: dict[tuple[int, str], dict[str, Any]] = {}
+        self.cells: dict[int, dict[str, Any]] = {}
+
+    def add(self, record: int, event: dict[str, Any], items: dict[str, list[tuple]]) -> None:
+        """Adds a CellSlotEvent of record number record and its slot_items()."""
+        b = int(event["timestamp_us"] / 1e6 // BIN_S)
+        latency = event.get("latency_us") or 0
+        c = self.cells.get(b)
+        if c is None:
+            c = self.cells[b] = {"record": record, "n": 0, "latency_sum": 0, "latency_max": latency, "dl_nof_prbs": 0,
+                                 "ul_nof_prbs": 0, "dl_ues": set(), "ul_ues": set(), "failed_attempts": 0}
+        c["record"] = min(c["record"], record)
+        c["n"] += 1
+        c["latency_sum"] += latency
+        c["latency_max"] = max(c["latency_max"], latency)
+        failed = (event.get("decision") or {}).get("failed_attempts") or {}
+        c["failed_attempts"] += sum(v for v in failed.values() if isinstance(v, int))
+        for rnti, ue, _, mcs, tbs, prbs, new_data, *_ in items["dl_grants"]:
+            u = self._ue(b, rnti, ue, record)
+            if new_data:
+                u["dl_nof_newtx"] += 1
+                u["dl_newtx_bytes"] += tbs or 0
+            else:
+                u["dl_nof_retx"] += 1
+            if mcs is not None:
+                u["dl_mcs_sum"] += mcs
+                u["dl_mcs_n"] += 1
+            u["dl_nof_prbs"] += prbs
+            c["dl_nof_prbs"] += prbs
+            c["dl_ues"].add(rnti)
+        for rnti, ue, _, tbs, prbs, layers, _, nof_retxs, _ in items["ul_grants"]:
+            u = self._ue(b, rnti, ue, record)
+            if nof_retxs:
+                u["ul_nof_retx"] += 1
+            else:
+                u["ul_nof_newtx"] += 1
+                u["ul_newtx_bytes"] += tbs or 0
+            if layers:
+                u["ul_layers_sum"] += layers
+                u["ul_layers_n"] += 1
+            u["ul_nof_prbs"] += prbs
+            c["ul_nof_prbs"] += prbs
+            c["ul_ues"].add(rnti)
+        for rnti, ue, _, status, tbs in items["harq_acks"]:
+            u = self._ue(b, rnti, ue, record)
+            if status == "Ack":
+                u["dl_nof_ok"] += 1
+                u["dl_ok_bytes"] += tbs or 0
+            elif status == "Nack":
+                u["dl_nof_nok"] += 1
+            else:
+                u["dl_nof_dtx"] += 1
+        for rnti, ue, cqi, ri, rsrp in items["csi_reports"]:
+            u = self._ue(b, rnti, ue, record)
+            # The last report of a bin, as for the METRICS lines.
+            if cqi is not None:
+                u["cqi"] = cqi
+            if ri is not None:
+                u["dl_ri"] = ri
+            if rsrp is not None:
+                u["rsrp_sum"] += rsrp
+                u["rsrp_n"] += 1
+        for rnti, ue in items["srs"]:
+            self._ue(b, rnti, ue, record)["sr_count"] += 1
+
+    def merge(self, other: Aggregator) -> None:
+        """Adds the sums of an aggregator of a later part of the trace."""
+        for key, o in other.ues.items():
+            u = self.ues.get(key)
+            if u is None:
+                self.ues[key] = o
+                continue
+            for k, v in o.items():
+                if k == "record":
+                    u[k] = min(u[k], v)
+                elif k in ("ue_index", "cqi", "dl_ri"):
+                    u[k] = v if v is not None else u[k]
+                else:
+                    u[k] += v
+        for b, o in other.cells.items():
+            c = self.cells.get(b)
+            if c is None:
+                self.cells[b] = o
+                continue
+            c["record"] = min(c["record"], o["record"])
+            c["latency_max"] = max(c["latency_max"], o["latency_max"])
+            c["dl_ues"] |= o["dl_ues"]
+            c["ul_ues"] |= o["ul_ues"]
+            for k in ("n", "latency_sum", "dl_nof_prbs", "ul_nof_prbs", "failed_attempts"):
+                c[k] += o[k]
+
+    def ue_rows(self) -> list[tuple]:
+        """Rows of time, record and the values of UE_FIELDS, per bin and RNTI, in time order."""
+        out = []
+        for (b, rnti), u in sorted(self.ues.items()):
+            reports = u["dl_nof_ok"] + u["dl_nof_nok"] + u["dl_nof_dtx"]
+            out.append((
+                b * BIN_S, u["record"], rnti, u["ue_index"],
+                u["dl_ok_bytes"] * 8 / BIN_S, u["dl_newtx_bytes"] * 8 / BIN_S,
+                u["dl_mcs_sum"] / u["dl_mcs_n"] if u["dl_mcs_n"] else None,
+                u["dl_nof_prbs"], u["dl_nof_newtx"], u["dl_nof_retx"],
+                u["dl_nof_ok"], u["dl_nof_nok"], u["dl_nof_dtx"],
+                100 * (reports - u["dl_nof_ok"]) / reports if reports else None,
+                u["ul_newtx_bytes"] * 8 / BIN_S, u["ul_nof_prbs"], u["ul_nof_newtx"], u["ul_nof_retx"],
+                u["ul_layers_sum"] / u["ul_layers_n"] if u["ul_layers_n"] else None,
+                u["cqi"], u["dl_ri"], u["rsrp_sum"] / u["rsrp_n"] if u["rsrp_n"] else None, u["sr_count"],
+            ))
+        return out
+
+    def cell_rows(self) -> list[tuple]:
+        """Rows of time, record and the values of CELL_FIELDS, per bin, in time order."""
+        return [(b * BIN_S, c["record"], c["latency_sum"] / c["n"], c["latency_max"], c["n"], c["dl_nof_prbs"],
+                 c["ul_nof_prbs"], len(c["dl_ues"]), len(c["ul_ues"]), c["failed_attempts"])
+                for b, c in sorted(self.cells.items())]
+
+    def _ue(self, b: int, rnti: str, ue_index: int, record: int) -> dict[str, Any]:
+        u = self.ues.get((b, rnti))
+        if u is None:
+            u = self.ues[(b, rnti)] = dict.fromkeys(_UE_SUMS, 0)
+            u.update(record=record, ue_index=ue_index, cqi=None, dl_ri=None)
+        u["record"] = min(u["record"], record)
+        return u
+
+
+# Sums kept per bin and UE.
+_UE_SUMS = ("dl_ok_bytes", "dl_newtx_bytes", "dl_mcs_sum", "dl_mcs_n", "dl_nof_prbs", "dl_nof_newtx", "dl_nof_retx",
+            "dl_nof_ok", "dl_nof_nok", "dl_nof_dtx", "ul_newtx_bytes", "ul_nof_prbs", "ul_nof_newtx", "ul_nof_retx",
+            "ul_layers_sum", "ul_layers_n", "rsrp_sum", "rsrp_n", "sr_count")

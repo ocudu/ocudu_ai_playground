@@ -1,0 +1,95 @@
+# SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
+# SPDX-License-Identifier: BSD-3-Clause-Open-MPI
+
+import unittest
+from pathlib import Path
+
+from parsers import schedtrace
+from parsers.schedtrace import grid, ue_metrics
+
+DATA = Path(__file__).parent / "data"
+
+
+def pdsch(rnti, mcs, tbs, new_data=True, nof_retxs=0, rbs=None):
+    return {"rnti": rnti, "ue_index": rnti - 0x4600, "harq_id": 0, "nof_retxs": nof_retxs, "k1": 4,
+            "rbs": rbs or {"type": "VrbAlloc", "vrb_start": 0, "vrb_length": 10},
+            "codewords": [{"mcs_index": mcs, "tb_size_bytes": tbs, "new_data": new_data, "rv_index": 0}]}
+
+
+def pusch(rnti, tbs, nof_retxs=0, layers=1):
+    return {"rnti": rnti, "ue_index": rnti - 0x4600, "harq_id": 1, "tb_size_bytes": tbs, "nof_layers": layers,
+            "rv_index": 0, "nof_retxs": nof_retxs, "k2": 4, "rbs": {"type": "VrbAlloc", "vrb_start": 0, "vrb_length": 5}}
+
+
+def ack(rnti, status, tbs=1000):
+    return {"type": "HarqAckEvent", "slot_rx": 0, "ue_idx": rnti - 0x4600, "rnti": rnti, "harq_id": 0, "status": status,
+            "tbs": tbs}
+
+
+def slot(t_us, inputs=(), latency=10, **decision):
+    return {"type": "CellSlotEvent", "slot_tx": 0, "timestamp_us": t_us, "latency_us": latency, "inputs": list(inputs),
+            "decision": decision}
+
+
+class UeMetricsTest(unittest.TestCase):
+    def setUp(self):
+        # DL BWP of 52 PRBs from CRB 2, RBGs of 4.
+        self.cell = grid.cell_of(next(schedtrace.read(DATA / "schedtrace_cell0.bin")))
+
+    def test_slot_items(self):
+        rbg = {"type": "RbgAlloc", "nof_rbgs": 14, "bitmap": 0b11 << 12}
+        items = ue_metrics.slot_items(slot(0, [ack(0x4601, "Ack"), {"type": "SrEvent", "slot_rx": 0, "ue_idx": 1,
+                                                                        "rnti": 0x4601}],
+                                           ue_pdschs=[pdsch(0x4601, 27, 5000, rbs=rbg)], puschs=[pusch(0x4601, 900)]),
+                                      self.cell)
+        # RBGs 0 and 1: CRBs 2 and 3, then 4 to 7, 6 PRBs.
+        self.assertEqual(items["dl_grants"], [("0x4601", 1, 0, 27, 5000, 6, True, 0, 4)])
+        self.assertEqual(items["ul_grants"], [("0x4601", 1, 1, 900, 5, 1, 0, 0, 4)])
+        self.assertEqual(items["harq_acks"], [("0x4601", 1, 0, "Ack", 1000)])
+        self.assertEqual(items["srs"], [("0x4601", 1)])
+
+    def test_aggregates(self):
+        agg = ue_metrics.Aggregator()
+        events = [
+            # Bin 0: a new transmission and a retransmission, and an ACK, a NACK and a DTX.
+            slot(1000, [ack(0x4601, "Ack", 2500), ack(0x4601, "Nack")], ue_pdschs=[pdsch(0x4601, 20, 4000)],
+                 puschs=[pusch(0x4601, 1000, layers=2)]),
+            slot(2000, [ack(0x4601, "Dtx")], latency=30, ue_pdschs=[pdsch(0x4601, 10, 4000, False, 1)],
+                 puschs=[pusch(0x4601, 1000, nof_retxs=1)]),
+            # Bin 1.
+            slot(11000, [{"type": "CsiReportEvent", "slot_rx": 0, "ue_idx": 1, "rnti": 0x4601, "first_tb_wb_cqi": 12,
+                          "ri": 2, "rsrp_dbm": [-80]}]),
+        ]
+        for record, e in enumerate(events, 1):
+            agg.add(record, e, ue_metrics.slot_items(e, self.cell))
+        rows = [dict(zip(("t", "record", *ue_metrics.UE_FIELDS), r)) for r in agg.ue_rows()]
+        self.assertEqual(len(rows), 2)
+        first = rows[0]
+        self.assertEqual((first["t"], first["record"], first["rnti"], first["ue_index"]), (0, 1, "0x4601", 1))
+        # ACKed bytes and new transmission bytes, over 10 ms.
+        self.assertEqual((first["dl_brate"], first["dl_sched_brate"]), (2500 * 8 / 0.01, 4000 * 8 / 0.01))
+        self.assertEqual((first["dl_mcs"], first["dl_nof_prbs"], first["dl_nof_newtx"], first["dl_nof_retx"]),
+                         (15, 20, 1, 1))
+        self.assertEqual((first["dl_nof_ok"], first["dl_nof_nok"], first["dl_nof_dtx"]), (1, 1, 1))
+        self.assertAlmostEqual(first["dl_error_rate"], 200 / 3)
+        self.assertEqual((first["ul_sched_brate"], first["ul_nof_newtx"], first["ul_nof_retx"], first["ul_ri"]),
+                         (1000 * 8 / 0.01, 1, 1, 1.5))
+        self.assertEqual((rows[1]["cqi"], rows[1]["dl_ri"], rows[1]["rsrp"], rows[1]["dl_mcs"]), (12, 2, -80, None))
+        cell = [dict(zip(("t", "record", *ue_metrics.CELL_FIELDS), r)) for r in agg.cell_rows()]
+        self.assertEqual((cell[0]["latency_avg"], cell[0]["latency_max"], cell[0]["nof_slots"], cell[0]["dl_nof_ues"]),
+                         (20, 30, 2, 1))
+
+    def test_merge_equals_one_pass(self):
+        events = [slot(t, [ack(0x4601, "Ack")], ue_pdschs=[pdsch(0x4601, 20, 1000)]) for t in range(0, 30000, 500)]
+        whole, first, second = ue_metrics.Aggregator(), ue_metrics.Aggregator(), ue_metrics.Aggregator()
+        for record, e in enumerate(events, 1):
+            items = ue_metrics.slot_items(e, self.cell)
+            whole.add(record, e, items)
+            (first if record <= 25 else second).add(record, e, items)
+        first.merge(second)
+        self.assertEqual(first.ue_rows(), whole.ue_rows())
+        self.assertEqual(first.cell_rows(), whole.cell_rows())
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -56,7 +56,7 @@ def _union_vector(buf, types_at, values_at, members):
         out.append(_union(buf, values_at + 4 * i, kind, members) if kind else None)
     return out
 
-SCHEMA_HASH = "b74d7afe7f69cd80bf9e8f931f867cd99ce1a57316cb3273833e676809b07bea"
+SCHEMA_HASH = "85f458837d8e6f683aa4a101a97b9c80ec462729e67f79700b5e873ad8ea62fa"
 FORMAT_VERSION = (1, 0)
 
 _ENUM_CyclicPrefix = {0: 'Normal', 1: 'Extended'}
@@ -1355,20 +1355,65 @@ def _grid_member_RachIndication(buf, pos):
 
 
 def _grid_member_HarqAckEvent(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[6](buf, vt + 4) if n >= 6 else _VTABLES[n](buf, vt + 4) + (0,) * (6 - n)
+    o = vo[1]
+    v0 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[2]
+    v1 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[3]
+    v2 = buf[pos + o] if o else 0
+    o = vo[4]
+    v3 = _ENUM_HarqAckReportStatus.get(x := _s_u8(buf, pos + o)[0], x) if o else 'Nack'
+    o = vo[5]
+    v4 = _s_u32(buf, pos + o)[0] if o else 0
     return {
         "type": "HarqAckEvent",
+        "ue_idx": v0,
+        "rnti": v1,
+        "harq_id": v2,
+        "status": v3,
+        "tbs": v4,
     }
 
 
 def _grid_member_SrEvent(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[3](buf, vt + 4) if n >= 3 else _VTABLES[n](buf, vt + 4) + (0,) * (3 - n)
+    o = vo[1]
+    v0 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[2]
+    v1 = _s_u16(buf, pos + o)[0] if o else 0
     return {
         "type": "SrEvent",
+        "ue_idx": v0,
+        "rnti": v1,
     }
 
 
 def _grid_member_CsiReportEvent(buf, pos):
+    vt = pos - _i32(buf, pos)[0]
+    n = (_u16(buf, vt)[0] - 4) >> 1
+    vo = _VTABLES[10](buf, vt + 4) if n >= 10 else _VTABLES[n](buf, vt + 4) + (0,) * (10 - n)
+    o = vo[1]
+    v0 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[2]
+    v1 = _s_u16(buf, pos + o)[0] if o else 0
+    o = vo[4]
+    v2 = _scalars(buf, pos + o + _u32(buf, pos + o)[0], "h") if o else None
+    o = vo[5]
+    v3 = buf[pos + o] if o else None
+    o = vo[9]
+    v4 = buf[pos + o] if o else None
     return {
         "type": "CsiReportEvent",
+        "ue_idx": v0,
+        "rnti": v1,
+        "rsrp_dbm": v2,
+        "ri": v3,
+        "first_tb_wb_cqi": v4,
     }
 
 
@@ -1425,27 +1470,30 @@ def _grid_table_Pusch(buf, pos):
     v3 = buf[pos + o] if o else 0
     o = vo[5]
     v4 = buf[pos + o] if o else 0
-    o = vo[7]
+    o = vo[6]
     v5 = buf[pos + o] if o else 0
+    o = vo[7]
+    v6 = buf[pos + o] if o else 0
     o = vo[8]
-    v6 = _s_u32(buf, pos + o)[0] if o else 0
+    v7 = _s_u32(buf, pos + o)[0] if o else 0
     o = vo[9]
-    v7 = _s_u16(buf, pos + o)[0] if o else 0
+    v8 = _s_u16(buf, pos + o)[0] if o else 0
     o = vo[10]
-    v8 = buf[pos + o] if o else 0
-    o = vo[11]
     v9 = buf[pos + o] if o else 0
+    o = vo[11]
+    v10 = buf[pos + o] if o else 0
     return {
         "rnti": v0,
         "rbs": v1,
         "sym_start": v2,
         "sym_length": v3,
         "rv_index": v4,
-        "harq_id": v5,
-        "tb_size_bytes": v6,
-        "ue_index": v7,
-        "nof_retxs": v8,
-        "k2": v9,
+        "nof_layers": v5,
+        "harq_id": v6,
+        "tb_size_bytes": v7,
+        "ue_index": v8,
+        "nof_retxs": v9,
+        "k2": v10,
     }
 
 
@@ -1597,7 +1645,7 @@ def _grid_table_PagingPdsch(buf, pos):
 def _grid_table_SlotDecision(buf, pos):
     vt = pos - _i32(buf, pos)[0]
     n = (_u16(buf, vt)[0] - 4) >> 1
-    vo = _VTABLES[11](buf, vt + 4) if n >= 11 else _VTABLES[n](buf, vt + 4) + (0,) * (11 - n)
+    vo = _VTABLES[13](buf, vt + 4) if n >= 13 else _VTABLES[n](buf, vt + 4) + (0,) * (13 - n)
     o = vo[0]
     v0 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 12, _STRUCT_DlPdcch.iter_unpack, _build_DlPdcch) if o else None
     o = vo[1]
@@ -1620,6 +1668,8 @@ def _grid_table_SlotDecision(buf, pos):
     v9 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 18, _STRUCT_CsiRs.iter_unpack, _build_CsiRs) if o else None
     o = vo[10]
     v10 = _structs(buf, pos + o + _u32(buf, pos + o)[0], 12, _STRUCT_Prach.iter_unpack, _build_Prach) if o else None
+    o = vo[12]
+    v11 = _struct_FailedAttempts(buf, pos + o) if o else None
     return {
         "dl_pdcchs": v0,
         "ul_pdcchs": v1,
@@ -1632,6 +1682,7 @@ def _grid_table_SlotDecision(buf, pos):
         "ssbs": v8,
         "csi_rs": v9,
         "prachs": v10,
+        "failed_attempts": v11,
     }
 
 

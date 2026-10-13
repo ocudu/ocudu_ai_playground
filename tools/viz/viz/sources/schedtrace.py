@@ -18,9 +18,10 @@ from typing import Any
 
 from parsers import schedtrace
 from parsers.schedtrace import grid as grid_util
+from parsers.schedtrace import ue_metrics
 
 from .. import parallel
-from .base import DatasetWriter, ProgressFn, RunIdentity
+from .base import DatasetWriter, ProgressFn, RunIdentity, column_type
 from .log_metrics import _parsers_version
 
 _NAME_RE = re.compile(r"schedtrace_cell\d+\.bin")
@@ -42,6 +43,11 @@ _FDD_MIN_SHARE = 0.05
 _U32 = struct.Struct("<I")
 # Frames after which the SFN wraps.
 _NOF_SFNS = 1024
+# Datasets of the aggregates per bin of ue_metrics.BIN_S, and of the rows of each kind of ue_metrics.slot_items(), with
+# their label.
+_UE_DATASET, _CELL_DATASET = "ue_metrics", "cell_metrics"
+_DATASET_LABELS = {_UE_DATASET: "UE metrics per 10 ms", _CELL_DATASET: "cell metrics per 10 ms", "dl_grants": "DL grants",
+                   "ul_grants": "UL grants", "harq_acks": "HARQ-ACK reports", "csi_reports": "CSI reports"}
 
 
 class SchedtraceSource:
@@ -51,7 +57,7 @@ class SchedtraceSource:
 
     name = "schedtrace"
     # The schema hash invalidates the parses of the trace when the schemas change.
-    version = f"8+parsers-{_parsers_version()}+schema-{schedtrace.schema_hash()[:12]}"
+    version = f"9+parsers-{_parsers_version()}+schema-{schedtrace.schema_hash()[:12]}"
 
     def accepts(self, path: Path) -> bool:
         if not _NAME_RE.fullmatch(path.name):
@@ -98,12 +104,21 @@ class SchedtraceSource:
         args = [(str(path), lo, hi, 1 + i * chunk, _cell_dict(cell)) for i, (lo, hi) in enumerate(zip(bounds, bounds[1:]))]
         # Bins that span chunks, merged from the parts of each.
         bins: dict[tuple[int, int], dict[str, Any]] = {}
+        agg = ue_metrics.Aggregator()
+        # Kinds of slot items with rows, which get a dataset.
+        seen: set[str] = set()
         mixed = Counter()
         t_min = t_max = None
         for (_, _, hi, _, _), res in zip(args, parallel.map_chunks(_parse_chunk, args)):
             writer.add_record_texts(res["texts"])
             writer.add_grid_slots(res["slots"])
             writer.add_grid_cells(res["cells"])
+            for kind, rows in res["items"].items():
+                if rows:
+                    writer.add_rows(kind, ue_metrics.ITEM_FIELDS[kind], _column_types(ue_metrics.ITEM_FIELDS[kind], rows),
+                                    rows)
+                    seen.add(kind)
+            agg.merge(res["agg"])
             mixed.update(res["mixed"])
             for key, b in res["partial_bins"].items():
                 if key in bins:
@@ -116,6 +131,16 @@ class SchedtraceSource:
             if progress:
                 progress(hi, size)
         writer.add_grid_cells([_cells_row(key, b) for key, b in bins.items()])
+        for name, fields, rows, units, context in (
+            (_UE_DATASET, ue_metrics.UE_FIELDS, agg.ue_rows(), ue_metrics.UE_UNITS, ["rnti", "ue_index"]),
+            (_CELL_DATASET, ue_metrics.CELL_FIELDS, agg.cell_rows(), ue_metrics.CELL_UNITS, []),
+        ):
+            if rows:
+                writer.add_rows(name, fields, _column_types(fields, rows), rows)
+                writer.set_dataset_info(name, units, context, label=_DATASET_LABELS[name])
+        for kind in seen:
+            units = {f: u for f, u in ue_metrics.ITEM_UNITS.items() if f in ue_metrics.ITEM_FIELDS[kind]}
+            writer.set_dataset_info(kind, units, ["rnti", "ue_index"], label=_DATASET_LABELS[kind])
         active = mixed["dl"] + mixed["ul"] + mixed["both"]
         duplex = "FDD" if active and mixed["both"] / active >= _FDD_MIN_SHARE else "TDD"
         writer.set_meta("grid", {**_cell_dict(cell), "nof_crbs": cell.nof_crbs, "slot_duration_s": cell.slot_duration_s,
@@ -237,6 +262,8 @@ def _parse_chunk(path: str, start: int, end: int, first_record: int, cell_dict: 
     # Bins of the finest level by index, from which the coarser levels are rolled up.
     fine: dict[int, dict[str, Any]] = {}
     mixed: Counter = Counter()
+    agg = ue_metrics.Aggregator()
+    items: dict[str, list[tuple]] = {kind: [] for kind in ue_metrics.ITEM_FIELDS}
     t_min = t_max = None
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
         offsets = schedtrace.offsets(mm, start, end)
@@ -251,6 +278,11 @@ def _parse_chunk(path: str, start: int, end: int, first_record: int, cell_dict: 
                 continue
             allocs = grid_util.allocations(event, cell)
             texts.append((record, _summary(event, allocs, spf)))
+            slot_items = ue_metrics.slot_items(event, cell)
+            agg.add(record, event, slot_items)
+            for kind, rows in items.items():
+                # Booleans as 0 and 1, which plots and filters take as numbers.
+                rows.extend((t, record, *(int(v) if isinstance(v, bool) else v for v in row)) for row in slot_items[kind])
             slots.append((record, t, offset, _U32.unpack_from(mm, offset)[0] + 4, event["slot_tx"]))
             dirs = {a["dir"] for a in allocs if a["channel"] in ("PDSCH", "PUSCH", "PUCCH")}
             if dirs:
@@ -279,8 +311,13 @@ def _parse_chunk(path: str, start: int, end: int, first_record: int, cell_dict: 
             cells.append(_cells_row((level, index), b))
         else:
             partial[(level, index)] = b
-    return {"texts": texts, "slots": slots, "cells": cells, "partial_bins": partial, "mixed": mixed, "t_min": t_min,
-            "t_max": t_max}
+    return {"texts": texts, "slots": slots, "cells": cells, "partial_bins": partial, "items": items, "agg": agg,
+            "mixed": mixed, "t_min": t_min, "t_max": t_max}
+
+
+def _column_types(fields: tuple[str, ...], rows: list[tuple]) -> dict[str, set[str]]:
+    """The column types of the values of each field of rows of time, record and the field values."""
+    return {f: {t for row in rows if (t := column_type(row[i + 2])) is not None} for i, f in enumerate(fields)}
 
 
 def _cells_row(key: tuple[int, int], b: dict[str, Any]) -> tuple:

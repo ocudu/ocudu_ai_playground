@@ -207,6 +207,27 @@ them: those of DCI format 1_0 in a common search space (SIB, RAR, paging, fallba
 from the lowest CRB of its CORESET (TS 38.214 5.1.2.2.2), the others from the BWP start; PDCCHs from the REG bundles
 of their CCEs (TS 38.211 7.3.2.2). `skills/analyze-ran-log/scripts/ocudu/schedtrace_collisions.py` prints them.
 
+`schedtrace.ue_metrics` gives the per-UE metrics of a trace: `slot_items()` the DL and UL grants, HARQ-ACK and CSI
+reports and SRs of a slot, per UE, and `Aggregator` their sums per UE and 10 ms bin, as rows named after the fields of
+the METRICS `Scheduler UE` lines where they mean the same (`dl_brate` from the ACKed TBS, `dl_mcs`, `dl_nof_ok`,
+`dl_error_rate`, `cqi`, `dl_ri`, `sr_count`), plus the scheduler latency, PRBs and UEs of the cell per bin.
+Aggregators of parts of a trace merge. The trace has no UL CRC or buffer status: UL rates are of scheduled new
+transmissions (`ul_sched_brate`), and a DTX report counts as not ok.
+
+```python
+from parsers import schedtrace
+from parsers.schedtrace import grid, ue_metrics
+
+events = schedtrace.read("schedtrace_cell0.bin", grid_only=True)
+cell = grid.cell_of(next(events))
+agg = ue_metrics.Aggregator()
+for record, ev in enumerate(events, 2):
+    if ev["type"] == "CellSlotEvent":
+        agg.add(record, ev, ue_metrics.slot_items(ev, cell))
+for t, record, *values in agg.ue_rows():
+    print(t, dict(zip(ue_metrics.UE_FIELDS, values)))
+```
+
 ### Log search, summary and UE procedure latencies
 
 ```python

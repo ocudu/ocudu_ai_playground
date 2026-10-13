@@ -115,7 +115,7 @@ def allocations(slot_event: dict[str, Any], cell: Cell) -> list[dict[str, Any]]:
                 add(direction, channel, sym_start, half, [first], info)
                 add(direction, channel, sym_start + half, sym_length - half, [(origin + hop, rbs["vrb_length"])], info)
         elif rbs.get("type") == "RbgAlloc":
-            add(direction, channel, sym_start, sym_length, _rbg_crbs(rbs["bitmap"], rbs["nof_rbgs"], bwp), info)
+            add(direction, channel, sym_start, sym_length, rbg_crbs(rbs["bitmap"], rbs["nof_rbgs"], bwp), info)
 
     dl, ul = cell.dl_bwp, cell.ul_bwp
     origins = _VrbOrigins(decision.get("dl_pdcchs") or [], cell)
@@ -277,7 +277,7 @@ class _VrbOrigins:
         return self.lowest_crb.get(pdcch["coreset_id"])
 
 
-def _rbg_crbs(bitmap: int, nof_rbgs: int, bwp: dict[str, Any]) -> list[tuple[int, int]]:
+def rbg_crbs(bitmap: int, nof_rbgs: int, bwp: dict[str, Any]) -> list[tuple[int, int]]:
     """CRB ranges of the RBGs of a bitmap, merged where contiguous. RBG 0 is the most significant of the nof_rbgs bits,
     as OCUDU writes them.
     """

@@ -15,11 +15,13 @@ const steppedPath = uPlot.paths.stepped({ align: 1 });
 const FETCH_DELAY_MS = 120;
 // Split values listed in the split value picker.
 const MAX_LISTED_SPLITS = 300;
-// Dataset and field of new plots, when their source has them.
-const DEFAULT_DATASET = "sched";
-const DEFAULT_FIELD = "total_dl_brate";
+// Datasets and fields of new plots, the first that their source has: of logs, then of scheduler event traces.
+const DEFAULT_DATASETS = ["sched", "ue_metrics"];
+const DEFAULT_FIELDS = ["total_dl_brate", "dl_brate"];
 // Field each dataset is split by when picked, e.g. one series per UE.
-const DEFAULT_SPLITS = { sched: "pci", sched_ue: "rnti" };
+const DEFAULT_SPLITS = {
+  sched: "pci", sched_ue: "rnti", ue_metrics: "rnti", dl_grants: "rnti", ul_grants: "rnti", harq_acks: "rnti", csi_reports: "rnti",
+};
 
 
 /**
@@ -83,9 +85,9 @@ export default {
     };
   },
   computed: {
-    /** Sources the panel offers: those with datasets, parsed or not, e.g. not scheduler event traces, which have none. */
+    /** Sources the panel offers, parsed or not. */
     sourceChoices() {
-      return (this.choices ?? this.sources).filter((s) => s.type !== "schedtrace");
+      return this.choices ?? this.sources;
     },
     source() {
       return this.sources[this.plot.source];
@@ -228,14 +230,16 @@ export default {
   methods: {
     eventText,
 
-    /** DEFAULT_DATASET if the source has it, else its first dataset. */
+    /** The first of DEFAULT_DATASETS that the source has, else its first dataset. */
     defaultDataset() {
-      return (this.datasets.find((d) => d.name === DEFAULT_DATASET) ?? this.datasets[0])?.name ?? null;
+      const preferred = DEFAULT_DATASETS.map((name) => this.datasets.find((d) => d.name === name)).find(Boolean);
+      return (preferred ?? this.datasets[0])?.name ?? null;
     },
 
-    /** DEFAULT_FIELD if the dataset has it, else its first numeric field. */
+    /** The first of DEFAULT_FIELDS that the dataset has, else its first numeric field. */
     defaultField() {
-      return (this.numericFields.find((f) => f.name === DEFAULT_FIELD) ?? this.numericFields[0])?.name ?? null;
+      const preferred = DEFAULT_FIELDS.map((name) => this.numericFields.find((f) => f.name === name)).find(Boolean);
+      return (preferred ?? this.numericFields[0])?.name ?? null;
     },
 
     /** Field of the second metric when first enabled: the uplink one of a downlink field and the other way round, e.g.

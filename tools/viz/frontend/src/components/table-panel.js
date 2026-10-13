@@ -41,9 +41,9 @@ export default {
     return { loading: false, error: "", fields: [], rows: [], total: 0, instanceOptions: [], filterDraft: this.panel.filter, maxScrollHeight: null };
   },
   computed: {
-    /** Sources the panel offers: those with datasets, parsed or not, e.g. not scheduler event traces, which have none. */
+    /** Sources the panel offers, parsed or not. */
     sourceChoices() {
-      return (this.choices ?? this.sources).filter((s) => s.type !== "schedtrace");
+      return this.choices ?? this.sources;
     },
     source() {
       return this.sources[this.panel.source];

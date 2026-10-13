@@ -400,7 +400,15 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 
 - `SchedtraceSource` reads the `schedtrace_cell<N>.bin` of OCUDU with `parsers.schedtrace`, on request like MAC and RLC
   pcaps (traces of a few minutes are hundreds of MB). Its records are the events, the text a summary line and the
-  detail the decoded event, and it has no datasets: its view is the `grid` panel.
+  detail the decoded event. Its views are the `grid` panel and plots and tables of its datasets.
+- Its datasets are the per-UE metrics of `parsers.schedtrace.ue_metrics`: `ue_metrics`, aggregates per UE and 10 ms
+  bin, named as the fields of the METRICS `Scheduler UE` lines where they mean the same (e.g. `dl_brate`, the ACKed
+  DL TBS, `dl_error_rate`, `cqi`), so that a plot of either reads the same; `cell_metrics`, the scheduler latency,
+  PRBs and UEs of the cell per bin; and one row per grant or report, `dl_grants`, `ul_grants`, `harq_acks` and
+  `csi_reports`, for exact values. 10 ms bins, one radio frame, keep the scheduler dynamics that METRICS periods of a
+  second average out. The trace has no UL CRC or buffer status, so UL rates are of scheduled new transmissions
+  (`ul_sched_brate`). Workers sum the bins of their chunk and the server process merges the sums, as for the grid
+  occupancy, and every row links to its slot event. New plots of a trace show `ue_metrics.dl_brate` split by RNTI.
 - `parsers.schedtrace.grid` places the allocations of a slot as rectangles of symbols and CRBs. The trace has no
   VRB-to-PRB interleaving, RBG configuration or SRS frequency resources, so VRBs map to PRBs one to one, RBGs have the
   configuration 1 size of the BWP, and SRS is left out. PDSCHs of DCI format 1_0 in a common search space are placed

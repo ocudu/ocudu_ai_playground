@@ -43,6 +43,19 @@ class SchedtraceSourceTest(unittest.TestCase):
         # The end of the last slot, the stop event's time plus a slot.
         self.assertAlmostEqual(self.store.meta["t_max"], 1700000000.002, places=6)
 
+    def test_ue_datasets(self):
+        datasets = self.store.datasets
+        # The slot has a UE PDSCH and a PUSCH, HARQ-ACK and CSI reports, and an SR.
+        self.assertEqual(sorted(datasets), ["cell_metrics", "csi_reports", "dl_grants", "harq_acks", "ue_metrics",
+                                            "ul_grants"])
+        ue = datasets["ue_metrics"]
+        self.assertEqual((ue["units"]["dl_brate"], ue["context"], ue["label"]), ("bps", ["rnti", "ue_index"],
+                                                                                 "UE metrics per 10 ms"))
+        series = self.store.series("dl_grants", "tbs", split_by="rnti")
+        # The slot is record 2, after the cell start event.
+        self.assertEqual([(s["split"], s["v"], s["record"]) for s in series["series"]], [("0x4601", [12345], [2])])
+        self.assertEqual(datasets["dl_grants"]["fields"]["new_data"], "number")
+
     def test_grid_window(self):
         res = self.source.grid(self.path, self.store, None, None, 1000)
         self.assertEqual((res["mode"], res["nof_slots"]), ("rects", 1))
