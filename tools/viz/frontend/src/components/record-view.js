@@ -4,8 +4,14 @@
 import { getJSON } from "../api.js";
 import EventTables from "./event-tables.js";
 
-// Records shown around the selected one.
+// Records first shown around the selected one.
 const WINDOW = 61;
+// Records loaded when the lines are scrolled near their first or last one, and records kept at most, those farthest
+// from the scrolled end dropped, so that the page holds a bounded part of the file.
+const PAGE = 200;
+const MAX_RECORDS = 1000;
+// Distance from the first or last line, in pixels, at which the next records are loaded.
+const LOAD_MARGIN = 300;
 // Browser storage key of the height of the log lines, in pixels.
 const HEIGHT_KEY = "ocudu-viz-log-height";
 const MIN_HEIGHT = 80;
@@ -45,6 +51,10 @@ export default {
     // current is the highlighted record, the selected one until another record is clicked, and detail its decoding.
     return {
       records: [], center: 0, error: "", height: loadHeight(), current: null, detail: "", detailError: "",
+      // Whether the first and the last record of the file are loaded, and whether more records are being loaded.
+      atStart: false, atEnd: false, paging: false,
+      // Count of the loads of the pane, which tells pages of an earlier load apart.
+      generation: 0,
       // Decoded record as a structure, for sources that give one, and the view of it: "decisions", "events" or "raw".
       detailData: null, detailTab: "decisions",
       // Search of the records: its text, whether it is a regular expression, and its outcome, e.g. "no match".
@@ -196,6 +206,66 @@ export default {
       }
     },
 
+    /** Loads the records before or after the loaded ones when the lines are scrolled near their first or last one. */
+    onScroll() {
+      const lines = this.$refs.lines;
+      if (!lines || this.paging || !this.records.length) return;
+      if (lines.scrollTop < LOAD_MARGIN && !this.atStart) this.loadPage(true);
+      else if (lines.scrollHeight - lines.scrollTop - lines.clientHeight < LOAD_MARGIN && !this.atEnd) this.loadPage(false);
+    },
+
+    /**
+     * Loads PAGE records before the first loaded one, or after the last, keeping the lines in view where they are, and
+     * drops records from the other end beyond MAX_RECORDS.
+     */
+    async loadPage(before) {
+      this.paging = true;
+      const generation = this.generation;
+      try {
+        const first = this.records[0].record;
+        const last = this.records[this.records.length - 1].record;
+        const from = before ? Math.max(1, first - PAGE) : last + 1;
+        const count = before ? first - from : PAGE;
+        // The API returns the records from around - count / 2, rounded down.
+        const page = count > 0 ? await getJSON("/api/records", { source: this.selection.source, around: from + Math.floor(count / 2), count }) : [];
+        if (generation !== this.generation) return;
+        const fresh = page.filter((r) => (before ? r.record < first : r.record > last));
+        const lines = this.$refs.lines;
+        if (before) {
+          this.atStart = from === 1 || !fresh.length;
+          const firstTop = lines.firstElementChild?.offsetTop ?? 0;
+          this.records = [...fresh, ...this.records];
+          if (this.records.length > MAX_RECORDS) {
+            this.records = this.records.slice(0, MAX_RECORDS);
+            this.atEnd = false;
+          }
+          await this.$nextTick();
+          // The prepended lines push the ones in view down by their height, the offset of the line that was first.
+          const formerFirst = lines.children[fresh.length];
+          if (formerFirst) lines.scrollTop += formerFirst.offsetTop - firstTop;
+        } else {
+          this.atEnd = fresh.length < PAGE;
+          this.records = [...this.records, ...fresh];
+          const excess = this.records.length - MAX_RECORDS;
+          if (excess > 0) {
+            // Measured once the appended lines are rendered.
+            await this.$nextTick();
+            const height = lines.scrollHeight;
+            this.records = this.records.slice(excess);
+            this.atStart = false;
+            await this.$nextTick();
+            // The dropped first lines pull the ones in view up by their height.
+            lines.scrollTop -= height - lines.scrollHeight;
+          }
+        }
+        this.error = "";
+      } catch (e) {
+        this.error = e.message;
+      } finally {
+        this.paging = false;
+      }
+    },
+
     /** Fills the window with the pane, or restores it, keeping the highlighted record in view. */
     async toggleMaximized() {
       this.maximized = !this.maximized;
@@ -224,9 +294,15 @@ export default {
 
     async load(center) {
       this.center = Math.max(1, center);
+      // Pages requested before this load are dropped when they arrive.
+      const generation = ++this.generation;
       try {
         const { source, record, field } = this.selection;
-        this.records = await getJSON("/api/records", { source, around: this.center, count: WINDOW, mark: field ? record : null, field });
+        const records = await getJSON("/api/records", { source, around: this.center, count: WINDOW, mark: field ? record : null, field });
+        if (generation !== this.generation) return;
+        this.records = records;
+        this.atStart = !records.length || records[0].record === 1;
+        this.atEnd = records.length < WINDOW;
         this.error = "";
       } catch (e) {
         this.error = e.message;
@@ -252,8 +328,6 @@ export default {
       <header class="panel-bar">
         <strong>{{ sourceName }}</strong>
         <span class="muted">{{ hasDetail ? "frame" : "line" }} {{ current }}</span>
-        <button @click="load(center - WINDOW)">earlier</button>
-        <button @click="load(center + WINDOW)">later</button>
         <form class="filter record-search" @submit.prevent="search(false)">
           <input v-model="query" placeholder="search" title="Enter: next match, Shift+Enter: previous. Case-insensitive."
                  @keydown.enter.shift.prevent="search(true)" @input="searchNote = ''" />
@@ -270,7 +344,7 @@ export default {
         <button class="icon" title="Close" @click="$emit('close')">✕</button>
       </header>
       <div :class="['record-body', { split: hasDetail }]">
-        <div ref="lines" class="record-lines" :style="height && !maximized ? { height: height + 'px' } : null">
+        <div ref="lines" class="record-lines" @scroll.passive="onScroll" :style="height && !maximized ? { height: height + 'px' } : null">
           <div v-for="r in records" :key="r.record"
                :class="['record-line', { selected: r.record === current, clickable: hasDetail }]" @click="select(r.record)">
             <span class="lineno">{{ r.record }}</span><span class="text"><template v-for="(part, i) in segments(r)" :key="i"><mark v-if="part.mark">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>

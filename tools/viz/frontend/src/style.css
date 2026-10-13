@@ -389,6 +389,8 @@ main { flex: 1 0 auto; padding: 8px 16px 16px; }
 .record-lines {
   /* Positioned, so that the offsetTop of a line is relative to this container. */
   position: relative;
+  /* Paging keeps the lines in view itself, which the browser's scroll anchoring would do twice. */
+  overflow-anchor: none;
   height: 35vh;
   overflow: auto;
   font: 12px/1.5 ui-monospace, monospace;

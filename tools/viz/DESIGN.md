@@ -396,6 +396,16 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   search that finds nothing reads the whole file: about 2 s for 485 MB. Pcaps search the frame summaries they store.
 - The pane highlights the matches in its lines with a JavaScript regular expression, which mostly agrees with Python's.
 
+### D19a. Scrolling the record pane
+
+- The pane first shows 61 records around the selected one, and loads 200 more before or after them when its lines are
+  scrolled within 300 px of their first or last one (`/api/records`), until the first or last record of the file. It
+  keeps at most 1000 records, dropping those at the other end, so that the page never holds a large part of a file,
+  and keeps the lines in view where they were: the browser's scroll anchoring is off for the pane, which corrects the
+  scroll position itself. Pages of an earlier selection or search are dropped when they arrive.
+- The server reads a page of a log from the nearest record offset of the store at or before its first record, one
+  every 1000 lines, so a page reads at most about 1200 lines of the file.
+
 ### D20. Resource grid of scheduler event traces
 
 - `SchedtraceSource` reads the `schedtrace_cell<N>.bin` of OCUDU with `parsers.schedtrace`, on request like MAC and RLC
