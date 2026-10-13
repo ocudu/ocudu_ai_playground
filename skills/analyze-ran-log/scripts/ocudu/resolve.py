@@ -32,11 +32,13 @@ import json
 import sys
 from pathlib import Path
 
-import ocudu_log_summary  # reuse resolve_run_dir()
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "_lib"))
+
+from parsers.log import run  # noqa: E402
 
 # All five OCUDU app log names resolve as kind `ocudu` -- same format, different
-# role. Sourced from the summary module so the two can't drift apart.
-OCUDU_LOG_NAMES = ocudu_log_summary.OCUDU_LOG_NAMES
+# role. Sourced from parsers.log.run so the two can't drift apart.
+OCUDU_LOG_NAMES = run.LOG_NAMES
 SIDECARS = ("stdout.log", "metrics.json")
 # OCUDU app component directory names that can appear under a test_gnb[...] dir.
 COMPONENT_GLOBS = ("ocudu-gnb-*", "ocudu-cu-*", "ocudu-cu-cp-*", "ocudu-cu-up-*", "ocudu-du-*")
@@ -75,12 +77,12 @@ def build_report(given: Path) -> dict:
     components = find_components(given.resolve()) if given.is_dir() else []
 
     try:
-        run_dir = ocudu_log_summary.resolve_run_dir(str(given))
+        run_dir = run.resolve_run_dir(str(given))
     except FileNotFoundError as e:
         return {**report, "ok": False, "bail": str(e)}
 
     report["run_dir"] = str(run_dir)
-    primary = ocudu_log_summary.primary_log_in(run_dir)
+    primary = run.primary_log_in(run_dir)
     if primary is None:
         return {
             **report, "ok": False,
@@ -91,12 +93,12 @@ def build_report(given: Path) -> dict:
 
     report["primary_log"] = primary.name
     report["role"] = primary.stem.replace("_", "-")
-    cfgs = sorted(c.name for c in run_dir.glob(ocudu_log_summary.OCUDU_CFG_GLOB))
+    cfgs = sorted(c.name for c in run_dir.glob(run.CONFIG_GLOB))
     artifacts = (primary.name, *SIDECARS)
     report["present"] = [a for a in artifacts if (run_dir / a).is_file()] + cfgs
     report["missing"] = [a for a in artifacts if not (run_dir / a).is_file()]
     if not cfgs:
-        report["missing"].append(ocudu_log_summary.OCUDU_CFG_GLOB)
+        report["missing"].append(run.CONFIG_GLOB)
     if len(components) > 1:
         report["components"] = components
         report["resolved_component"] = next(
