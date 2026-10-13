@@ -11,27 +11,42 @@ from typing import Any
 
 from .tshark import Tshark, TsharkError
 
-PCAP_NAMES = ("mac.pcap", "rlc.pcap", "f1ap.pcap", "e1ap.pcap", "ngap.pcap")
+PROTOCOLS = ("mac", "rlc", "f1ap", "e1ap", "ngap")
+PCAP_NAMES = tuple(f"{proto}.pcap" for proto in PROTOCOLS)
 # Dissectors of the pcaps, one of which tshark binds on the first frame of each.
 KNOWN_DISSECTORS = ("ngap", "f1ap", "e1ap", "mac-nr", "rlc-nr")
 
 
+def pcap_proto(path: str | os.PathLike[str]) -> str | None:
+    """Protocol of a pcap by its file name, <proto>.pcap or with a prefix, e.g. gnb_f1ap.pcap, or None."""
+    p = Path(path)
+    if p.suffix != ".pcap":
+        return None
+    for proto in PROTOCOLS:
+        if p.stem == proto or p.stem.endswith((f"_{proto}", f"-{proto}")):
+            return proto
+    return None
+
+
 def find_pcaps(run_dir: str | os.PathLike[str]) -> dict[str, Path | None]:
-    """The pcaps of a run directory by protocol, e.g. "mac", None for the missing ones."""
+    """The pcaps of a run directory by protocol, e.g. "mac", None for the missing ones. Of several pcaps of a protocol,
+    <proto>.pcap, else the first by name.
+    """
     p = Path(run_dir)
     if not p.is_dir():
         raise FileNotFoundError(f"not a directory: {p}")
-    out: dict[str, Path | None] = {}
-    for name in PCAP_NAMES:
-        full = p / name
-        out[name.split(".")[0]] = full if full.is_file() else None
+    out: dict[str, Path | None] = dict.fromkeys(PROTOCOLS)
+    for full in sorted(p.glob("*.pcap"), key=lambda f: (f.stem not in PROTOCOLS, f.name)):
+        proto = pcap_proto(full)
+        if proto is not None and out[proto] is None and full.is_file():
+            out[proto] = full
     return out
 
 
 def is_run_dir(path: str | os.PathLike[str]) -> bool:
-    """Whether a directory holds at least two of the OCUDU pcaps."""
+    """Whether a directory holds the pcaps of at least two protocols."""
     p = Path(path)
-    return p.is_dir() and sum(1 for n in PCAP_NAMES if (p / n).is_file()) >= 2
+    return p.is_dir() and sum(1 for f in find_pcaps(p).values() if f) >= 2
 
 
 def resolve(path: str | os.PathLike[str]) -> dict[str, Any]:
@@ -48,7 +63,7 @@ def resolve(path: str | os.PathLike[str]) -> dict[str, Any]:
         present = [proto for proto, p in pcaps.items() if p]
         if len(present) < 2:
             found = ", ".join(present) if present else "none"
-            return {"bail": f"not a run directory (need ≥2 of {', '.join(PCAP_NAMES)}); found: {found}"}
+            return {"bail": f"not a run directory (need pcaps of ≥2 of {', '.join(PROTOCOLS)}); found: {found}"}
         return {
             "kind": "run directory",
             "targets": [pcaps[proto] for proto in present],

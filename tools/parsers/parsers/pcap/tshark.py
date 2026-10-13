@@ -143,9 +143,14 @@ class Tshark:
         return remaining
 
     def cache_path(self, pcap: str | os.PathLike[str], tag: str) -> Path:
-        """Cache file of an extraction from a pcap, identified by tag."""
-        canonical = str(Path(pcap).resolve())
-        digest = hashlib.sha256(f"{canonical}\0{tag}".encode()).hexdigest()[:16]
+        """Cache file of an extraction from a pcap, identified by tag, for the pcap's current size and mtime."""
+        src = Path(pcap).resolve()
+        try:
+            st = src.stat()
+            version = f"{st.st_size}\0{st.st_mtime_ns}"
+        except OSError:
+            version = ""
+        digest = hashlib.sha256(f"{src}\0{version}\0{tag}".encode()).hexdigest()[:16]
         return self.work_dir / f"pcap-cache-{digest}.tsv"
 
     def iter_fields(
@@ -182,7 +187,10 @@ class Tshark:
         lines = self.run(args)
         if cf is not None:
             cf.parent.mkdir(parents=True, exist_ok=True)
-            cf.write_text("\n".join(lines) + ("\n" if lines else ""))
+            # A cache file counts as complete once it exists, so it appears only once written.
+            tmp = cf.with_name(f"{cf.name}.{os.getpid()}.tmp")
+            tmp.write_text("\n".join(lines) + ("\n" if lines else ""))
+            tmp.replace(cf)
         for line in lines:
             yield split_fields(line, len(fields_list))
 

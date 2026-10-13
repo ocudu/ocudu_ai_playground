@@ -29,7 +29,7 @@ from pathlib import Path
 import utils
 from parsers.pcap import overview
 from parsers.ran.procedures import proc_name
-from parsers.pcap.run import PCAP_NAMES
+from parsers.pcap.run import find_pcaps
 
 
 def render_text(summaries: list[dict]) -> str:
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: not found: {p}", file=sys.stderr)
         return 1
     if p.is_dir():
-        targets = [p / name for name in PCAP_NAMES if (p / name).is_file()]
+        targets = [f for f in find_pcaps(p).values() if f]
         if not targets:
             print(f"error: no OCUDU pcaps in {p}", file=sys.stderr)
             return 1

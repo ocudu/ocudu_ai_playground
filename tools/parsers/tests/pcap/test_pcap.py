@@ -119,6 +119,15 @@ class RunDirTest(unittest.TestCase):
         self.assertEqual((res["kind"], res["siblings"]), ("single pcap", ["f1ap"]))
         self.assertIn("bail", run.resolve(self.dir / "missing.pcap"))
 
+    def test_prefixed_names(self):
+        for name in ("gnb_f1ap.pcap", "gnb_ngap.pcap", "ngap.pcap", "gnb_mac.txt"):
+            (self.dir / name).write_bytes(b"x")
+        pcaps = run.find_pcaps(self.dir)
+        # The unprefixed name wins over a prefixed one.
+        self.assertEqual((pcaps["f1ap"].name, pcaps["ngap"].name, pcaps["mac"]), ("gnb_f1ap.pcap", "ngap.pcap", None))
+        self.assertTrue(run.is_run_dir(self.dir))
+        self.assertEqual([run.pcap_proto(n) for n in ("du-e1ap.pcap", "f1ap.pcapng", "snap.pcap")], ["e1ap", None, None])
+
     def test_check_empty_pcap(self):
         (self.dir / "mac.pcap").write_bytes(b"")
         res = run.check_pcap(Tshark(self.dir / "work"), self.dir / "mac.pcap")
@@ -135,7 +144,7 @@ class F1apPcapTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_messages(self):
+    def test_f1ap_messages(self):
         records = f1ap.messages(self.tshark, F1AP_PCAP)
         self.assertEqual(len(records), 32)
         self.assertEqual(records[0]["message"], "F1Setup")
@@ -150,14 +159,25 @@ class F1apPcapTest(unittest.TestCase):
         self.assertEqual(len(first), 1)
         self.assertEqual((first[0]["cu_ue_f1ap_id"], first[0]["crntis"]), ("0", ["17921"]))
 
+    def test_cache_of_a_replaced_pcap_is_not_used(self):
+        pcap = Path(self.tmp.name) / "f1ap.pcap"
+        shutil.copy(F1AP_PCAP, pcap)
+        self.assertEqual(len(frames.summaries(self.tshark, pcap)), 32)
+        # The same path, now holding only the first frames.
+        first = Path(self.tmp.name) / "first.pcap"
+        self.tshark.run(["-r", str(pcap), "-c", "3", "-w", str(first), "-F", "pcap"])
+        first.replace(pcap)
+        self.assertEqual(len(frames.summaries(self.tshark, pcap)), 3)
+        self.assertEqual(self.cache_events, [False, False])
+
     def test_check_pcap(self):
         res = run.check_pcap(self.tshark, F1AP_PCAP)
         self.assertTrue(res["ok"], res)
         self.assertEqual(res["dissector"], "f1ap")
 
     def test_overview(self):
-        # The protocol of a pcap is its file stem.
-        pcap = Path(self.tmp.name) / "f1ap.pcap"
+        # The protocol of a pcap is that of its file name.
+        pcap = Path(self.tmp.name) / "gnb_f1ap.pcap"
         shutil.copy(F1AP_PCAP, pcap)
         summary = overview.summarise(self.tshark, pcap, top=3)
         self.assertEqual((summary["proto"], summary["packets"], summary["failures"]), ("f1ap", 32, 0))

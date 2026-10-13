@@ -10,6 +10,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from .run import pcap_proto
 from .tshark import Tshark, TsharkError
 from .values import epoch_to_iso
 
@@ -39,13 +40,13 @@ PROTO_FIELDS: dict[str, dict[str, Any]] = {
 
 
 def summarise(tshark: Tshark, pcap: Path, *, top: int = 5) -> dict[str, Any]:
-    """Summary of a pcap, whose protocol is its file stem, e.g. "ngap".
+    """Summary of a pcap, whose protocol is that of its file name, see run.pcap_proto(), e.g. "ngap".
 
     Returns "file", "proto" and "packets", and once there are packets, the time span ("first_epoch", "last_epoch",
     "duration_s", "first_iso", "last_iso"), the distinct UE identifiers by label, the top procedure codes and the
     number of failures, for the protocols that have them.
     """
-    proto = pcap.stem
+    proto = pcap_proto(pcap) or pcap.stem
     spec = PROTO_FIELDS.get(proto)
     out: dict[str, Any] = {"file": str(pcap), "proto": proto}
     fields = ["frame.time_epoch"]
