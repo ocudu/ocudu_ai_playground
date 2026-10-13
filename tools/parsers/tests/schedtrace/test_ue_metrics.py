@@ -79,6 +79,21 @@ class UeMetricsTest(unittest.TestCase):
         self.assertEqual((cell[0]["latency_avg"], cell[0]["latency_max"], cell[0]["nof_slots"], cell[0]["dl_nof_ues"]),
                          (20, 30, 2, 1))
 
+    def test_bin_size_and_totals(self):
+        # 1 s bins: one bin with all 60 slots, each with a 1000 byte new transmission and its ACK.
+        events = [slot(t, [ack(0x4601, "Ack")], ue_pdschs=[pdsch(0x4601, 20, 1000)]) for t in range(0, 30000, 500)]
+        agg = ue_metrics.Aggregator(bin_s=1)
+        for record, e in enumerate(events, 1):
+            agg.add(record, e, ue_metrics.slot_items(e, self.cell))
+        (row,) = agg.ue_rows()
+        values = dict(zip(ue_metrics.UE_FIELDS, row[2:]))
+        self.assertEqual((row[0], values["dl_nof_newtx"], values["dl_brate"]), (0, 60, 60 * 1000 * 8))
+        # Over the 30 ms of the slots, as for a whole trace.
+        (total,) = agg.ue_totals(0.03)
+        values = dict(zip(ue_metrics.UE_FIELDS, total[2:]))
+        self.assertEqual((total[0], total[1], values["rnti"], values["dl_mcs"]), (0, 0, "0x4601", 20))
+        self.assertAlmostEqual(values["dl_brate"], 60 * 1000 * 8 / 0.03)
+
     def test_merge_equals_one_pass(self):
         events = [slot(t, [ack(0x4601, "Ack")], ue_pdschs=[pdsch(0x4601, 20, 1000)]) for t in range(0, 30000, 500)]
         whole, first, second = ue_metrics.Aggregator(), ue_metrics.Aggregator(), ue_metrics.Aggregator()

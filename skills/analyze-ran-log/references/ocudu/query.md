@@ -110,6 +110,22 @@ PDSCHs of DCI format 1_0 in a common search space (SIB, RAR, paging, fallback) a
 placed from their CORESET, the others from the BWP. PDCCHs take the CRBs of their
 CCEs in their CORESET.
 
+**Scheduler per-UE metrics** — for "what did the scheduler do for UE X" at slot
+resolution, e.g. throughput, MCS, PRBs, retransmissions, HARQ-ACK outcomes, CQI or
+SRs between two times, read the scheduler event traces: a summary per UE, then one
+row per period per UE, or the grants and reports themselves:
+
+```bash
+python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/schedtrace_ue_metrics.py <trace or run dir> \
+  [--rnti 0x4601] [--ue 0] [--after 13:35:40] [--before 13:35:41] [--period 0.01] \
+  [--summary] [--grants dl|ul|harq|csi] [-j <workers>]
+```
+
+Fields follow the METRICS `Scheduler UE` lines where they mean the same: `dl_brate`
+is of the ACKed TBS, and 1 s periods match a 1 s METRICS period. Traces have no UL
+CRC or buffer status, so UL throughput is of the scheduled new transmissions
+(`ul_sched_brate`), and a DTX report counts as not ok.
+
 ## answer shape
 
 ```

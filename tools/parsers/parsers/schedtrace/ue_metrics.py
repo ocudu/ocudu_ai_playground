@@ -15,7 +15,7 @@ from typing import Any
 from ..ran.rnti import normalize
 from .grid import Cell, rbg_crbs
 
-# Duration of an aggregation bin, in seconds.
+# Default duration of an aggregation bin, in seconds.
 BIN_S = 0.01
 # Fields of the rows of each kind of grant or report of slot_items(), all with "rnti" and "ue_index" first.
 ITEM_FIELDS: dict[str, tuple[str, ...]] = {
@@ -75,18 +75,19 @@ def slot_items(event: dict[str, Any], cell: Cell) -> dict[str, list[tuple]]:
 
 
 class Aggregator:
-    """Sums of the grants and reports of each UE, and of each cell slot, per bin of BIN_S. Aggregators of parts of a
-    trace merge into the one of the whole.
+    """Sums of the grants and reports of each UE, and of each cell slot, per bin of bin_s seconds. Aggregators of parts
+    of a trace, with the same bin, merge into the one of the whole.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, bin_s: float = BIN_S) -> None:
+        self.bin_s = bin_s
         # Sums of each (bin, RNTI), and of each bin for the cell, with the first record of the bin.
         self.ues: dict[tuple[int, str], dict[str, Any]] = {}
         self.cells: dict[int, dict[str, Any]] = {}
 
     def add(self, record: int, event: dict[str, Any], items: dict[str, list[tuple]]) -> None:
         """Adds a CellSlotEvent of record number record and its slot_items()."""
-        b = int(event["timestamp_us"] / 1e6 // BIN_S)
+        b = int(event["timestamp_us"] / 1e6 // self.bin_s)
         latency = event.get("latency_us") or 0
         c = self.cells.get(b)
         if c is None:
@@ -174,25 +175,31 @@ class Aggregator:
 
     def ue_rows(self) -> list[tuple]:
         """Rows of time, record and the values of UE_FIELDS, per bin and RNTI, in time order."""
-        out = []
+        return [(b * self.bin_s, u["record"], *_ue_values(rnti, u, self.bin_s)) for (b, rnti), u in sorted(self.ues.items())]
+
+    def ue_totals(self, duration_s: float) -> list[tuple]:
+        """Rows of the first and last bin time and the values of UE_FIELDS over all the bins of each RNTI, rates over
+        duration_s seconds, e.g. of the whole trace, in RNTI order.
+        """
+        totals: dict[str, dict[str, Any]] = {}
+        spans: dict[str, list[int]] = {}
         for (b, rnti), u in sorted(self.ues.items()):
-            reports = u["dl_nof_ok"] + u["dl_nof_nok"] + u["dl_nof_dtx"]
-            out.append((
-                b * BIN_S, u["record"], rnti, u["ue_index"],
-                u["dl_ok_bytes"] * 8 / BIN_S, u["dl_newtx_bytes"] * 8 / BIN_S,
-                u["dl_mcs_sum"] / u["dl_mcs_n"] if u["dl_mcs_n"] else None,
-                u["dl_nof_prbs"], u["dl_nof_newtx"], u["dl_nof_retx"],
-                u["dl_nof_ok"], u["dl_nof_nok"], u["dl_nof_dtx"],
-                100 * (reports - u["dl_nof_ok"]) / reports if reports else None,
-                u["ul_newtx_bytes"] * 8 / BIN_S, u["ul_nof_prbs"], u["ul_nof_newtx"], u["ul_nof_retx"],
-                u["ul_layers_sum"] / u["ul_layers_n"] if u["ul_layers_n"] else None,
-                u["cqi"], u["dl_ri"], u["rsrp_sum"] / u["rsrp_n"] if u["rsrp_n"] else None, u["sr_count"],
-            ))
-        return out
+            t = totals.get(rnti)
+            if t is None:
+                totals[rnti], spans[rnti] = dict(u), [b, b]
+                continue
+            spans[rnti][1] = b
+            for k, v in u.items():
+                if k in ("ue_index", "cqi", "dl_ri"):
+                    t[k] = v if v is not None else t[k]
+                elif k != "record":
+                    t[k] += v
+        return [(spans[rnti][0] * self.bin_s, spans[rnti][1] * self.bin_s, *_ue_values(rnti, t, duration_s))
+                for rnti, t in sorted(totals.items())]
 
     def cell_rows(self) -> list[tuple]:
         """Rows of time, record and the values of CELL_FIELDS, per bin, in time order."""
-        return [(b * BIN_S, c["record"], c["latency_sum"] / c["n"], c["latency_max"], c["n"], c["dl_nof_prbs"],
+        return [(b * self.bin_s, c["record"], c["latency_sum"] / c["n"], c["latency_max"], c["n"], c["dl_nof_prbs"],
                  c["ul_nof_prbs"], len(c["dl_ues"]), len(c["ul_ues"]), c["failed_attempts"])
                 for b, c in sorted(self.cells.items())]
 
@@ -203,6 +210,20 @@ class Aggregator:
             u.update(record=record, ue_index=ue_index, cqi=None, dl_ri=None)
         u["record"] = min(u["record"], record)
         return u
+
+
+def _ue_values(rnti: str, u: dict[str, Any], seconds: float) -> tuple:
+    """The values of UE_FIELDS from the sums of a UE over a span of seconds."""
+    reports = u["dl_nof_ok"] + u["dl_nof_nok"] + u["dl_nof_dtx"]
+    return (
+        rnti, u["ue_index"], u["dl_ok_bytes"] * 8 / seconds, u["dl_newtx_bytes"] * 8 / seconds,
+        u["dl_mcs_sum"] / u["dl_mcs_n"] if u["dl_mcs_n"] else None,
+        u["dl_nof_prbs"], u["dl_nof_newtx"], u["dl_nof_retx"], u["dl_nof_ok"], u["dl_nof_nok"], u["dl_nof_dtx"],
+        100 * (reports - u["dl_nof_ok"]) / reports if reports else None,
+        u["ul_newtx_bytes"] * 8 / seconds, u["ul_nof_prbs"], u["ul_nof_newtx"], u["ul_nof_retx"],
+        u["ul_layers_sum"] / u["ul_layers_n"] if u["ul_layers_n"] else None,
+        u["cqi"], u["dl_ri"], u["rsrp_sum"] / u["rsrp_n"] if u["rsrp_n"] else None, u["sr_count"],
+    )
 
 
 # Sums kept per bin and UE.
