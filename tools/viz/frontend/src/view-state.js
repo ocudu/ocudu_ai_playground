@@ -38,6 +38,8 @@ export function encodeView(app) {
         range: app.tabs[r.id].userRange,
         events: app.tabs[r.id].eventCategories,
         alone: app.tabs[r.id].relatedAnswered || undefined,
+        // Marks are saved by the file of their log and their regex, and marked again when restored.
+        marks: (app.tabs[r.id].marks ?? []).map((m) => ({ log: app.sources[m.log]?.file ?? null, pattern: m.pattern, shown: m.shown })),
         plots: app.tabs[r.id].plots.map((p) => ({
           source: app.sources[p.source]?.file ?? null,
           // An ad-hoc metric is saved as its spec, and opened again from its log, the source of the same file.
@@ -98,7 +100,13 @@ export function decodeView(hash, runs, sources) {
         columnFilter: p.columnFilter ?? "",
       });
     }
-    tabs.push({ run: run.id, range: t.range ?? null, plots, eventCategories: t.events ?? null, relatedAnswered: Boolean(t.alone) });
+    const marks = [];
+    for (const m of t.marks ?? []) {
+      const log = byFile.get(m.log);
+      if (log) marks.push({ source: log.id, pattern: m.pattern, shown: m.shown !== false });
+      else warnings.push(`${m.log} is not in ${t.run}, its mark /${m.pattern}/ was skipped.`);
+    }
+    tabs.push({ run: run.id, range: t.range ?? null, plots, marks, eventCategories: t.events ?? null, relatedAnswered: Boolean(t.alone) });
   }
   const active = byName.get(state.active)?.id ?? null;
   return { view: { timeMode: state.timeMode, active, tabs }, warnings };

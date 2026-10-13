@@ -149,7 +149,7 @@ class _OpenRequest(BaseModel):
 
 
 class _AdhocRequest(BaseModel):
-    key: str
+    key: str | None = None
     filter: str | None = None
     split_key: str | None = None
 
@@ -217,7 +217,9 @@ def create_app(
 
     @app.post("/api/sources/{source_id}/adhoc")
     def open_adhoc(source_id: int, req: _AdhocRequest) -> dict[str, Any]:
-        """Opens the ad-hoc metric of a key=value field of the lines of a log, or of the log of an ad-hoc metric."""
+        """Opens the ad-hoc metric of a key=value field of the lines of a log, or of the log of an ad-hoc metric, or
+        without a key, the lines that match a filter, as events.
+        """
         try:
             spec = adhoc.Spec(req.key, req.filter or None, req.split_key or None)
             entry = registry.open_adhoc(source_id, spec)

@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
 """Ad-hoc metrics of an OCUDU log: the numeric values of a key=value field in its lines, e.g. tbs=5889 of the slot
-decision lines of the scheduler, with the time of their log entry.
+decision lines of the scheduler, with the time of their log entry; or, without a key, the lines that match a regular
+expression, e.g. to mark them as events.
 
 Lines may be kept to those matching a regular expression, and each value may take the value of a split key, the
 nearest one before it in its line, e.g. the ue= of the grant a tbs= belongs to. Numbers with a unit are scaled to the
@@ -27,16 +28,30 @@ _TIMESTAMP_RE = re.compile(rb"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)")
 _MAX_LOOKBACK = 1 << 20
 
 
+# Characters of the text of a line kept for each line of scan_lines().
+MAX_TEXT = 500
+_PREAMBLE_RE = re.compile(r"^\S+\s+\[\s*([^\]]*?)\s*\]\s+(?:\[([A-Z])\]\s)?")
+_UE_RE = re.compile(r"(?<![\w-])ue=(\d+)")
+_RNTI_RE = re.compile(r"(?<![\w])(?:c-|tc-)?rnti=(0x[0-9a-fA-F]+)")
+
+
 @dataclass(frozen=True)
 class Spec:
-    """An ad-hoc metric: the values of key, in the lines that match filter, if any, split by the value of split_key."""
+    """An ad-hoc metric: the values of key, in the lines that match filter, if any, split by the value of split_key. Without
+    a key, the lines that match filter.
+    """
 
-    key: str
+    key: str | None
     filter: str | None = None
     split_key: str | None = None
 
     def __post_init__(self) -> None:
-        if not re.fullmatch(_KEY_CHARS + "+", self.key):
+        if self.key is None:
+            if not self.filter:
+                raise ValueError("Give a key, or a filter of the lines.")
+            if self.split_key is not None:
+                raise ValueError("A split key needs a key.")
+        elif not re.fullmatch(_KEY_CHARS + "+", self.key):
             raise ValueError(f"Invalid key {self.key!r}.")
         if self.split_key is not None and not re.fullmatch(_KEY_CHARS + "+", self.split_key):
             raise ValueError(f"Invalid split key {self.split_key!r}.")
@@ -101,6 +116,39 @@ def scan(path: str, start: int, end: int, first_line: int, spec: Spec) -> dict:
                 split = found["value"].decode("utf-8", "replace") if found else None
             rows.append((t, line_no, line_start, value, split))
     return {"rows": rows, "unit": unit}
+
+
+def scan_lines(path: str, start: int, end: int, first_line: int, spec: Spec) -> list[tuple]:
+    """Scans the byte range [start, end) of a log, whose first line is line first_line, for the lines that match the
+    filter of a spec, case-insensitive.
+
+    Returns rows of (time in seconds since the epoch, line number, line offset, text of at most MAX_TEXT characters,
+    logger, level letter, UE index, RNTI), in file order, the last four None when the line has none.
+    """
+    pattern = re.compile(spec.filter.encode(), re.IGNORECASE | re.MULTILINE)
+    rows: list[tuple] = []
+    with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+        line_no, counted_to, last_start = first_line, start, -1
+        for m in pattern.finditer(mm, start, end):
+            newline = mm.rfind(b"\n", start, m.start())
+            line_start = newline + 1 if newline != -1 else start
+            if line_start == last_start:
+                continue
+            last_start = line_start
+            line_no += mm[counted_to:line_start].count(b"\n")
+            counted_to = line_start
+            t = _entry_time(mm, line_start, start)
+            if t is None:
+                continue
+            line_end = mm.find(b"\n", line_start, end)
+            text = mm[line_start: end if line_end == -1 else line_end].decode("utf-8", "replace")
+            pre = _PREAMBLE_RE.match(text)
+            ue = _UE_RE.search(text)
+            rnti = _RNTI_RE.search(text)
+            rows.append((t, line_no, line_start, text[:MAX_TEXT], pre.group(1) if pre else None,
+                         pre.group(2) if pre else None, int(ue.group(1)) if ue else None,
+                         rnti.group(1).lower() if rnti else None))
+    return rows
 
 
 def _entry_time(mm: mmap.mmap, line_start: int, floor: int) -> float | None:

@@ -431,6 +431,18 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - The URL view state saves an ad-hoc plot by its log and spec, and opens the metric again when restored.
 - A line with several values and no split key gives one plotted point, the last one, since points are per record;
   splitting by a key of the line separates them.
+- Ad-hoc metrics and marks are lines of their log and take its time shift in relative time.
+
+### D19c. Marked lines
+
+- Right-clicking text selected in a line of the log pane also offers `Mark lines with “…”`: the lines of the log that
+  contain the text, ignoring case, become events on the plots of the tab, as a mark. A mark is an ad-hoc source whose
+  spec has a regex and no key (`parsers.log.adhoc.scan_lines()`); its records are the matching lines and its events,
+  of category `adhoc` and type the regex, carry each line's text, logger, level, UE index and RNTI.
+- Each mark has a chip in the event bar, with its count, to show or hide it, and ✕ to remove it. Its events are drawn
+  with those of the chips of log events; clicking one opens the log pane on the matching lines only, `filtered`.
+- The URL view state saves the marks of a tab by the file of their log and their regex.
+- Marks are drawn on the plots, not yet in the trace, whose events are on the UE lanes of the events of a log.
 
 ### D20. Resource grid of scheduler event traces
 

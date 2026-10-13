@@ -66,6 +66,16 @@ class AdhocTest(unittest.TestCase):
         # The same spec is the same source, also when asked from an ad-hoc metric of the log.
         self.assertEqual(self.registry.open_adhoc(entry.id, Spec("tbs", filter="tbs=300|tbs=600")).id, entry.id)
 
+    def test_marked_lines(self):
+        entry = self.open(Spec(None, filter="rrc"))
+        store = entry.store
+        # No dataset: the lines are records and events.
+        self.assertEqual((store.datasets, [r["record"] for r in store.records(1, 10)]), ({}, [4, 6]))
+        self.assertEqual(store.event_counts, {"adhoc": 2})
+        events = store.events(None, None, None, None, 10, None)["events"]
+        self.assertEqual([(e["record"], e["type"], e["layer"], e["ue"]) for e in events], [(4, "/rrc/", "RRC", 0), (6, "/rrc/", "RRC", 1)])
+        self.assertTrue(events[0]["text"].endswith("something else"))
+
     def test_log_records_after_and_before(self):
         store = self.registry.entries()[0].store
         self.assertEqual([r["record"] for r in store.records(after=4, count=5)], [5, 6])

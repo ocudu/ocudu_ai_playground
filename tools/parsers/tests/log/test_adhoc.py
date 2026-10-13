@@ -61,8 +61,20 @@ class AdhocTest(unittest.TestCase):
             rows += adhoc.scan(str(self.path), start, end, first, adhoc.Spec("tbs", split_key="ue"))["rows"]
         self.assertEqual(rows, self.scan(adhoc.Spec("tbs", split_key="ue"))["rows"])
 
+    def test_lines(self):
+        rows = adhoc.scan_lines(str(self.path), 0, self.path.stat().st_size, 1, adhoc.Spec(None, filter="TBS=\\d"))
+        # Each matching line once, case-insensitive, also within longer keys as a regex does, the body line with the time
+        # of its entry.
+        self.assertEqual([line for _, line, *_ in rows], [1, 2, 3, 5, 6])
+        t, line, offset, text, layer, level, ue, rnti = rows[0]
+        self.assertEqual((layer, level, ue, rnti), ("SCHED", "I", 0, "0x44"))
+        self.assertEqual(text, LOG.splitlines()[0])
+        self.assertEqual(rows[3][0], epoch("2026-10-12T13:35:41.001500"))
+        self.assertEqual(rows[3][4:], (None, None, None, None))
+
     def test_invalid_specs(self):
-        for kwargs in ({"key": "a b"}, {"key": "tbs", "filter": "(("}, {"key": "tbs", "split_key": "u e"}):
+        for kwargs in ({"key": "a b"}, {"key": "tbs", "filter": "(("}, {"key": "tbs", "split_key": "u e"},
+                       {"key": None}, {"key": None, "filter": "x", "split_key": "ue"}):
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
                 adhoc.Spec(**kwargs)
         self.assertEqual(adhoc.Spec("cw[0].tbs").key, "cw[0].tbs")

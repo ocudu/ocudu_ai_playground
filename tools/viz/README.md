@@ -127,6 +127,9 @@ In the page:
   line regex (e.g. `slot decisions`), and a `split by` box, a key of the same lines (e.g. `ue`, one series per UE);
   Enter applies them. Clicking a point shows only the matching lines in the log pane (`filtered`); `all lines` goes
   back to the whole log at the same line.
+- Select text in a line of the log pane, e.g. `rnti=0x45` or `RLF`, right-click it, and `Mark lines with “…”` marks
+  the lines of the log with that text, ignoring case, as events on the plots. Each mark gets a chip in the event bar
+  to show, hide (click) or remove (✕) it; clicking a marked event shows the marked lines in the log pane.
 - The top-right corner of a plot shows the time and value under the mouse. The legend below shows the time under
   the cursor.
 - Filter the rows of a plot with an expression, applied on Enter. Values are in the base units of the

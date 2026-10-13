@@ -10,6 +10,8 @@ const WINDOW = 61;
 // from the scrolled end dropped, so that the page holds a bounded part of the file.
 const PAGE = 200;
 const MAX_RECORDS = 1000;
+// Characters of a selection that its lines can be marked by.
+const MAX_MARK_TEXT = 200;
 // Distance from the first or last line, in pixels, at which the next records are loaded.
 const LOAD_MARGIN = 300;
 // Browser storage key of the height of the log lines, in pixels.
@@ -46,7 +48,7 @@ export default {
     sources: { type: Array, required: true },
   },
   components: { EventTables },
-  emits: ["close", "select-record", "plot-key"],
+  emits: ["close", "select-record", "plot-key", "mark-lines"],
   data() {
     // current is the highlighted record, the selected one until another record is clicked, and detail its decoding.
     return {
@@ -61,7 +63,7 @@ export default {
       query: "", regex: false, searchNote: "", searching: false,
       // Whether the pane fills the window.
       maximized: false,
-      // Context menu of a key=value field of a line, at its position in the window, with the key it plots.
+      // Context menu of a line, at its position in the window, with the key it plots and the text it marks, if any.
       menu: null,
     };
   },
@@ -220,23 +222,30 @@ export default {
     },
 
     /**
-     * Opens the menu of the numeric key=value field right-clicked in a line, or of the key selected, e.g. "tbs" of
-     * "tbs=5889". Elsewhere, and with Shift, the browser's own menu opens.
+     * Opens the menu of a line: to plot the numeric key=value field right-clicked, or the key selected, e.g. "tbs" of
+     * "tbs=5889", and to mark the lines with the text selected. Elsewhere, and with Shift, the browser's own menu opens.
      */
     onContextMenu(e) {
       this.menu = null;
       if (e.shiftKey || !this.logSource) return;
-      const key = this.selectedKey() ?? this.keyAt(e.clientX, e.clientY);
-      if (!key) return;
+      const text = this.selectedText();
+      const key = (text && this.keyOf(text)) ?? this.keyAt(e.clientX, e.clientY);
+      if (!key && !text) return;
       e.preventDefault();
-      this.menu = { x: e.clientX, y: e.clientY, key };
+      this.menu = { x: e.clientX, y: e.clientY, key, text };
     },
 
-    /** The key of a key or key=value field selected in the lines, or null. */
-    selectedKey() {
+    /** The text selected in the lines, of at most MAX_MARK_TEXT characters, or null. */
+    selectedText() {
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed || !this.$refs.lines.contains(selection.anchorNode)) return null;
-      const m = /^([\w.\-\[\]]+?)(=\S*)?$/.exec(selection.toString().trim());
+      const text = selection.toString().trim();
+      return text && text.length <= MAX_MARK_TEXT && !text.includes("\n") ? text : null;
+    },
+
+    /** The key of a text that is a key or a key=value field, or null. */
+    keyOf(text) {
+      const m = /^([\w.\-\[\]]+?)(=\S*)?$/.exec(text);
       return m ? m[1] : null;
     },
 
@@ -262,6 +271,12 @@ export default {
 
     plotMenuKey() {
       this.$emit("plot-key", { source: this.logSource.id, key: this.menu.key });
+      this.menu = null;
+    },
+
+    /** Marks the lines with the selected text, matched literally and ignoring case. */
+    markMenuText() {
+      this.$emit("mark-lines", { source: this.logSource.id, pattern: this.menu.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") });
       this.menu = null;
     },
 
@@ -399,7 +414,7 @@ export default {
         <strong>{{ sourceName }}</strong>
         <span class="muted">{{ hasDetail ? "frame" : "line" }} {{ current }}</span>
         <form class="filter record-search" @submit.prevent="search(false)">
-          <input v-model="query" placeholder="search" title="Enter: next match, Shift+Enter: previous. Case-insensitive. Right-click a key=value field of a line to plot it."
+          <input v-model="query" placeholder="search" title="Enter: next match, Shift+Enter: previous. Case-insensitive. Right-click a key=value field of a line to plot it, or selected text to mark the lines with it."
                  @keydown.enter.shift.prevent="search(true)" @input="searchNote = ''" />
         </form>
         <label class="inline" title="Search with a regular expression (Python syntax), e.g. ue=\d+ .*RLF">
@@ -433,8 +448,10 @@ export default {
         <pre v-else-if="hasDetail" class="record-detail" :style="height && !maximized ? { height: height + 'px' } : null"><span v-if="detailError" class="error">{{ detailError }}</span>{{ detail || (detailError ? "" : "decoding…") }}</pre>
       </div>
       <div v-if="menu" ref="menu" class="context-menu" role="menu" :style="{ left: menu.x + 'px', top: menu.y + 'px' }">
-        <button role="menuitem" title="Plot the values of this key=value field over time, from all the lines of the log"
+        <button v-if="menu.key" role="menuitem" title="Plot the values of this key=value field over time, from all the lines of the log"
                 @click="plotMenuKey">Plot {{ menu.key }}=</button>
+        <button v-if="menu.text" role="menuitem" title="Mark the lines of the log with this text, ignoring case, as events on the plots"
+                @click="markMenuText">Mark lines with “{{ menu.text.length > 40 ? menu.text.slice(0, 40) + "…" : menu.text }}”</button>
       </div>
     </aside>
   `,

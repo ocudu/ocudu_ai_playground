@@ -73,7 +73,8 @@ function newPlot(init) {
  */
 function newTab() {
   // focused is the id of the panel maximized, alone with the log pane, or null.
-  return { plots: [], userRange: null, defaultPlotAdded: false, eventCategories: [], related: null, relatedAnswered: false, focused: null };
+  // marks are the lines marked as events on the plots: their ad-hoc source, regex, log and whether they are shown.
+  return { plots: [], userRange: null, defaultPlotAdded: false, eventCategories: [], marks: [], related: null, relatedAnswered: false, focused: null };
 }
 
 const App = {
@@ -135,6 +136,8 @@ const App = {
         if (!span) continue;
         for (const id of run.sources) shifts[id] = -span.min;
       }
+      // Ad-hoc metrics and marks are lines of their log, whose shift they take.
+      for (const s of this.sources) if (s.parent != null) shifts[s.id] = shifts[s.parent];
       return shifts;
     },
     fullRange() {
@@ -146,7 +149,8 @@ const App = {
     /** Inputs of the events request of the active tab. */
     eventsQuery() {
       const states = this.runSources.map((s) => [s.id, s.status, s.events_status]);
-      return [this.activeId, states, this.view, this.activeTab?.eventCategories, this.timeMode];
+      const marks = (this.activeTab?.marks ?? []).map((m) => [m.source, m.shown, this.sources[m.source]?.events_status]);
+      return [this.activeId, states, this.view, this.activeTab?.eventCategories, marks, this.timeMode];
     },
     /** Logs of the active run whose events are parsed, the sources of the events marked on the plots. */
     eventLogs() {
@@ -317,6 +321,7 @@ const App = {
         // Ad-hoc metrics are opened again from their log, which their plots name. The plots of the reactive tab are
         // passed, so that the panels see them change.
         for (const p of this.tabs[t.run].plots.filter((p) => p.adhoc)) this.plotAdhoc({ source: p.source, ...p.adhoc }, p);
+        for (const m of t.marks) this.markLines(m, m.shown, this.tabs[t.run]);
       }
       if (view.active != null) this.activeId = view.active;
       this.restoring = false;
@@ -432,8 +437,9 @@ const App = {
     async fetchEvents() {
       this.eventsAbort?.abort();
       const kinds = PLOT_EVENTS.filter((kind) => this.activeTab?.eventCategories?.includes(kind.key));
-      const sources = this.eventLogs;
-      if (!sources.length || !kinds.length || !this.view) {
+      const sources = kinds.length ? this.eventLogs : [];
+      const marks = (this.activeTab?.marks ?? []).filter((m) => m.shown && this.sources[m.source]?.events_status === "ready");
+      if ((!sources.length && !marks.length) || !this.view) {
         this.events = [];
         this.eventsTruncated = false;
         return;
@@ -444,13 +450,20 @@ const App = {
         // Whole categories and single types; an empty category list is left out of the query, matching only the types.
         const categories = kinds.filter((kind) => !kind.type).map((kind) => kind.category);
         const types = kinds.filter((kind) => kind.type).map((kind) => kind.type);
-        const results = await Promise.all(
-          sources.map((s) => {
+        const results = await Promise.all([
+          ...sources.map((s) => {
             const shift = this.shifts[s.id];
             const params = { source: s.id, t0: this.view.min - shift, t1: this.view.max - shift, categories, types, limit: MAX_EVENTS };
             return getJSON("/api/events", params, signal).then((res) => ({ res, s, shift }));
           }),
-        );
+          // All the events of a mark are its lines.
+          ...marks.map((m) => {
+            const s = this.sources[m.source];
+            const shift = this.shifts[s.id];
+            const params = { source: s.id, t0: this.view.min - shift, t1: this.view.max - shift, limit: MAX_EVENTS };
+            return getJSON("/api/events", params, signal).then((res) => ({ res, s, shift }));
+          }),
+        ]);
         this.events = results
           .flatMap(({ res, s, shift }) => res.events.map((e) => ({ ...e, t: e.t + shift, source: s.id })))
           .sort((a, b) => a.t - b.t);
@@ -458,6 +471,23 @@ const App = {
       } catch (e) {
         if (e.name !== "AbortError") this.warnings = [...this.warnings, e.message];
       }
+    },
+
+    /**
+     * Marks the lines of a log that match a regex, as {source, pattern}, as events on the plots of a tab, the active one
+     * by default. shown sets whether they are drawn at first.
+     */
+    async markLines(mark, shown = true, tab = this.activeTab) {
+      if (!tab) return;
+      let id;
+      try {
+        ({ id } = await postJSON(`/api/sources/${mark.source}/adhoc`, { key: null, filter: mark.pattern }));
+      } catch (e) {
+        this.warnings = [...this.warnings, e.message];
+        return;
+      }
+      if (!tab.marks.some((m) => m.source === id)) tab.marks.push({ source: id, pattern: mark.pattern, log: mark.source, shown });
+      await this.pollSources();
     },
 
     /** @param {"plot" | "table" | "trace" | "grid"} kind */
@@ -737,7 +767,7 @@ const App = {
         </div>
         <template v-else-if="activeTab">
           <p class="hint muted">Drag to zoom, Shift+drag to pan, double-click to reset, W/S to zoom in and out, A/D to pan, click a point or an event marker to see its log line or frame.</p>
-          <div v-if="eventCategoryChips.length || eventsState || activeNotes.length" class="event-bar">
+          <div v-if="eventCategoryChips.length || eventsState || activeNotes.length || activeTab.marks.length" class="event-bar">
             <span class="muted">events</span>
             <span v-if="eventsState === 'parsing'" class="muted">parsing…</span>
             <span v-else-if="eventsState === 'error'" class="error">could not be parsed</span>
@@ -747,6 +777,13 @@ const App = {
                     @click="toggleEventCategory(c.key)">
               <span class="event-dot"></span>{{ c.label }} <span class="muted">{{ c.count }}</span>
             </button>
+            <span v-for="(m, i) in activeTab.marks" :key="m.source" class="mark-chip">
+              <button :class="['event-chip', 'ev-adhoc', { off: !m.shown }]" :title="'Show or hide the lines matching /' + m.pattern + '/ on the plots'"
+                      @click="m.shown = !m.shown">
+                <span class="event-dot"></span>“{{ m.pattern }}” <span class="muted">{{ sources[m.source]?.status === "ready" && sources[m.source]?.events_status === "ready" ? sources[m.source].event_counts?.adhoc ?? 0 : "…" }}</span>
+              </button>
+              <button class="icon" title="Remove this mark" @click="activeTab.marks.splice(i, 1)">✕</button>
+            </span>
             <span v-if="eventsTruncated" class="muted">only the first events of the window are shown, zoom in for all</span>
             <span v-for="n in activeNotes" :key="n" class="muted event-note">{{ n }}</span>
           </div>
@@ -780,7 +817,7 @@ const App = {
       </template>
     </main>
     <record-view v-if="selection" :selection="selection" :sources="sources" @close="selection = null"
-                 @select-record="selection = $event" @plot-key="plotAdhoc($event)" />
+                 @select-record="selection = $event" @plot-key="plotAdhoc($event)" @mark-lines="markLines($event)" />
     <file-browser v-if="browserOpen" :roots="roots" @open="openPath" @close="browserOpen = false" />
     <div v-if="relatedQuestion" class="modal-backdrop">
       <section class="modal run-question" role="alertdialog" aria-labelledby="run-question-title" @keydown.esc="activeTab.relatedAnswered = true">

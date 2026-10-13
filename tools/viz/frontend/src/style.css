@@ -40,6 +40,7 @@
   --ev-failure: #e0b000;
   --ev-warning: #f57c00;
   --ev-error: #e53935;
+  --ev-adhoc: #37474f;
   /* Resource grid colors, by channel. */
   --ch-pdsch: #8cd17d;
   --ch-sib: #d7b5a6;
@@ -88,6 +89,7 @@
   --ev-failure: #ffd84d;
   --ev-warning: #ff9a3c;
   --ev-error: #ff6b6b;
+  --ev-adhoc: #cfd8dc;
   --ch-pdsch: #98971a;
   --ch-sib: #bdae93;
   --ch-rar: #d65d0e;
@@ -308,6 +310,7 @@ main { flex: 1 0 auto; padding: 8px 16px 16px; }
 .ev-failure .event-dot { background: var(--ev-failure); }
 .ev-warning .event-dot { background: var(--ev-warning); }
 .ev-error .event-dot { background: var(--ev-error); }
+.ev-adhoc .event-dot { background: var(--ev-adhoc); }
 .cursor-event { margin-top: 2px; max-width: 60vw; white-space: normal; color: var(--fg); }
 .cursor-event .event-dot { margin-right: 5px; }
 .trace .chart { min-height: 0; padding-top: 0; padding-bottom: 0; }
@@ -394,6 +397,7 @@ main { flex: 1 0 auto; padding: 8px 16px 16px; }
 }
 .context-menu button { text-align: left; border: none; background: none; }
 .context-menu button:hover { background: var(--selected); }
+.mark-chip { display: inline-flex; align-items: center; }
 .filtered-chip { padding: 0 6px; border-radius: 8px; background: var(--selected); font-size: 12px; }
 
 .resize-handle {

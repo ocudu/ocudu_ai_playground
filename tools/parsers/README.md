@@ -234,7 +234,8 @@ for t, record, *values in agg.ue_rows():
 `parsers.log.adhoc` scans a byte range of a log for the numeric values of a `key=value` field, e.g. `tbs=` of the slot
 decision lines, optionally in the lines matching a regex and split by the nearest value of another key before each
 value in its line. Values with a unit are scaled as METRICS fields are. Ranges of `chunks.chunk_ranges()` scan
-independently.
+independently. Without a key, `scan_lines()` gives the lines matching the regex, with their text, logger, level, UE
+index and RNTI.
 
 ```python
 import os
