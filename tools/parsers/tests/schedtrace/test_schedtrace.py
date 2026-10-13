@@ -77,6 +77,20 @@ class SchedtraceTest(unittest.TestCase):
             path.write_bytes(data[:-5])
             self.assertEqual(len(list(schedtrace.read(path))), 2)
 
+    def test_corrupt_size_warns(self):
+        data = bytearray((DATA / "schedtrace_cell0.bin").read_bytes())
+        second = schedtrace.offsets(data)[1]
+        data[second : second + 4] = (schedtrace.MAX_EVENT_SIZE + 1).to_bytes(4, "little")
+        with self.assertWarnsRegex(UserWarning, f"corrupt schedtrace event size .* at offset {second}"):
+            self.assertEqual(len(list(schedtrace.events(data))), 1)
+        with self.assertWarnsRegex(UserWarning, "corrupt"):
+            self.assertEqual(schedtrace.offsets(data), [schedtrace.HEADER.size])
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "schedtrace_cell0.bin"
+            path.write_bytes(data)
+            with self.assertWarnsRegex(UserWarning, f"{path}: corrupt"):
+                self.assertEqual(len(list(schedtrace.read(path))), 1)
+
     def test_read_matches_events(self):
         data = (DATA / "schedtrace_cell0.bin").read_bytes()
         self.assertEqual(list(schedtrace.read(DATA / "schedtrace_cell0.bin")), list(schedtrace.events(data)))

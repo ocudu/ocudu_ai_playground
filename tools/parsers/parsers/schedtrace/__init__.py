@@ -28,6 +28,8 @@ FBS_DIR = Path(__file__).parent / "fbs"
 MAGIC = b"SCHT"
 HEADER = struct.Struct("<4sHH")
 _U32 = struct.Struct("<I")
+# Largest event size, as OCUDU's trace_to_log checks it; a larger size prefix is corrupt.
+MAX_EVENT_SIZE = 1 << 20
 
 
 class FormatError(ValueError):
@@ -75,6 +77,15 @@ def _partial_header(head: bytes | memoryview) -> bool:
     return len(head) < HEADER.size and MAGIC.startswith(bytes(head[: len(MAGIC)]))
 
 
+def _corrupt(size: int, pos: int, name: str | None = None) -> bool:
+    """Whether an event size prefix is corrupt, warning about it."""
+    if size <= MAX_EVENT_SIZE:
+        return False
+    prefix = f"{name}: " if name else ""
+    warnings.warn(f"{prefix}corrupt schedtrace event size {size} at offset {pos}, the events from it are left out.")
+    return True
+
+
 def _text(v: tuple[int, int]) -> str:
     return f"{v[0]}.{v[1]}"
 
@@ -100,7 +111,7 @@ def events(data: bytes | memoryview, grid_only: bool = False) -> Iterator[dict[s
 
     Each has "timestamp_us" and "type", "CellStartEvent", "CellSlotEvent" or "CellStopEvent", with the fields of that
     event, e.g. "slot_tx", "latency_us", "inputs" and "decision" for a slot. An incomplete last event, e.g. of a
-    trace still being written, is left out. grid_only leaves out the fields that grid.allocations() does not need,
+    trace still being written, is left out, and so are the events from a corrupt size prefix, with a warning. grid_only leaves out the fields that grid.allocations() does not need,
     except the slot, latency and input types, which is faster; some may be left anyway.
     """
     root = _root(grid_only)
@@ -108,7 +119,7 @@ def events(data: bytes | memoryview, grid_only: bool = False) -> Iterator[dict[s
     pos = first_offset(view)
     while pos + 4 <= len(view):
         size = _U32.unpack_from(view, pos)[0]
-        if pos + 4 + size > len(view):
+        if _corrupt(size, pos) or pos + 4 + size > len(view):
             return
         event = root(view[pos + 4 : pos + 4 + size])
         value = event.pop("value") or {"type": None}
@@ -125,7 +136,7 @@ def offsets(data: bytes | memoryview, start: int | None = None, end: int | None 
     pos = first_offset(data) if start is None else start
     while pos + 4 <= end:
         size = _U32.unpack_from(data, pos)[0]
-        if pos + 4 + size > end:
+        if _corrupt(size, pos) or pos + 4 + size > end:
             break
         out.append(pos)
         pos += 4 + size
@@ -149,6 +160,8 @@ def read(path: str | os.PathLike[str], grid_only: bool = False) -> Iterator[dict
         check_version(version(head), os.fspath(path))
         while len(prefix := f.read(4)) == 4:
             size = _U32.unpack(prefix)[0]
+            if _corrupt(size, f.tell() - 4, os.fspath(path)):
+                return
             buf = f.read(size)
             if len(buf) < size:
                 return

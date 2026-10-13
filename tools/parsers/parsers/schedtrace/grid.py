@@ -168,10 +168,10 @@ def allocations(slot_event: dict[str, Any], cell: Cell) -> list[dict[str, Any]]:
             nof_cces = 1 << p["aggr_lvl"]
             info = {"item": [key, i], "rnti": p["rnti"], "dci_type": p["dci_type"], "coreset_id": p["coreset_id"],
                     "ss_id": p["ss_id"], "cce": p["cce"], "nof_cces": nof_cces}
-            key = (p["coreset_id"], p["cce"], nof_cces)
-            crbs = pdcch_cache.get(key)
+            cce_key = (p["coreset_id"], p["cce"], nof_cces)
+            crbs = pdcch_cache.get(cce_key)
             if crbs is None:
-                crbs = pdcch_cache[key] = pdcch_crbs(cs, p["cce"], nof_cces)
+                crbs = pdcch_cache[cce_key] = pdcch_crbs(cs, p["cce"], nof_cces)
             add("DL", "PDCCH", _first_symbol(ss), cs["duration"], crbs, info)
     for i, p in enumerate(decision.get("prachs") or []):
         _add_prach(add, i, p, cell)

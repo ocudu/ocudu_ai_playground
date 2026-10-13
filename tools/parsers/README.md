@@ -152,7 +152,9 @@ events = timeline.run_events(tshark, "run_dir", ["ngap", "f1ap"], ue="0")
 
 `tshark` reads pcaps through a link or copy in the work directory, since the AppArmor profile of `tshark` on Ubuntu
 only lets it read under `/tmp`, and dissects the MAC and RLC PDUs of `mac.pcap` and `rlc.pcap` through the
-`mac_nr_udp` and `rlc_nr_udp` heuristics. Field extractions are cached in the work directory by pcap and fields.
+`mac_nr_udp` and `rlc_nr_udp` heuristics. Field extractions are cached in the work directory by pcap path, size and
+mtime, and a tag, by default the fields and filter. `run.find_pcaps()` finds the pcaps of each protocol by file name,
+`<proto>.pcap` or with a prefix, e.g. `gnb_f1ap.pcap`.
 `run.check_pcap()` checks that a pcap has a frame that one of the known dissectors binds. `messages.messages()` lists
 the NGAP, F1AP or E1AP messages of a pcap with their procedure, outcome, UE identifiers and cause, `frames.summaries()`
 the one-line tshark summary of each frame and `frames.decode()` decodes one frame. `frames.time_span()` reads the time
@@ -177,7 +179,8 @@ OCUDU writes one `schedtrace_cell<N>.bin` per cell when the `trace.schedtrace` o
 size-prefixed FlatBuffers `CellEvent` buffers. `read()` and `events()` yield each as a dict with `timestamp_us`,
 `type` (`CellStartEvent`, `CellSlotEvent` or `CellStopEvent`) and its fields: tables as dicts, vectors as lists, enums
 by name, unions with their member as `type`, absent optional fields as `None`. An incomplete last event, e.g. of a
-trace being written, is left out.
+trace being written, is left out. A size prefix over `MAX_EVENT_SIZE` (1 MiB) is corrupt: the events from it are left
+out, with a warning.
 
 `schedtrace.FORMAT_VERSION` is the version of the schemas of `schedtrace/fbs/`, from their `FileFormatVersionMajor`
 and `FileFormatVersionMinor` enums. Traces of another major version, and traces without a header, written before OCUDU versioned the

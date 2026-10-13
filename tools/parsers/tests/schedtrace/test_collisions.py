@@ -141,6 +141,12 @@ class PdcchTest(unittest.TestCase):
         self.assertEqual([(a["channel"], a["sym_start"], a["sym_length"], a["crb_start"], a["crb_length"], a["item"])
                           for a in allocs], [("PDCCH", 0, 1, 14, 6, ["ul_pdcchs", 0]), ("PDCCH", 0, 1, 38, 6, ["ul_pdcchs", 0])])
 
+    def test_allocations_of_pdcchs_name_their_items(self):
+        cell = grid.cell_of(next(schedtrace.read(DATA / "schedtrace_cell0.bin")))
+        allocs = grid.allocations(slot(dl_pdcchs=[pdcch(5, 1, 0, 1, ss_id=1), pdcch(6, 1, 2, 1, ss_id=1)]), cell)
+        self.assertEqual(sorted({tuple(a["item"]) for a in allocs}), [("dl_pdcchs", 0), ("dl_pdcchs", 1)])
+
+
 
 class PrachTest(unittest.TestCase):
     """PRACH occasions: msg1-FrequencyStart 3 in the UL BWP from CRB 0, PRACH and PUSCH subcarrier spacing 30 kHz."""
