@@ -119,6 +119,11 @@ const App = {
     readySources() {
       return this.runSources.filter((s) => s.status === "ready");
     },
+    /** Sources that plots and tables offer: those of the active run, then the ad-hoc metrics of its logs. */
+    panelSources() {
+      const ids = new Set(this.activeRun?.sources ?? []);
+      return [...this.runSources, ...this.sources.filter((s) => s.parent != null && ids.has(s.parent) && s.status !== "closed")];
+    },
     /** Shift from source time to display time, per source id: in relative time, from the start of its run. */
     shifts() {
       const shifts = this.sources.map(() => 0);
@@ -309,6 +314,9 @@ const App = {
         tab.relatedAnswered = t.relatedAnswered;
         tab.defaultPlotAdded = true;
         this.tabs[t.run] = tab;
+        // Ad-hoc metrics are opened again from their log, which their plots name. The plots of the reactive tab are
+        // passed, so that the panels see them change.
+        for (const p of this.tabs[t.run].plots.filter((p) => p.adhoc)) this.plotAdhoc({ source: p.source, ...p.adhoc }, p);
       }
       if (view.active != null) this.activeId = view.active;
       this.restoring = false;
@@ -463,6 +471,31 @@ const App = {
       if (source == null) return;
       const dataset = sameSource ? last.dataset : null;
       tab.plots.push(newPlot({ source, dataset, kind }));
+      await this.$nextTick();
+      [...document.querySelectorAll("main > .panel")].at(-1)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    },
+
+    /**
+     * Opens the ad-hoc metric of a key=value field of the lines of a log, as {source, key, filter, split_key}, and
+     * shows it in a plot: in plot if given, which then changes to it, else in a new plot.
+     */
+    async plotAdhoc(spec, plot = null) {
+      let id;
+      try {
+        ({ id } = await postJSON(`/api/sources/${spec.source}/adhoc`, { key: spec.key, filter: spec.filter ?? null, split_key: spec.split_key ?? null }));
+      } catch (e) {
+        this.warnings = [...this.warnings, e.message];
+        return;
+      }
+      await this.pollSources();
+      const init = { source: id, dataset: "adhoc", field: spec.key, splitBy: spec.split_key ?? null, splitValues: [] };
+      if (plot) {
+        Object.assign(plot, init);
+        return;
+      }
+      const tab = this.activeTab;
+      if (!tab) return;
+      tab.plots.push(newPlot({ ...init, kind: "plot" }));
       await this.$nextTick();
       [...document.querySelectorAll("main > .panel")].at(-1)?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     },
@@ -631,14 +664,15 @@ const App = {
         this.error = e.message;
         return;
       }
-      for (const s of this.runSourcesOf(this.runs)) {
+      for (const s of this.sources) {
         if (s.status === "error" && !this.reportedErrors.has(s.id)) {
           this.reportedErrors.add(s.id);
           this.warnings = [...this.warnings, s.error];
         }
       }
       this.syncTabs();
-      if (this.runSourcesOf(this.runs).some(isParsing)) {
+      // All the sources, which include the ad-hoc metrics of the logs of the runs.
+      if (this.sources.some(isParsing)) {
         this.pollTimer = setTimeout(() => this.pollSources(), SOURCES_POLL_MS);
       }
     },
@@ -726,13 +760,13 @@ const App = {
                         :time-mode="timeMode" :theme-version="themeVersion" @zoom="zoom" @remove="removePlot(p.id)"
                         @select-record="selection = $event" @parse-source="parseSource" />
             <table-panel v-else-if="p.kind === 'table'" v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
-                         :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :panel="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts"
-                         :show-source="runSources.length > 1" @remove="removePlot(p.id)" @select-record="selection = $event"
+                         :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :panel="p" :sources="sources" :choices="panelSources" :view="view" :shifts="shifts"
+                         :show-source="panelSources.length > 1" @remove="removePlot(p.id)" @select-record="selection = $event"
                          @parse-source="parseSource" />
             <plot-panel v-else v-show="activeTab.focused == null || activeTab.focused === p.id" :maximized="activeTab.focused === p.id"
-                         :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :plot="p" :sources="sources" :choices="runSources" :view="view" :shifts="shifts" :time-mode="timeMode"
-                        :theme-version="themeVersion" :show-source="runSources.length > 1" :events="events"
-                        @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" @parse-source="parseSource" />
+                         :maximized-height="maximizedHeight" @maximize="toggleFocus(p.id)" :plot="p" :sources="sources" :choices="panelSources" :view="view" :shifts="shifts" :time-mode="timeMode"
+                        :theme-version="themeVersion" :show-source="panelSources.length > 1" :events="events"
+                        @zoom="zoom" @remove="removePlot(p.id)" @select-record="selection = $event" @parse-source="parseSource" @adhoc="plotAdhoc($event, p)" />
           </template>
           <div class="add-buttons">
             <button class="add-plot" title="Plot of a metric over time, or its histogram" @click="addPlot('plot')">+ plot</button>
@@ -745,7 +779,8 @@ const App = {
         </template>
       </template>
     </main>
-    <record-view v-if="selection" :selection="selection" :sources="sources" @close="selection = null" />
+    <record-view v-if="selection" :selection="selection" :sources="sources" @close="selection = null"
+                 @select-record="selection = $event" @plot-key="plotAdhoc($event)" />
     <file-browser v-if="browserOpen" :roots="roots" @open="openPath" @close="browserOpen = false" />
     <div v-if="relatedQuestion" class="modal-backdrop">
       <section class="modal run-question" role="alertdialog" aria-labelledby="run-question-title" @keydown.esc="activeTab.relatedAnswered = true">

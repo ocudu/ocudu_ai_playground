@@ -18,6 +18,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from parsers.log import adhoc
 from pydantic import BaseModel
 from starlette.types import Scope
 
@@ -103,7 +104,11 @@ def _source_info(entry: SourceEntry, name: str) -> dict[str, Any]:
         "notes": [],
         "event_counts": {},
         "event_type_counts": {},
+        "parent": entry.parent,
     }
+    if (spec := getattr(entry.source_type, "spec", None)) is not None:
+        info["adhoc"] = {"key": spec.key, "filter": spec.filter, "split_key": spec.split_key}
+        info["name"] = f"{name} › {entry.source_type.label}"
     s = entry.store
     if s is None:
         return info
@@ -141,6 +146,12 @@ def _run_info(run: RunEntry, name: str) -> dict[str, Any]:
 
 class _OpenRequest(BaseModel):
     path: str
+
+
+class _AdhocRequest(BaseModel):
+    key: str
+    filter: str | None = None
+    split_key: str | None = None
 
 
 def create_app(
@@ -203,6 +214,18 @@ def create_app(
         except KeyError:
             raise HTTPException(404, f"Unknown source {source_id}.") from None
         return {"id": source_id}
+
+    @app.post("/api/sources/{source_id}/adhoc")
+    def open_adhoc(source_id: int, req: _AdhocRequest) -> dict[str, Any]:
+        """Opens the ad-hoc metric of a key=value field of the lines of a log, or of the log of an ad-hoc metric."""
+        try:
+            spec = adhoc.Spec(req.key, req.filter or None, req.split_key or None)
+            entry = registry.open_adhoc(source_id, spec)
+        except KeyError:
+            raise HTTPException(404, f"Unknown source {source_id}.") from None
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from None
+        return {"id": entry.id}
 
     @app.get("/api/runs")
     def list_runs() -> list[dict[str, Any]]:
@@ -545,15 +568,19 @@ def create_app(
     @app.get("/api/records")
     def records(
         source: int,
-        around: int = Query(..., ge=1),
+        around: int | None = Query(None, ge=1),
+        after: int | None = Query(None, ge=0),
+        before: int | None = Query(None, ge=1),
         count: int = Query(50, ge=1, le=1000),
         mark: int | None = None,
         field: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Returns the records around a record. With mark and field, the record mark gets the spans of the field in
-        its text, as "marks".
+        """Returns the records around a record, or the count records after or before one. With mark and field, the
+        record mark gets the spans of the field in its text, as "marks".
         """
-        out = get_store(source).records(around, count)
+        if (around, after, before).count(None) != 2:
+            raise HTTPException(400, "Give one of around, after and before.")
+        out = get_store(source).records(around, count, after, before)
         spans_fn = getattr(registry.source_type(source), "field_spans", None)
         if mark is not None and field and spans_fn is not None:
             for r in out:

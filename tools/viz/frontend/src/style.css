@@ -378,6 +378,24 @@ main { flex: 1 0 auto; padding: 8px 16px 16px; }
 .records.maximized .record-lines,
 .records.maximized .record-detail { height: auto; }
 
+.adhoc-bar { display: flex; gap: 8px; }
+.adhoc-bar .adhoc-split { width: 8em; }
+.adhoc-title { white-space: nowrap; }
+.context-menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 25%);
+}
+.context-menu button { text-align: left; border: none; background: none; }
+.context-menu button:hover { background: var(--selected); }
+.filtered-chip { padding: 0 6px; border-radius: 8px; background: var(--selected); font-size: 12px; }
+
 .resize-handle {
   height: 6px;
   margin-top: -3px;

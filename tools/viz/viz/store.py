@@ -87,8 +87,9 @@ class StoreWriter:
         self._notes: list[str] = []
         # Source-specific metadata, e.g. the cell of a resource grid.
         self._extra_meta: dict[str, Any] = {}
-        # Whether the resource grid tables were created.
+        # Whether the resource grid tables were created, and the table of the lines that are the records.
         self._grid = False
+        self._lines = False
         self._conn.executescript(
             """
             CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
@@ -147,6 +148,13 @@ class StoreWriter:
 
     def add_record_texts(self, rows: list[tuple[int, str]]) -> None:
         self._conn.executemany("INSERT OR REPLACE INTO record_texts VALUES (?, ?)", rows)
+
+    def add_record_lines(self, rows: list[tuple[int, int]]) -> None:
+        """Makes the records the lines of the file at these (line number, offset), rather than all its lines."""
+        if not self._lines:
+            self._lines = True
+            self._conn.execute("CREATE TABLE record_lines (record INTEGER PRIMARY KEY, offset INTEGER)")
+        self._conn.executemany("INSERT OR REPLACE INTO record_lines VALUES (?, ?)", rows)
 
     def set_meta(self, key: str, value: Any) -> None:
         self._extra_meta[key] = value
@@ -336,6 +344,8 @@ class Store:
                     "SELECT name, kind, fields, units, context, label, instance FROM datasets ORDER BY label"
                 )
             }
+            # Records that are some lines of the file only, e.g. those of an ad-hoc metric.
+            self._sparse = conn.execute("SELECT 1 FROM sqlite_master WHERE name = 'record_lines'").fetchone() is not None
             # Time span of each dataset, from the indexed timestamp column.
             for name, ds in self.datasets.items():
                 ds["t_min"], ds["t_max"] = conn.execute(f"SELECT MIN({_TS}), MAX({_TS}) FROM {_quote('ds_' + name)}").fetchone()
@@ -739,15 +749,33 @@ class Store:
             ).fetchall()
         return [r[0] for r in rows]
 
-    def records(self, around: int, count: int = 50) -> list[dict[str, Any]]:
-        """Returns the raw records centred on the given record: the texts set by the source, else the lines of its file."""
-        first = max(1, around - count // 2)
+    def records(self, around: int | None = None, count: int = 50, after: int | None = None,
+                before: int | None = None) -> list[dict[str, Any]]:
+        """Returns raw records in order: centred on the record around, or the count records after the record after, or
+        before the record before. Texts are the ones set by the source, else the lines of its file.
+        """
         with self._connect() as conn:
+            if self._sparse:
+                return self._sparse_records(conn, around, count, after, before)
             if conn.execute("SELECT 1 FROM record_texts LIMIT 1").fetchone():
-                texts = conn.execute(
-                    "SELECT record, text FROM record_texts WHERE record >= ? ORDER BY record LIMIT ?", (first, count)
-                ).fetchall()
-                return [{"record": r, "text": text} for r, text in texts]
+                if after is not None:
+                    rows = conn.execute("SELECT record, text FROM record_texts WHERE record > ? ORDER BY record LIMIT ?",
+                                        (after, count)).fetchall()
+                elif before is not None:
+                    rows = conn.execute("SELECT record, text FROM record_texts WHERE record < ? ORDER BY record DESC LIMIT ?",
+                                        (before, count)).fetchall()[::-1]
+                else:
+                    rows = conn.execute("SELECT record, text FROM record_texts WHERE record >= ? ORDER BY record LIMIT ?",
+                                        (max(1, around - count // 2), count)).fetchall()
+                return [{"record": r, "text": text} for r, text in rows]
+            if after is not None:
+                first = after + 1
+            elif before is not None:
+                first, count = max(1, before - count), min(count, before - 1)
+            else:
+                first = max(1, around - count // 2)
+            if count <= 0:
+                return []
             row = conn.execute(
                 "SELECT record, offset FROM record_offsets WHERE record <= ? ORDER BY record DESC LIMIT 1", (first,)
             ).fetchone()
@@ -761,6 +789,27 @@ class Store:
                     if len(out) == count:
                         break
                 record += 1
+        return out
+
+    def _sparse_records(self, conn: sqlite3.Connection, around: int | None, count: int, after: int | None,
+                        before: int | None) -> list[dict[str, Any]]:
+        """The records of a store whose records are some lines of its file, read at their offsets."""
+        if after is not None:
+            rows = conn.execute("SELECT record, offset FROM record_lines WHERE record > ? ORDER BY record LIMIT ?",
+                                (after, count)).fetchall()
+        elif before is not None:
+            rows = conn.execute("SELECT record, offset FROM record_lines WHERE record < ? ORDER BY record DESC LIMIT ?",
+                                (before, count)).fetchall()[::-1]
+        else:
+            rows = conn.execute("SELECT record, offset FROM record_lines WHERE record < ? ORDER BY record DESC LIMIT ?",
+                                (around, count // 2)).fetchall()[::-1]
+            rows += conn.execute("SELECT record, offset FROM record_lines WHERE record >= ? ORDER BY record LIMIT ?",
+                                 (around, count - len(rows))).fetchall()
+        out = []
+        with self.path.open("rb") as f:
+            for record, offset in rows:
+                f.seek(offset)
+                out.append({"record": record, "text": f.readline().decode("utf-8", "replace").rstrip("\r\n")})
         return out
 
     def search(self, pattern: str, regex: bool = False, after: int = 0, backward: bool = False) -> dict[str, Any]:

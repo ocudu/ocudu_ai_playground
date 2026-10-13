@@ -40,6 +40,8 @@ export function encodeView(app) {
         alone: app.tabs[r.id].relatedAnswered || undefined,
         plots: app.tabs[r.id].plots.map((p) => ({
           source: app.sources[p.source]?.file ?? null,
+          // An ad-hoc metric is saved as its spec, and opened again from its log, the source of the same file.
+          adhoc: app.sources[p.source]?.adhoc ?? undefined,
           ...Object.fromEntries(PLOT_KEYS.map((k) => [k, p[k]])),
         })),
       })),
@@ -83,7 +85,7 @@ export function decodeView(hash, runs, sources) {
       }
       // Datasets are only known for parsed sources, so plots of sources still parsing are kept as they are. Plots
       // without a dataset, e.g. of a tab never shown, get one when shown.
-      if (p.dataset != null && source.datasets.length && !source.datasets.some((d) => d.name === p.dataset)) {
+      if (!p.adhoc && p.dataset != null && source.datasets.length && !source.datasets.some((d) => d.name === p.dataset)) {
         warnings.push(`Dataset ${p.dataset} is not in ${p.source}, its plot was skipped.`);
         continue;
       }

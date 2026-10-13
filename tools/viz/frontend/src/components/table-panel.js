@@ -222,7 +222,7 @@ export default {
     <section class="panel">
       <header class="panel-bar">
         <select v-if="showSource" v-model.number="panel.source" :title="source ? source.path : 'Source'">
-          <option v-for="s in sourceChoices" :key="s.id" :value="s.id" :disabled="s.status === 'error'">{{ s.file ?? s.name }}</option>
+          <option v-for="s in sourceChoices" :key="s.id" :value="s.id" :disabled="s.status === 'error'">{{ s.adhoc ? s.name : s.file ?? s.name }}</option>
         </select>
         <select v-model="panel.dataset" title="Dataset">
           <option v-for="d in datasets" :key="d.name" :value="d.name">{{ d.label }}</option>

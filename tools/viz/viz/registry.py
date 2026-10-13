@@ -9,7 +9,10 @@ import threading
 from dataclasses import dataclass
 from pathlib import Path
 
+from parsers.log import adhoc
+
 from .files import resolve_within
+from .sources.adhoc import AdhocSource
 from .sources.base import RunIdentity, SourceType
 from .store import Store, StoreCache
 
@@ -37,6 +40,8 @@ class SourceEntry:
     store: Store | None = None
     events_status: str = "pending"
     source_type: SourceType | None = None
+    # Source this one is derived from, e.g. the log of an ad-hoc metric.
+    parent: int | None = None
 
 
 @dataclass
@@ -218,7 +223,8 @@ class SourceRegistry:
         on_request = getattr(source_type, "on_request", None)
         deferred = defer and on_request is not None and on_request(resolved) and not self.cache.is_cached(resolved, source_type)
         with self._lock:
-            entry = next((e for e in self._entries if e.path == resolved and e.status in ("deferred", "parsing", "ready")), None)
+            entry = next((e for e in self._entries if e.path == resolved and e.parent is None
+                          and e.status in ("deferred", "parsing", "ready")), None)
             if entry is None:
                 entry = SourceEntry(len(self._entries), resolved, "deferred" if deferred else "parsing", source_type=source_type)
                 self._entries.append(entry)
@@ -228,6 +234,28 @@ class SourceRegistry:
                 entry.status = "parsing"
         if entry.status == "parsing":
             threading.Thread(target=self._parse, args=(entry, source_type), daemon=True, name=f"parse-{entry.id}").start()
+        return entry
+
+    def open_adhoc(self, source_id: int, spec: adhoc.Spec) -> SourceEntry:
+        """Opens the ad-hoc metric of a spec over the log of a source, scanning it in the background. One already
+        open is not reopened. Raises KeyError for unknown ids and OpenError for sources that are not logs.
+        """
+        if self.cache is None:
+            raise OpenError("Ad-hoc metrics are not available.")
+        with self._lock:
+            if not 0 <= source_id < len(self._entries):
+                raise KeyError(source_id)
+            parent = self._entries[source_id]
+            if parent.parent is not None:
+                parent = self._entries[parent.parent]
+            if parent.source_type is None or parent.source_type.name != "log_metrics" or parent.status == "closed":
+                raise OpenError(f"{parent.path.name}: ad-hoc metrics are picked from logs only.")
+            for e in self._entries:
+                if e.parent == parent.id and e.status in ("parsing", "ready") and getattr(e.source_type, "spec", None) == spec:
+                    return e
+            entry = SourceEntry(len(self._entries), parent.path, "parsing", source_type=AdhocSource(spec), parent=parent.id)
+            self._entries.append(entry)
+        threading.Thread(target=self._parse, args=(entry, entry.source_type), daemon=True, name=f"adhoc-{entry.id}").start()
         return entry
 
     def add_deferred(self, path: Path, source_type: SourceType) -> SourceEntry:
@@ -250,12 +278,15 @@ class SourceRegistry:
         return entry
 
     def close(self, source_id: int) -> None:
-        """Closes a source, releasing its store. Its id is not reused. Raises KeyError for unknown ids."""
+        """Closes a source, and the ad-hoc metrics derived from it, releasing their stores. Ids are not reused. Raises
+        KeyError for unknown ids.
+        """
         with self._lock:
             if not 0 <= source_id < len(self._entries):
                 raise KeyError(source_id)
-            entry = self._entries[source_id]
-            entry.status, entry.store = "closed", None
+            for entry in self._entries:
+                if entry.id == source_id or entry.parent == source_id:
+                    entry.status, entry.store = "closed", None
 
     def entries(self) -> list[SourceEntry]:
         """Returns the sources in id order."""

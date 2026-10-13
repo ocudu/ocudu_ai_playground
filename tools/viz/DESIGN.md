@@ -129,7 +129,8 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 - `GET /api/series?source&dataset&field&split_by&split_values&t0&t1&width`: one series per split value, each with its
   own timestamps, values and record ids. The browser aligns them with `uPlot.join`.
 - `GET /api/context?source&dataset&field`: distinct values of a field, for split value selection.
-- `GET /api/records?source&around&count`: raw records (log lines) around a record.
+- `GET /api/records?source&around&count`: raw records (log lines) around a record; with `after` or `before` instead of
+  `around`, the count records after or before one.
 - Sources sharing a file name are labelled with the first directory where their paths differ.
 
 ### D6. Filters and statistics
@@ -399,12 +400,37 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
 ### D19a. Scrolling the record pane
 
 - The pane first shows 61 records around the selected one, and loads 200 more before or after them when its lines are
-  scrolled within 300 px of their first or last one (`/api/records`), until the first or last record of the file. It
+  scrolled within 300 px of their first or last one (`/api/records?after` or `before`, so that sparse records, e.g. of
+  an ad-hoc metric, page too), until the first or last record. It
   keeps at most 1000 records, dropping those at the other end, so that the page never holds a large part of a file,
   and keeps the lines in view where they were: the browser's scroll anchoring is off for the pane, which corrects the
   scroll position itself. Pages of an earlier selection or search are dropped when they arrive.
 - The server reads a page of a log from the nearest record offset of the store at or before its first record, one
   every 1000 lines, so a page reads at most about 1200 lines of the file.
+
+### D19b. Ad-hoc metrics of logs
+
+- Right-clicking a `key=value` field with a numeric value in a line of the log pane, e.g. `tbs=5889` of a slot decision
+  line, or a selected key, opens a menu with `Plot tbs=`, which plots the numeric values of that key in all the lines
+  of the log over time, at the time of their log entry. Values with a unit are scaled to the canonical unit of METRICS
+  fields. Elsewhere, and with Shift, the browser's own menu opens, so that copying keeps working; a menu rather than a
+  button picks the field under the pointer without selecting it first.
+- An ad-hoc metric is a source of its own (`AdhocSource`, `parsers.log.adhoc`), derived from its log (`parent`) and
+  opened with `POST /api/sources/{id}/adhoc {key, filter, split_key}`: the log is scanned in the worker pool, in the
+  chunks of metrics parsing, finding the key in bytes and reading only the lines it is in, and the result is cached
+  per spec like any parse. Its dataset `adhoc` has the values and, with a split key, the value of that key nearest
+  before each value in its line, e.g. the `ue=` of a grant, so that plots, statistics, filters and CSV work as for
+  other datasets. Its records are the lines with values only, stored as offsets (`record_lines`), not texts, so that
+  the file is never held in memory.
+- The plot of an ad-hoc metric is driven by text: its header names its log and key (e.g. `gnb.log › dl_bo=`) and has a
+  `filter` box, a line regex (Python, case-insensitive), and a `split by` box, a key; Enter opens the ad-hoc metric of
+  the new spec. The pickers of source, dataset and field, the second field and the metrics filter of other plots are
+  left out, since an ad-hoc metric has one source, dataset and field, and its lines are filtered by text. Clicking a point opens the log pane on its records, i.e. the lines
+  that match, marked `filtered`, paging through them; `all lines` shows the same line among all the lines of the
+  log. Plot and table source pickers offer the ad-hoc metrics of the logs of the run.
+- The URL view state saves an ad-hoc plot by its log and spec, and opens the metric again when restored.
+- A line with several values and no split key gives one plotted point, the last one, since points are per record;
+  splitting by a key of the line separates them.
 
 ### D20. Resource grid of scheduler event traces
 

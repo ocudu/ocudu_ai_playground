@@ -57,7 +57,7 @@ export default {
     maximizedHeight: { type: Number, default: 0 },
   },
   components: { ExportDialog },
-  emits: ["zoom", "remove", "select-record", "parse-source", "maximize"],
+  emits: ["zoom", "remove", "select-record", "parse-source", "maximize", "adhoc"],
   data() {
     return {
       maxLegendSeries: MAX_LEGEND_SERIES,
@@ -72,6 +72,9 @@ export default {
       instanceOptions: [],
       splitFilter: "",
       filterDraft: this.plot.filter,
+      // Line regex and split key of an ad-hoc metric being edited, applied as a new ad-hoc metric.
+      adhocFilter: "",
+      adhocSplit: "",
       stats: [],
       statsSampled: false,
       unit: { divisor: 1, label: "" },
@@ -142,6 +145,14 @@ export default {
     },
   },
   watch: {
+    // The edited spec starts as the one of the ad-hoc metric shown.
+    "source.adhoc": {
+      handler(spec) {
+        this.adhocFilter = spec?.filter ?? "";
+        this.adhocSplit = spec?.split_key ?? "";
+      },
+      immediate: true,
+    },
     // A source left to parse on request, e.g. a MAC pcap, is parsed once picked; its datasets come once parsed.
     "source.status": {
       handler(status) {
@@ -161,7 +172,8 @@ export default {
     "plot.dataset"() {
       this.plot.field = this.defaultField();
       this.plot.field2 = this.defaultField2();
-      const split = DEFAULT_SPLITS[this.plot.dataset];
+      // An ad-hoc metric is split by its split key.
+      const split = this.source?.adhoc ? this.source.adhoc.split_key : DEFAULT_SPLITS[this.plot.dataset];
       this.plot.splitBy = split && this.splitFields.includes(split) ? split : null;
       this.loadInstanceOptions(true);
     },
@@ -286,6 +298,16 @@ export default {
       } catch (e) {
         this.error = e.message;
       }
+    },
+
+    /** Shows the ad-hoc metric of the same key with the line regex and split key being edited. */
+    applyAdhoc() {
+      const spec = this.source?.adhoc;
+      if (!spec) return;
+      const filter = this.adhocFilter.trim() || null;
+      const split = this.adhocSplit.trim() || null;
+      if (filter === spec.filter && split === spec.split_key) return;
+      this.$emit("adhoc", { source: this.source.parent, key: spec.key, filter, split_key: split });
     },
 
     applyFilter() {
@@ -593,37 +615,55 @@ export default {
   template: `
     <section class="panel">
       <header class="panel-bar">
-        <select v-if="showSource" v-model.number="plot.source" :title="source ? source.path : 'Source'">
-          <option v-for="s in sourceChoices" :key="s.id" :value="s.id" :disabled="s.status === 'error'">
-            {{ s.file ?? s.name }}{{ s.status === "parsing" ? " (parsing)" : s.status === "deferred" ? " (not parsed)" : s.status === "error" ? " (error)" : "" }}
-          </option>
-        </select>
-        <select v-model="plot.dataset" title="Dataset">
-          <option v-for="d in datasets" :key="d.name" :value="d.name">{{ d.label }}</option>
-        </select>
-        <select v-if="dataset && dataset.instance" v-model="plot.instance" :title="dataset.instance">
-          <option :value="null">all</option>
-          <option v-for="v in instanceOptions" :key="v" :value="v">{{ v }}</option>
-        </select>
-        <select v-model="plot.field" title="Field" class="field-select">
-          <option v-for="f in numericFields" :key="f.name" :value="f.name">{{ f.name }}</option>
-        </select>
-        <label v-if="plot.mode !== 'histogram'" class="inline" title="A second field of the dataset, dashed, on its own axis on the right when its unit differs">
-          <input type="checkbox" :checked="plot.second" @change="toggleSecond($event.target.checked)" /> 2nd
-        </label>
-        <select v-if="plot.second && plot.mode !== 'histogram'" v-model="plot.field2" title="Second field" class="field-select">
-          <option v-for="f in numericFields" :key="f.name" :value="f.name" :disabled="f.name === plot.field">{{ f.name }}</option>
-        </select>
-        <select v-model="plot.mode" title="View">
-          <option value="time">time series</option>
-          <option value="histogram">histogram</option>
-        </select>
-        <label class="inline">split by
-          <select v-model="plot.splitBy">
-            <option :value="null">none</option>
-            <option v-for="g in splitFields" :key="g" :value="g">{{ g }}</option>
+        <template v-if="source?.adhoc">
+          <strong class="adhoc-title" :title="source.path">{{ source.file }} › {{ source.adhoc.key }}=</strong>
+          <form class="adhoc-bar" @submit.prevent="applyAdhoc">
+            <label class="inline" title="Keep the values of the lines that match this regular expression (Python syntax, case-insensitive). Enter applies it.">filter
+              <input v-model="adhocFilter" :class="{ dirty: (adhocFilter.trim() || null) !== source.adhoc.filter }" placeholder="regex, e.g. slot decisions" />
+            </label>
+            <label class="inline" title="One series per value of this key, e.g. ue: each value takes the nearest one before it in its line. Enter applies it.">split by
+              <input v-model="adhocSplit" class="adhoc-split" :class="{ dirty: (adhocSplit.trim() || null) !== source.adhoc.split_key }" placeholder="key, e.g. ue" />
+            </label>
+            <button type="submit" hidden></button>
+          </form>
+          <select v-model="plot.mode" title="View">
+            <option value="time">time series</option>
+            <option value="histogram">histogram</option>
           </select>
-        </label>
+        </template>
+        <template v-else>
+          <select v-if="showSource" v-model.number="plot.source" :title="source ? source.path : 'Source'">
+            <option v-for="s in sourceChoices" :key="s.id" :value="s.id" :disabled="s.status === 'error'">
+              {{ s.adhoc ? s.name : s.file ?? s.name }}{{ s.status === "parsing" ? " (parsing)" : s.status === "deferred" ? " (not parsed)" : s.status === "error" ? " (error)" : "" }}
+            </option>
+          </select>
+          <select v-model="plot.dataset" title="Dataset">
+            <option v-for="d in datasets" :key="d.name" :value="d.name">{{ d.label }}</option>
+          </select>
+          <select v-if="dataset && dataset.instance" v-model="plot.instance" :title="dataset.instance">
+            <option :value="null">all</option>
+            <option v-for="v in instanceOptions" :key="v" :value="v">{{ v }}</option>
+          </select>
+          <select v-model="plot.field" title="Field" class="field-select">
+            <option v-for="f in numericFields" :key="f.name" :value="f.name">{{ f.name }}</option>
+          </select>
+          <label v-if="plot.mode !== 'histogram'" class="inline" title="A second field of the dataset, dashed, on its own axis on the right when its unit differs">
+            <input type="checkbox" :checked="plot.second" @change="toggleSecond($event.target.checked)" /> 2nd
+          </label>
+          <select v-if="plot.second && plot.mode !== 'histogram'" v-model="plot.field2" title="Second field" class="field-select">
+            <option v-for="f in numericFields" :key="f.name" :value="f.name" :disabled="f.name === plot.field">{{ f.name }}</option>
+          </select>
+          <select v-model="plot.mode" title="View">
+            <option value="time">time series</option>
+            <option value="histogram">histogram</option>
+          </select>
+          <label class="inline">split by
+            <select v-model="plot.splitBy">
+              <option :value="null">none</option>
+              <option v-for="g in splitFields" :key="g" :value="g">{{ g }}</option>
+            </select>
+          </label>
+        </template>
         <details v-if="plot.splitBy" class="splits">
           <summary>{{ splitSummary }}</summary>
           <div class="splits-popup">
@@ -635,7 +675,7 @@ export default {
             <div v-if="splitOptions.length > listedSplits.length" class="muted">filter to see more</div>
           </div>
         </details>
-        <form class="filter" @submit.prevent="applyFilter">
+        <form v-if="!source?.adhoc" class="filter" @submit.prevent="applyFilter">
           <input v-model="filterDraft" :class="{ dirty: filterDirty }" placeholder="rnti > 0x4605 and pci == 1"
                  title="Comparisons (== != < <= > >=, is null) joined by and/or/not. Values in base units (us, bps)." @blur="applyFilter" />
         </form>

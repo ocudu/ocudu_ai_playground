@@ -229,6 +229,24 @@ for t, record, *values in agg.ue_rows():
     print(t, dict(zip(ue_metrics.UE_FIELDS, values)))
 ```
 
+### Ad-hoc metrics of logs
+
+`parsers.log.adhoc` scans a byte range of a log for the numeric values of a `key=value` field, e.g. `tbs=` of the slot
+decision lines, optionally in the lines matching a regex and split by the nearest value of another key before each
+value in its line. Values with a unit are scaled as METRICS fields are. Ranges of `chunks.chunk_ranges()` scan
+independently.
+
+```python
+import os
+
+from parsers.log import adhoc
+
+spec = adhoc.Spec("tbs", filter="slot decisions", split_key="ue")
+res = adhoc.scan("gnb.log", 0, os.path.getsize("gnb.log"), 1, spec)
+for t, line, offset, value, ue in res["rows"]:
+    print(t, line, value, ue)
+```
+
 ### Log search, summary and UE procedure latencies
 
 ```python

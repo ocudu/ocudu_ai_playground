@@ -90,6 +90,9 @@ class DatasetWriter(Protocol):
     def add_record_texts(self, rows: list[tuple[int, str]]) -> None:
         """Adds the texts of records, as (record, text)."""
 
+    def add_record_lines(self, rows: list[tuple[int, int]]) -> None:
+        """Makes the records some lines of the file only, as (line number, offset), rather than all of them."""
+
     def set_meta(self, key: str, value: Any) -> None:
         """Sets metadata of the source, e.g. the cell of a resource grid, served with its info."""
 

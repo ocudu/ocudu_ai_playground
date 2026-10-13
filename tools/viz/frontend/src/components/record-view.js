@@ -46,7 +46,7 @@ export default {
     sources: { type: Array, required: true },
   },
   components: { EventTables },
-  emits: ["close"],
+  emits: ["close", "select-record", "plot-key"],
   data() {
     // current is the highlighted record, the selected one until another record is clicked, and detail its decoding.
     return {
@@ -61,6 +61,8 @@ export default {
       query: "", regex: false, searchNote: "", searching: false,
       // Whether the pane fills the window.
       maximized: false,
+      // Context menu of a key=value field of a line, at its position in the window, with the key it plots.
+      menu: null,
     };
   },
   computed: {
@@ -69,6 +71,11 @@ export default {
     },
     sourceName() {
       return this.source?.name ?? "";
+    },
+    /** Log whose lines ad-hoc metrics are picked from: the source, or the log of an ad-hoc metric. */
+    logSource() {
+      if (this.source?.parent != null) return this.sources[this.source.parent];
+      return this.source?.type === "log_metrics" ? this.source : null;
     },
     /** Matcher of the search in the shown lines, to highlight its matches, or null. JavaScript regular expressions
      * mostly agree with the Python ones of the server; a pattern only the server takes is not highlighted. */
@@ -102,9 +109,15 @@ export default {
     // In the capture phase, so that it runs before the app's own Esc handling.
     this.keyListener = (e) => this.onKey(e);
     window.addEventListener("keydown", this.keyListener, true);
+    // A press anywhere but on the menu closes it.
+    this.pointerListener = (e) => {
+      if (this.menu && !this.$refs.menu?.contains(e.target)) this.menu = null;
+    };
+    window.addEventListener("pointerdown", this.pointerListener, true);
   },
   beforeUnmount() {
     window.removeEventListener("keydown", this.keyListener, true);
+    window.removeEventListener("pointerdown", this.pointerListener, true);
   },
   methods: {
     /** Highlights a record and shows its decoding, for sources whose records decode. */
@@ -206,8 +219,60 @@ export default {
       }
     },
 
+    /**
+     * Opens the menu of the numeric key=value field right-clicked in a line, or of the key selected, e.g. "tbs" of
+     * "tbs=5889". Elsewhere, and with Shift, the browser's own menu opens.
+     */
+    onContextMenu(e) {
+      this.menu = null;
+      if (e.shiftKey || !this.logSource) return;
+      const key = this.selectedKey() ?? this.keyAt(e.clientX, e.clientY);
+      if (!key) return;
+      e.preventDefault();
+      this.menu = { x: e.clientX, y: e.clientY, key };
+    },
+
+    /** The key of a key or key=value field selected in the lines, or null. */
+    selectedKey() {
+      const selection = window.getSelection();
+      if (!selection || selection.isCollapsed || !this.$refs.lines.contains(selection.anchorNode)) return null;
+      const m = /^([\w.\-\[\]]+?)(=\S*)?$/.exec(selection.toString().trim());
+      return m ? m[1] : null;
+    },
+
+    /** The key of the key=value field with a numeric value at a point of the window, or null. */
+    keyAt(x, y) {
+      const caret = document.caretPositionFromPoint?.(x, y);
+      const range = caret ? null : document.caretRangeFromPoint?.(x, y);
+      const node = caret?.offsetNode ?? range?.startContainer;
+      const offset = caret?.offset ?? range?.startOffset;
+      const text = node?.parentElement?.closest(".text");
+      if (!text || !this.$refs.lines.contains(text)) return null;
+      // Matches split the text of a line into several nodes, so the offset is counted from the start of the line.
+      let at = 0;
+      const walker = document.createTreeWalker(text, NodeFilter.SHOW_TEXT);
+      for (let n = walker.nextNode(); n && n !== node; n = walker.nextNode()) at += n.textContent.length;
+      at += offset;
+      // Numbers as the ad-hoc scan reads them, with an optional unit, e.g. 55.5Mbps, but not 0x44.
+      for (const m of text.textContent.matchAll(/(?<![\w.\-\[\]])([\w.\-\[\]]+)=[-+]?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?[A-Za-z%]*(?![\w.])/g)) {
+        if (m.index <= at && at <= m.index + m[0].length) return m[1];
+      }
+      return null;
+    },
+
+    plotMenuKey() {
+      this.$emit("plot-key", { source: this.logSource.id, key: this.menu.key });
+      this.menu = null;
+    },
+
+    /** Shows the same record among all the lines of the log of an ad-hoc metric. */
+    showAllLines() {
+      this.$emit("select-record", { source: this.source.parent, record: this.current ?? this.selection.record });
+    },
+
     /** Loads the records before or after the loaded ones when the lines are scrolled near their first or last one. */
     onScroll() {
+      this.menu = null;
       const lines = this.$refs.lines;
       if (!lines || this.paging || !this.records.length) return;
       if (lines.scrollTop < LOAD_MARGIN && !this.atStart) this.loadPage(true);
@@ -224,15 +289,14 @@ export default {
       try {
         const first = this.records[0].record;
         const last = this.records[this.records.length - 1].record;
-        const from = before ? Math.max(1, first - PAGE) : last + 1;
-        const count = before ? first - from : PAGE;
-        // The API returns the records from around - count / 2, rounded down.
-        const page = count > 0 ? await getJSON("/api/records", { source: this.selection.source, around: from + Math.floor(count / 2), count }) : [];
+        // Records are fetched by position, since those of an ad-hoc metric are some lines of the log only.
+        const cursor = before ? { before: first } : { after: last };
+        const page = await getJSON("/api/records", { source: this.selection.source, count: PAGE, ...cursor });
         if (generation !== this.generation) return;
         const fresh = page.filter((r) => (before ? r.record < first : r.record > last));
         const lines = this.$refs.lines;
         if (before) {
-          this.atStart = from === 1 || !fresh.length;
+          this.atStart = page.length < PAGE;
           const firstTop = lines.firstElementChild?.offsetTop ?? 0;
           this.records = [...fresh, ...this.records];
           if (this.records.length > MAX_RECORDS) {
@@ -275,6 +339,11 @@ export default {
 
     /** Restores the maximized pane on Esc, before the app restores a maximized panel behind it. */
     onKey(e) {
+      if (e.key === "Escape" && this.menu) {
+        e.stopPropagation();
+        this.menu = null;
+        return;
+      }
       if (e.key !== "Escape" || !this.maximized) return;
       e.stopPropagation();
       this.toggleMaximized();
@@ -302,7 +371,8 @@ export default {
         if (generation !== this.generation) return;
         this.records = records;
         this.atStart = !records.length || records[0].record === 1;
-        this.atEnd = records.length < WINDOW;
+        // The ends of an ad-hoc metric's records are found by paging, which loads nothing past them.
+        this.atEnd = !records.length;
         this.error = "";
       } catch (e) {
         this.error = e.message;
@@ -329,7 +399,7 @@ export default {
         <strong>{{ sourceName }}</strong>
         <span class="muted">{{ hasDetail ? "frame" : "line" }} {{ current }}</span>
         <form class="filter record-search" @submit.prevent="search(false)">
-          <input v-model="query" placeholder="search" title="Enter: next match, Shift+Enter: previous. Case-insensitive."
+          <input v-model="query" placeholder="search" title="Enter: next match, Shift+Enter: previous. Case-insensitive. Right-click a key=value field of a line to plot it."
                  @keydown.enter.shift.prevent="search(true)" @input="searchNote = ''" />
         </form>
         <label class="inline" title="Search with a regular expression (Python syntax), e.g. ue=\d+ .*RLF">
@@ -339,12 +409,14 @@ export default {
         <button class="icon" title="Next match (Enter)" :disabled="!query" @click="search(false)">↓</button>
         <span v-if="searching" class="muted">searching</span>
         <span v-else-if="searchNote" :class="searchNote === 'no match' || searchNote.startsWith('wrapped') ? 'muted' : 'error'">{{ searchNote }}</span>
+        <span v-if="source?.adhoc" class="filtered-chip" :title="'Only the lines with values of ' + source.adhoc.key + '='">filtered</span>
+        <button v-if="source?.adhoc" title="Show this line among all the lines of the log" @click="showAllLines">all lines</button>
         <span class="status"><span v-if="error" class="error">{{ error }}</span></span>
         <button class="icon" :title="maximized ? 'Restore (Esc)' : 'Maximize'" @click="toggleMaximized">{{ maximized ? "🗗" : "⛶" }}</button>
         <button class="icon" title="Close" @click="$emit('close')">✕</button>
       </header>
       <div :class="['record-body', { split: hasDetail }]">
-        <div ref="lines" class="record-lines" @scroll.passive="onScroll" :style="height && !maximized ? { height: height + 'px' } : null">
+        <div ref="lines" class="record-lines" @scroll.passive="onScroll" @contextmenu="onContextMenu" :style="height && !maximized ? { height: height + 'px' } : null">
           <div v-for="r in records" :key="r.record"
                :class="['record-line', { selected: r.record === current, clickable: hasDetail }]" @click="select(r.record)">
             <span class="lineno">{{ r.record }}</span><span class="text"><template v-for="(part, i) in segments(r)" :key="i"><mark v-if="part.mark">{{ part.text }}</mark><template v-else>{{ part.text }}</template></template></span>
@@ -359,6 +431,10 @@ export default {
                         :highlight="current === selection.record ? selection.item ?? null : null" />
         </div>
         <pre v-else-if="hasDetail" class="record-detail" :style="height && !maximized ? { height: height + 'px' } : null"><span v-if="detailError" class="error">{{ detailError }}</span>{{ detail || (detailError ? "" : "decoding…") }}</pre>
+      </div>
+      <div v-if="menu" ref="menu" class="context-menu" role="menu" :style="{ left: menu.x + 'px', top: menu.y + 'px' }">
+        <button role="menuitem" title="Plot the values of this key=value field over time, from all the lines of the log"
+                @click="plotMenuKey">Plot {{ menu.key }}=</button>
       </div>
     </aside>
   `,

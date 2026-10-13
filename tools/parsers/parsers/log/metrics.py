@@ -162,6 +162,13 @@ def _normalize(num: str, unit: str | None) -> tuple[int | float, str | None, boo
     return _scale(num, exponent), base, True
 
 
+def normalize_number(num: str, unit: str | None) -> tuple[int | float, str | None, bool]:
+    """Scales a number printed with a unit, e.g. "55.5" and "Mbps", to its canonical unit, as METRICS fields are:
+    (value, unit, unit_is_known).
+    """
+    return _normalize(num, unit)
+
+
 def _find_list_end(text: str, start: int) -> int:
     """Returns the index of the bracket closing the list or record opened at text[start]."""
     depth = 0
