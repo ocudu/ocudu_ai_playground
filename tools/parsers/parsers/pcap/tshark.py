@@ -78,7 +78,8 @@ class Tshark:
         proc = subprocess.run([tshark, *extra, *args], check=False, capture_output=True, text=True)
         if check and proc.returncode != 0:
             err = _filter_stderr(proc.stderr) or proc.stderr.strip()
-            if proc.returncode == 2 and _CUT_SHORT in err:
+            # The exit code of a cut-short pcap varies across tshark builds, e.g. 2 or 14.
+            if _CUT_SHORT in err:
                 warnings.warn(f"{err}\nOnly its complete records are read.")
                 return [line for line in proc.stdout.splitlines() if line]
             raise TsharkError(f"tshark exited {proc.returncode}: {err}\nargs: {' '.join(args)}")
