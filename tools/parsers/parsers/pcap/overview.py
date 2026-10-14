@@ -12,7 +12,7 @@ from typing import Any
 
 from .run import pcap_proto
 from .tshark import Tshark, TsharkError
-from .values import epoch_to_iso
+from .values import epoch_to_iso, first
 
 logger = logging.getLogger("parsers")
 
@@ -75,7 +75,7 @@ def summarise(tshark: Tshark, pcap: Path, *, top: int = 5) -> dict[str, Any]:
         per_label: dict[str, set[str]] = {label: set() for label, _ in spec["ue"]}
         for r in rows:
             for (label, _), val in zip(spec["ue"], r[ue_start:ue_start + len(spec["ue"])]):
-                if val:
+                if val := first(val):
                     per_label[label].add(val)
         out["distinct_ues_by_label"] = {k: sorted(v) for k, v in per_label.items()}
         if spec["failure_filter"]:

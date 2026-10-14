@@ -12,7 +12,7 @@ from typing import Any
 
 from .run import find_pcaps
 from .tshark import Tshark, TsharkError
-from .values import epoch_to_iso
+from .values import epoch_to_iso, first
 
 logger = logging.getLogger("parsers")
 
@@ -42,7 +42,7 @@ def events(tshark: Tshark, pcap: str | os.PathLike[str], proto: str) -> list[dic
         except ValueError:
             continue
         if proto in ("ngap", "f1ap", "e1ap"):
-            ue_ids = [v for v in rest[1:] if v]
+            ue_ids = [v for v in map(first, rest[1:]) if v]
             summary = f"procCode={rest[0]}"
         elif proto == "mac":
             ue_ids = [rest[0]] if rest[0] else []

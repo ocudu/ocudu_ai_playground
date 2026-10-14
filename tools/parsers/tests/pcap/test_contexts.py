@@ -3,6 +3,7 @@
 
 import unittest
 
+from parsers.pcap import messages
 from parsers.pcap.contexts import ContextTracker, ue_contexts
 
 
@@ -27,6 +28,17 @@ class ContextTrackerTest(unittest.TestCase):
         self.assertEqual((first.t_start, first.t_end, first.rnti, first.released), (2.0, 3.0, "0x4601", True))
         self.assertEqual(first.label(), "du_f1ap=0 cu_f1ap=5")
         self.assertEqual((second.ids, second.rnti, second.released), ({"du_f1ap": "0"}, "0x4602", False))
+
+    def test_old_du_id_of_a_reestablishment(self):
+        # The DLRRCMessageTransfer of an rrcReestablishment names the old gNB-DU UE F1AP ID after the UE's own.
+        row = dict.fromkeys(messages.fields("f1ap"), "")
+        row.update({"frame.number": "3", "frame.time_epoch": "2.5", "f1ap.procedureCode": "12",
+                    "f1ap.GNB_DU_UE_F1AP_ID": "7,3", "f1ap.GNB_CU_UE_F1AP_ID": "7"})
+        reest = {**messages.message("f1ap", row), "crnti": None}
+        self.assertEqual(reest["du_ue_f1ap_id"], "7")
+        tracker = ContextTracker("f1ap")
+        contexts = [tracker.assign(m) for m in (msg(2.0, "11", du="7", crnti="17921"), reest, msg(2.6, "13", du="7", cu="7"))]
+        self.assertEqual([c.id for c in contexts], [0, 0, 0])
 
     def test_ue_contexts(self):
         self.assertEqual(len(ue_contexts("f1ap", [msg(1.0, "11", du="0"), msg(2.0, "11", du="1")])), 2)

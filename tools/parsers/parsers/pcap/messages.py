@@ -10,6 +10,7 @@ from typing import Any
 
 from ..ran.procedures import proc_name
 from .tshark import Tshark
+from .values import first
 
 # UE identifier fields of each protocol, by label.
 UE_ID_FIELDS: dict[str, list[tuple[str, str]]] = {
@@ -97,6 +98,8 @@ def message(proto: str, row: dict[str, str]) -> dict[str, Any] | None:
         "procedure": proc_name(proto, code, with_code=False),
         "outcome": outcome,
         "info": row["_ws.col.Info"],
-        **{label: row[f] or None for label, f in UE_ID_FIELDS[proto]},
+        # A message may also name an old identifier after the UE's own, e.g. the old gNB-DU UE F1AP ID of a
+        # reestablishment.
+        **{label: first(row[f]) for label, f in UE_ID_FIELDS[proto]},
         "cause": row[CAUSE_FIELDS[proto]] or None,
     }

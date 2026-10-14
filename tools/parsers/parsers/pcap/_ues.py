@@ -10,7 +10,7 @@ from typing import Any
 
 from ..ran.procedures import proc_name
 from .tshark import Tshark
-from .values import epoch_to_iso
+from .values import epoch_to_iso, first
 
 
 def ue_ids_by_key(
@@ -34,6 +34,7 @@ def ue_ids_by_key(
     by_other: dict[str, dict[str, Any]] = {}
     key_name, other_name = names
     for frame, epoch, code, key, other in tshark.iter_fields(pcap, fields, tag=tag, force=force):
+        key, other = first(key) or "", first(other) or ""
         # Rows without UE identifiers are procedures of the interface, e.g. NGSetup.
         if not epoch or not (key or other):
             continue

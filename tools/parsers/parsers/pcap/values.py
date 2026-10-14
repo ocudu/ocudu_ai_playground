@@ -8,6 +8,11 @@ from __future__ import annotations
 import datetime as _dt
 
 
+def first(value: str | None) -> str | None:
+    """First value of a tshark field of several occurrences, which tshark separates by commas, or None if empty."""
+    return value.split(",", 1)[0] or None if value else None
+
+
 def to_int(value: str | int | None, base: int = 0) -> int | None:
     """Integer of a tshark field value, e.g. "0x41" or "65", or None if empty or not a number."""
     try:

@@ -12,7 +12,7 @@ from ..ran.nas import nas_name
 from ..ran.procedures import proc_name
 from ..ran.rrc import RRC_MESSAGE_TYPES, decode_ccch_type
 from .tshark import Tshark
-from .values import epoch_to_iso, to_int
+from .values import epoch_to_iso, first, to_int
 
 UE_ID_FIELDS = [
     "frame.number",
@@ -53,8 +53,8 @@ def ue_ids(tshark: Tshark, pcap: str | os.PathLike[str], *, force: bool = False)
                 "frame": int(frame) if frame else None,
                 "epoch": float(epoch),
                 "code": code,
-                "du_ue_id": du_id or None,
-                "cu_ue_id": cu_id or None,
+                "du_ue_id": first(du_id),
+                "cu_ue_id": first(cu_id),
                 "crnti": crnti or None,
             })
     clusters = sorted(_build_clusters(rows), key=lambda c: c["first_epoch"])
@@ -85,8 +85,8 @@ def messages(tshark: Tshark, pcap: str | os.PathLike[str], *, force: bool = Fals
             "frame": int(v["frame.number"]) if v["frame.number"] else None,
             "epoch": float(v["frame.time_epoch"]),
             "code": v["f1ap.procedureCode"],
-            "du_ue_id": v["f1ap.GNB_DU_UE_F1AP_ID"] or None,
-            "cu_ue_id": v["f1ap.GNB_CU_UE_F1AP_ID"] or None,
+            "du_ue_id": first(v["f1ap.GNB_DU_UE_F1AP_ID"]),
+            "cu_ue_id": first(v["f1ap.GNB_CU_UE_F1AP_ID"]),
             **carried(v, rrc_types),
         })
     rows.sort(key=lambda x: x["epoch"])
