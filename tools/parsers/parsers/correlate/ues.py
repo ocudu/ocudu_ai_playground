@@ -9,6 +9,7 @@ across contexts, e.g. through handovers, with their NGAP and E1AP contexts, see 
 from __future__ import annotations
 
 import bisect
+import math
 from dataclasses import dataclass, field
 from collections.abc import Mapping
 from typing import Any, Hashable
@@ -69,7 +70,8 @@ def combine(*sources: list[Context]) -> list[Ue]:
     """The UEs of a run from the contexts of its sources, the most reliable first, e.g. an F1AP pcap, then its logs.
 
     The contexts of the first source are UEs of their own. A context of a later source joins a UE made from an earlier
-    one: with an RNTI, the UE of that RNTI whose lifetime, within RNTI_SLACK_S, overlaps it; without, the UE whose first
+    one: with an RNTI, the UE of that RNTI whose lifetime, within RNTI_SLACK_S, overlaps it, the lifetime of a UE open
+    at the end of its sources lasting to that end; without, the UE whose first
     context started nearest its creation, within CREATION_SLACK_S. Contexts of no UE are UEs of their own. UEs are in
     start order.
     """
@@ -266,9 +268,11 @@ class _Index:
     def target(self, ctx: Context, rnti: str | None) -> Ue | None:
         """The UE a context joins, see combine(), or None."""
         if rnti is not None:
+            # A UE open at the end of its sources lives on past its last message, e.g. a connected UE that sends no
+            # F1AP message for minutes.
             candidates = [
                 ue for ue in self._by_rnti.get(rnti, ())
-                if ue.t_start - RNTI_SLACK_S <= ctx.t_end and ctx.t_start <= ue.t_end + RNTI_SLACK_S
+                if ue.t_start - RNTI_SLACK_S <= ctx.t_end and ctx.t_start <= (math.inf if ue.open else ue.t_end) + RNTI_SLACK_S
             ]
             return min(candidates, key=lambda ue: abs(ue.t_start - ctx.t_start), default=None)
         lo = bisect.bisect_left(self._created, ctx.t_start - CREATION_SLACK_S)

@@ -39,6 +39,11 @@ class CombineTest(unittest.TestCase):
         self.assertEqual([ue.key for ue in ues], ["log:0", "log:1", "log:2", "log:3"])
         self.assertIsNone(ues[1].first("rnti"))
 
+    def test_open_ue_lives_past_its_last_message(self):
+        # The second F1AP context is never released, so a log UE of its RNTI long after its last message joins it.
+        late = [Context("log", 0, 90.0, 91.0, {"rnti": "0x4602"})]
+        self.assertEqual([(ue.key, ue.parts) for ue in combine(F1AP, late)][1], ("f1ap:1", [("f1ap", 1), ("log", 0)]))
+
     def test_rnti_outside_the_lifetime_does_not_join(self):
         late = [Context("log", 0, 40.0, 41.0, {"rnti": "0x4601"})]
         self.assertEqual([ue.key for ue in combine(F1AP, late)], ["f1ap:0", "f1ap:1", "log:0"])
