@@ -22,7 +22,7 @@ from pathlib import Path
 
 import utils
 from parsers.pcap import timeline
-from parsers.pcap.run import PCAP_NAMES, is_run_dir
+from parsers.pcap.run import PROTOCOLS, is_run_dir
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
 
     run_dir = Path(args.run_dir)
     if not is_run_dir(run_dir):
-        print(f"error: not a run directory (need ≥2 of {PCAP_NAMES}): {run_dir}", file=sys.stderr)
+        print(f"error: not a run directory (need pcaps of ≥2 of {PROTOCOLS}): {run_dir}", file=sys.stderr)
         return 1
 
     protocols = [p.strip() for p in args.protocols.split(",") if p.strip()]

@@ -50,7 +50,8 @@ DELEGATE = {
 }
 KINDS = tuple(DELEGATE)
 
-PCAP_NAMES = ("mac.pcap", "rlc.pcap", "f1ap.pcap", "e1ap.pcap", "ngap.pcap")
+# OCUDU pcap names, <proto>.pcap or with a prefix, e.g. gnb_f1ap.pcap.
+PCAP_GLOBS = ("*mac.pcap", "*rlc.pcap", "*f1ap.pcap", "*e1ap.pcap", "*ngap.pcap")
 # OCUDU app log basenames that mark an ocudu artifact.
 GNB_LOGS = ("gnb.log", "du.log", "cu.log", "cu_cp.log", "cu_up.log")
 UE_LOG = "ue.log"
@@ -64,7 +65,7 @@ VIAVI_SIGNATURE = re.compile(r"(C: RSET 0x|I: CMPI |^\d{2}/\d{2}/\d{2} [\d:]+ RS
 
 
 def _has_under(root: Path, name: str) -> bool:
-    """True if `name` exists at `root` or anywhere beneath it (bounded by first hit)."""
+    """True if `name`, a name or glob, exists at `root` or anywhere beneath it (bounded by first hit)."""
     if (root / name).is_file():
         return True
     return next(root.rglob(name), None) is not None
@@ -125,7 +126,7 @@ def classify(path: Path) -> tuple[str | None, str]:
         return "ocudu", "directory contains an OCUDU app log"
     if (path / UE_LOG).is_file():
         return "amari-ue", "directory contains ue.log"
-    if sum((path / n).is_file() for n in PCAP_NAMES) >= 1:
+    if any(p.is_file() for g in PCAP_GLOBS for p in path.glob(g)):
         return "pcap", "directory contains Upper-PDU pcaps"
     direct_viavi = any("Command_Log" in p.name and p.is_file()
                        for suf in VIAVI_SUFFIXES for p in path.glob(VIAVI_GLOB + suf))
@@ -140,7 +141,7 @@ def classify(path: Path) -> tuple[str | None, str]:
     has_gnb = _has_any_under(path, GNB_LOGS)
     has_ue = _has_under(path, UE_LOG)
     has_core = _has_any_under(path, CORE_LOGS)
-    has_pcap = _has_any_under(path, PCAP_NAMES)
+    has_pcap = _has_any_under(path, PCAP_GLOBS)
     has_viavi = _has_viavi_under(path)
     # A directory spanning ≥2 RAN application components is a whole-run directory
     # → cross-artifact correlation. Count each OCUDU *role* separately: a split

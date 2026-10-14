@@ -61,7 +61,8 @@ def find_viavi_logs(root: Path) -> list[Path]:
 
 # Primary OCUDU app-log filenames, in preference order.
 OCUDU_LOG_NAMES = ("gnb.log", "du.log", "cu.log", "cu_cp.log", "cu_up.log")
-PCAP_NAMES = ("ngap.pcap", "f1ap.pcap", "e1ap.pcap", "mac.pcap", "rlc.pcap")
+# OCUDU pcap names, <proto>.pcap or with a prefix, e.g. gnb_f1ap.pcap.
+PCAP_GLOBS = ("*ngap.pcap", "*f1ap.pcap", "*e1ap.pcap", "*mac.pcap", "*rlc.pcap")
 
 
 def classify(component_dir_name: str):
@@ -136,9 +137,8 @@ def inventory_component(comp_dir: Path) -> dict:
         if primary:
             info["clock_anchor"] = {"type": "gnb-utc", "first_event": utils.first_gnb_event_ts(primary)}
         info["configs"] += sorted(c.name for c in run_dir.glob("ocudu_*.yml"))
-        for p in PCAP_NAMES:
-            if (run_dir / p).is_file():
-                info["pcaps"].append(p)
+        for g in PCAP_GLOBS:
+            info["pcaps"] += sorted(p.name for p in run_dir.glob(g) if p.is_file())
     elif role == "ue":
         if (run_dir / "ue.log").is_file():
             info["logs"].append("ue.log")

@@ -28,7 +28,7 @@ import e1ap_ue_ids
 import f1ap_ue_ids
 import ngap_ue_ids
 import pcap_overview
-from parsers.pcap.run import PCAP_NAMES, find_pcaps, is_run_dir
+from parsers.pcap.run import PROTOCOLS, find_pcaps, is_run_dir
 
 
 def _section(title: str) -> None:
@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> int:
 
     run_dir = Path(args.run_dir)
     if not is_run_dir(run_dir):
-        print(f"error: not a run directory (need ≥2 of {PCAP_NAMES}): {run_dir}", file=sys.stderr)
+        print(f"error: not a run directory (need pcaps of ≥2 of {PROTOCOLS}): {run_dir}", file=sys.stderr)
         return 1
 
     pcaps = find_pcaps(run_dir)
