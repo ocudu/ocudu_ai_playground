@@ -23,13 +23,15 @@ def ue_ids_by_key(
     tag: str,
     force: bool,
 ) -> list[dict[str, Any]]:
-    """The UEs of a pcap identified by key_field, with the first other_field value seen, as names[0] and names[1].
+    """The UEs of a pcap identified by key_field, with the first other_field value seen, as names[0] and names[1]. A row
+    with only other_field, e.g. an NGAP HandoverRequest, joins the UE of that value.
 
     Each UE has its first frame and message, in order of appearance.
     """
     fields = ["frame.number", "frame.time_epoch", f"{proto}.procedureCode", key_field, other_field]
     clusters: list[dict[str, Any]] = []
     by_key: dict[str, dict[str, Any]] = {}
+    by_other: dict[str, dict[str, Any]] = {}
     key_name, other_name = names
     for frame, epoch, code, key, other in tshark.iter_fields(pcap, fields, tag=tag, force=force):
         # Rows without UE identifiers are procedures of the interface, e.g. NGSetup.
@@ -38,6 +40,8 @@ def ue_ids_by_key(
         epoch_f = float(epoch)
         frame_n = int(frame) if frame else None
         c = by_key.get(key) if key else None
+        if c is None and other:
+            c = by_other.get(other)
         if c is None:
             c = {"frame": frame_n, "first_epoch": epoch_f, "first_code": code, key_name: None, other_name: None}
             clusters.append(c)
@@ -47,8 +51,10 @@ def ue_ids_by_key(
             if c[key_name] is None:
                 c[key_name] = key
             by_key[key] = c
-        if other and c[other_name] is None:
-            c[other_name] = other
+        if other:
+            if c[other_name] is None:
+                c[other_name] = other
+            by_other[other] = c
     clusters.sort(key=lambda c: c["first_epoch"])
     return [
         {

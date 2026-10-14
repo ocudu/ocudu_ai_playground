@@ -38,9 +38,9 @@ with open("gnb.log") as f:
 df = metrics.to_dataframe(open("gnb.log"), "mac")  # units in df.attrs["units"]
 ```
 
-`parser.parse_file()` parses a whole log, yielding `(line_no, record)` in file order. Given an executor, it splits the
-log into ranges that start at log entries (`parsers.log.chunks`) and parses them in its workers, which is several times
-faster on large logs:
+`parser.parse_file()` parses a whole log, yielding `(line_no, record)` in file order. It splits the log into ranges
+that start at log entries (`parsers.log.chunks`), so that memory does not grow with the log. Given an executor, it
+parses them in its workers, which is several times faster on large logs:
 
 ```python
 import multiprocessing
@@ -152,9 +152,10 @@ events = timeline.run_events(tshark, "run_dir", ["ngap", "f1ap"], ue="0")
 
 `tshark` reads pcaps through a link or copy in the work directory, since the AppArmor profile of `tshark` on Ubuntu
 only lets it read under `/tmp`, and dissects the MAC and RLC PDUs of `mac.pcap` and `rlc.pcap` through the
-`mac_nr_udp` and `rlc_nr_udp` heuristics. Field extractions are cached in the work directory by pcap path, size and
-mtime, and a tag, by default the fields and filter. `run.find_pcaps()` finds the pcaps of each protocol by file name,
-`<proto>.pcap` or with a prefix, e.g. `gnb_f1ap.pcap`.
+`mac_nr_udp` and `rlc_nr_udp` heuristics. A pcap whose last record is cut short, e.g. by a crash, gives its complete
+records, with a warning. Field extractions are cached in the work directory by pcap path, size and mtime, and a tag, by
+default the fields and filter. `run.find_pcaps()` finds the pcaps of each protocol by file name, `<proto>.pcap` or with
+a prefix, e.g. `gnb_f1ap.pcap`.
 `run.check_pcap()` checks that a pcap has a frame that one of the known dissectors binds. `messages.messages()` lists
 the NGAP, F1AP or E1AP messages of a pcap with their procedure, outcome, UE identifiers and cause, `frames.summaries()`
 the one-line tshark summary of each frame and `frames.decode()` decodes one frame. `frames.time_span()` reads the time

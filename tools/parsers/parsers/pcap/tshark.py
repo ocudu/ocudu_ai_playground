@@ -10,6 +10,7 @@ import os
 import shutil
 import subprocess
 import tempfile
+import warnings
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from pathlib import Path
 
@@ -22,6 +23,8 @@ _NOISE_INTROS = (
     "Could not open your enabled protocols",
     "Could not open your heuristic dissectors",
 )
+# Error of a pcap whose last record is incomplete, e.g. of a process killed while writing it.
+_CUT_SHORT = "cut short in the middle of a packet"
 # OCUDU mac.pcap and rlc.pcap wrap NR PDUs in UDP-framed Upper-PDUs, dissected only with these heuristics.
 _READ_ARGS = ("--enable-heuristic", "mac_nr_udp", "--enable-heuristic", "rlc_nr_udp")
 
@@ -65,7 +68,9 @@ class Tshark:
         self._valid: dict[tuple[str, ...], list[str]] = {}
 
     def run(self, args: Sequence[str], *, check: bool = True) -> list[str]:
-        """Runs tshark with args, returning its non-empty stdout lines. Raises TsharkError if it fails and check."""
+        """Runs tshark with args, returning its non-empty stdout lines. Raises TsharkError if it fails and check, except
+        for a pcap whose last record is incomplete, whose complete records are returned with a warning.
+        """
         tshark = shutil.which("tshark")
         if not tshark:
             raise TsharkError("tshark not found on PATH")
@@ -73,6 +78,9 @@ class Tshark:
         proc = subprocess.run([tshark, *extra, *args], check=False, capture_output=True, text=True)
         if check and proc.returncode != 0:
             err = _filter_stderr(proc.stderr) or proc.stderr.strip()
+            if proc.returncode == 2 and _CUT_SHORT in err:
+                warnings.warn(f"{err}\nOnly its complete records are read.")
+                return [line for line in proc.stdout.splitlines() if line]
             raise TsharkError(f"tshark exited {proc.returncode}: {err}\nargs: {' '.join(args)}")
         return [line for line in proc.stdout.splitlines() if line]
 
@@ -204,7 +212,8 @@ def _filter_stderr(stderr: str) -> str:
             skip_next = False
             continue
         if any(p in line for p in _NOISE_INTROS):
-            skip_next = True
+            # The path is quoted, on this line or the next.
+            skip_next = '"' not in line
             continue
         if any(p in line for p in _NOISE_PATTERNS):
             continue

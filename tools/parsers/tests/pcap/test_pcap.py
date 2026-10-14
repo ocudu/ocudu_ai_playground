@@ -47,6 +47,11 @@ class TsharkHelpersTest(unittest.TestCase):
             "tshark: Some fields aren't valid:\n"
         )
         self.assertEqual(_filter_stderr(stderr), "tshark: Some fields aren't valid:")
+        stderr = (
+            'tshark: Can\'t open your preferences file "/home/u/.config/wireshark/preferences": Permission denied.\n'
+            'tshark: The file "a.pcap" appears to have been cut short in the middle of a packet.\n'
+        )
+        self.assertEqual(_filter_stderr(stderr), 'tshark: The file "a.pcap" appears to have been cut short in the middle of a packet.')
 
     def test_cache_path_depends_on_tag(self):
         ts = Tshark("/tmp/work")
@@ -78,6 +83,17 @@ class UeIdsTest(unittest.TestCase):
         ues = ngap.ue_ids(FakeTshark(rows), "ngap.pcap")
         self.assertEqual([(u["frame"], u["message"], u["ran_ue_ngap_id"], u["amf_ue_ngap_id"]) for u in ues],
                          [(2, "InitialUEMessage", "1", "7"), (4, "InitialUEMessage", "2", None)])
+
+    def test_ngap_rows_with_only_the_amf_id_join_its_ue(self):
+        rows = [
+            ["1", "10.0", "15", "1", ""],
+            ["2", "11.0", "14", "1", "9"],
+            # HandoverRequest from the AMF, before the gNB allocates a RAN UE id.
+            ["3", "12.0", "13", "", "9"],
+            ["4", "13.0", "13", "2", "9"],
+        ]
+        ues = ngap.ue_ids(FakeTshark(rows), "ngap.pcap")
+        self.assertEqual([(u["ran_ue_ngap_id"], u["amf_ue_ngap_id"]) for u in ues], [("1", "9")])
 
     def test_e1ap_ue_ids_names(self):
         ues = e1ap.ue_ids(FakeTshark([["5", "1.5", "8", "3", "9"]]), "e1ap.pcap")
@@ -169,6 +185,13 @@ class F1apPcapTest(unittest.TestCase):
         first.replace(pcap)
         self.assertEqual(len(frames.summaries(self.tshark, pcap)), 3)
         self.assertEqual(self.cache_events, [False, False])
+
+    def test_pcap_cut_short(self):
+        pcap = Path(self.tmp.name) / "f1ap.pcap"
+        data = F1AP_PCAP.read_bytes()
+        pcap.write_bytes(data[:-20])
+        with self.assertWarnsRegex(UserWarning, "cut short"):
+            self.assertEqual(len(frames.summaries(self.tshark, pcap)), 31)
 
     def test_check_pcap(self):
         res = run.check_pcap(self.tshark, F1AP_PCAP)
