@@ -72,6 +72,18 @@ class AdhocTest(unittest.TestCase):
         self.assertEqual(rows[3][0], epoch("2026-10-12T13:35:41.001500"))
         self.assertEqual(rows[3][4:], (None, None, None, None))
 
+    def test_lines_of_long_entries_take_the_time_of_their_entry(self):
+        log = []
+        for s in range(2):
+            log.append(f"2026-10-12T13:35:4{s}.000000 [SCHED   ] [D] Slot decisions:")
+            log += [f"- ue={i} tbs={i}" for i in range(3)]
+        self.path.write_text("\n".join(log) + "\n")
+        times = [epoch("2026-10-12T13:35:40"), epoch("2026-10-12T13:35:41")]
+        expected = [(times[0], 2), (times[0], 3), (times[0], 4), (times[1], 6), (times[1], 7), (times[1], 8)]
+        self.assertEqual([(t, line) for t, line, *_ in self.scan(adhoc.Spec("tbs"))["rows"]], expected)
+        rows = adhoc.scan_lines(str(self.path), 0, self.path.stat().st_size, 1, adhoc.Spec(None, filter="tbs="))
+        self.assertEqual([(t, line) for t, line, *_ in rows], expected)
+
     def test_invalid_specs(self):
         for kwargs in ({"key": "a b"}, {"key": "tbs", "filter": "(("}, {"key": "tbs", "split_key": "u e"},
                        {"key": None}, {"key": None, "filter": "x", "split_key": "ue"}):

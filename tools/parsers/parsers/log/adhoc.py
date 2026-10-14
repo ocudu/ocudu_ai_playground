@@ -17,7 +17,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from .chunks import ENTRY_START_RE
+from .chunks import ENTRY_START_RE, count_newlines
 from .metrics import normalize_number
 
 # Characters of a key, as in key=value fields, e.g. c-rnti, cw[0] or dl_bo.
@@ -88,6 +88,7 @@ def scan(path: str, start: int, end: int, first_line: int, spec: Spec) -> dict:
     rows: list[tuple] = []
     unit: str | None = None
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+        times = _EntryTimes(mm, start)
         line_no, counted_to = first_line, start
         line_start, line, t = -1, b"", None
         # Lines are only read where the key is found, and lines counted between them, which keeps the scan in C.
@@ -96,13 +97,13 @@ def scan(path: str, start: int, end: int, first_line: int, spec: Spec) -> dict:
             newline = mm.rfind(b"\n", start, pos)
             if (newline + 1 if newline != -1 else start) != line_start:
                 line_start = newline + 1 if newline != -1 else start
-                line_no += mm[counted_to:line_start].count(b"\n")
+                line_no += count_newlines(mm, counted_to, line_start)
                 counted_to = line_start
                 line_end = mm.find(b"\n", pos, end)
                 line = mm[line_start: end if line_end == -1 else line_end]
                 t = None
                 if keep is None or keep.search(line.decode("utf-8", "replace")):
-                    t = _entry_time(mm, line_start, start)
+                    t = times.at(line_start)
             if t is None:
                 continue
             value, value_unit, _ = normalize_number(m["num"].decode(), m["unit"].decode() if m["unit"] else None)
@@ -128,6 +129,7 @@ def scan_lines(path: str, start: int, end: int, first_line: int, spec: Spec) -> 
     pattern = re.compile(spec.filter.encode(), re.IGNORECASE | re.MULTILINE)
     rows: list[tuple] = []
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+        times = _EntryTimes(mm, start)
         line_no, counted_to, last_start = first_line, start, -1
         for m in pattern.finditer(mm, start, end):
             newline = mm.rfind(b"\n", start, m.start())
@@ -135,9 +137,9 @@ def scan_lines(path: str, start: int, end: int, first_line: int, spec: Spec) -> 
             if line_start == last_start:
                 continue
             last_start = line_start
-            line_no += mm[counted_to:line_start].count(b"\n")
+            line_no += count_newlines(mm, counted_to, line_start)
             counted_to = line_start
-            t = _entry_time(mm, line_start, start)
+            t = times.at(line_start)
             if t is None:
                 continue
             line_end = mm.find(b"\n", line_start, end)
@@ -151,19 +153,38 @@ def scan_lines(path: str, start: int, end: int, first_line: int, spec: Spec) -> 
     return rows
 
 
-def _entry_time(mm: mmap.mmap, line_start: int, floor: int) -> float | None:
-    """The time of the entry of the line at line_start: its own timestamp, else that of the nearest line before it
-    with one, looking back at most _MAX_LOOKBACK bytes and not before floor, the start of a range at an entry.
-    """
-    pos = line_start
-    lowest = max(floor, line_start - _MAX_LOOKBACK)
-    while True:
-        if ENTRY_START_RE.match(mm, pos) and (m := _TIMESTAMP_RE.match(mm, pos)):
-            try:
-                return datetime.fromisoformat(m.group(1).decode()).replace(tzinfo=timezone.utc).timestamp()
-            except ValueError:
+class _EntryTimes:
+    """Times of the entries of the lines of a range of a log, looked up in file order."""
+
+    def __init__(self, mm: mmap.mmap, floor: int):
+        self._mm = mm
+        self._floor = floor
+        # Start of the line looked up last, and its time.
+        self._line = -1
+        self._t: float | None = None
+
+    def at(self, line_start: int) -> float | None:
+        """The time of the entry of the line at line_start: its own timestamp, else that of the nearest line before it
+        with one, looking back at most _MAX_LOOKBACK bytes and not before the floor, the start of a range at an entry.
+        """
+        self._t = self._find(line_start)
+        self._line = line_start
+        return self._t
+
+    def _find(self, line_start: int) -> float | None:
+        mm = self._mm
+        pos = line_start
+        lowest = max(self._floor, line_start - _MAX_LOOKBACK)
+        while True:
+            if ENTRY_START_RE.match(mm, pos) and (m := _TIMESTAMP_RE.match(mm, pos)):
+                try:
+                    return datetime.fromisoformat(m.group(1).decode()).replace(tzinfo=timezone.utc).timestamp()
+                except ValueError:
+                    return None
+            # The lines from the one looked up last belong to its entry, so the walk back stops there.
+            if pos == self._line:
+                return self._t
+            if pos <= lowest:
                 return None
-        if pos <= lowest:
-            return None
-        newline = mm.rfind(b"\n", lowest, pos - 1)
-        pos = newline + 1 if newline != -1 else lowest
+            newline = mm.rfind(b"\n", lowest, pos - 1)
+            pos = newline + 1 if newline != -1 else lowest

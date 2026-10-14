@@ -582,9 +582,10 @@ class MetricsParser:
     ) -> Iterator[tuple[int, dict[str, Any]]]:
         """Parses the metrics of a log file, yielding the line number, from 1, and record of each metrics line.
 
-        With an executor, e.g. a ProcessPoolExecutor, the file is split into nof_chunks ranges at log entries, by
-        default one per 4 MB up to 64, parsed by its workers. Records are still yielded in file order, and the units
-        of all ranges are merged into self.units as a single pass would, complete once the iteration ends.
+        The file is split into nof_chunks ranges at log entries, by default one per 4 MB, parsed one at a time, or with
+        an executor, e.g. a ProcessPoolExecutor, by its workers, by default at most 64. Records are still yielded in
+        file order, and the units of all ranges are merged into self.units as a single pass would, complete once the
+        iteration ends.
 
         Worker processes started with "spawn" or "forkserver", the default start methods outside Linux and from Python
         3.14, import the main module of the calling program, so its entry point must be under
@@ -592,7 +593,10 @@ class MetricsParser:
         """
         path = Path(path)
         if nof_chunks is None:
-            nof_chunks = 1 if executor is None else min(_MAX_DEFAULT_CHUNKS, path.stat().st_size // _MIN_CHUNK_SIZE)
+            # Without an executor, ranges still bound the memory of the lines read at a time.
+            nof_chunks = path.stat().st_size // _MIN_CHUNK_SIZE
+            if executor is not None:
+                nof_chunks = min(_MAX_DEFAULT_CHUNKS, nof_chunks)
         ranges = chunks.chunk_ranges(path, max(1, nof_chunks))
         firsts = chunks.first_lines(path, ranges, executor)
         args = [(str(path), start, end, first, self.layers) for (start, end), first in zip(ranges, firsts)]

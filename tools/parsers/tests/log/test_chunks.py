@@ -1,9 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
+import mmap
 import multiprocessing
 import tempfile
 import unittest
+from unittest import mock
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
@@ -57,6 +59,17 @@ class ChunksTest(unittest.TestCase):
         for (start, end), first in zip(ranges, firsts):
             lines = chunks.read_lines(self.log, start, end)
             self.assertEqual(lines, all_lines[first - 1 : first - 1 + len(lines)])
+
+    def test_count_newlines_in_blocks(self):
+        text = self.log.read_bytes()
+        with mock.patch.object(chunks, "_COUNT_BLOCK", 7), open(self.log, "rb") as f, \
+                mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+            self.assertEqual(chunks.count_newlines(mm, 3, len(text) - 5), text[3:-5].count(b"\n"))
+            self.assertEqual(chunks.count_newlines(mm, 5, 5), 0)
+
+    def test_parse_file_in_ranges_matches_a_single_pass(self):
+        expected = list(metrics.MetricsParser().parse_file(self.log, nof_chunks=1))
+        self.assertEqual(list(metrics.MetricsParser().parse_file(self.log, nof_chunks=7)), expected)
 
     def test_parse_file_in_parallel_matches_a_single_pass(self):
         serial = metrics.MetricsParser()

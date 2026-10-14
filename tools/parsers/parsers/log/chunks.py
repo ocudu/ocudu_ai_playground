@@ -19,6 +19,8 @@ from .events import ENTRY_START_PATTERN
 
 # Start of the lines that begin a log entry, as a bytes pattern.
 ENTRY_START_RE = re.compile(ENTRY_START_PATTERN.encode())
+# Bytes copied at a time to count line ends.
+_COUNT_BLOCK = 1 << 20
 
 
 def chunk_ranges(path: str | Path, nof_chunks: int) -> list[tuple[int, int]]:
@@ -47,7 +49,12 @@ def count_lines(path: str | Path, start: int, end: int) -> int:
     if end <= start:
         return 0
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-        return mm[start:end].count(b"\n")
+        return count_newlines(mm, start, end)
+
+
+def count_newlines(mm: mmap.mmap, start: int, end: int) -> int:
+    """Number of line ends in the byte range [start, end) of an mmap, read in blocks of bounded size."""
+    return sum(mm[pos : min(end, pos + _COUNT_BLOCK)].count(b"\n") for pos in range(start, end, _COUNT_BLOCK))
 
 
 def first_lines(path: str | Path, ranges: list[tuple[int, int]], executor: Executor | None = None) -> list[int]:
