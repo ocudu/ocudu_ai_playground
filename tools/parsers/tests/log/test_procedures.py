@@ -34,6 +34,11 @@ class ProceduresTest(unittest.TestCase):
         # Left open at the end of the log.
         self.assertEqual(self.found["UE Delete"], [])
 
+    def test_ue_is_not_taken_from_longer_keys(self):
+        lines = ['2026-04-21T03:21:49.000000 [DU-MNG  ] [I] cu_ue=7 du_ue=3 proc="UE Create": Procedure started....\n',
+                 '2026-04-21T03:21:49.000100 [DU-MNG  ] [I] cu_ue=7 du_ue=3 proc="UE Create": Procedure finished successfully.\n']
+        self.assertEqual([i.ue for i in procedures.instances(lines)["UE Create"]], [3])
+
     def test_latencies(self):
         mac = self.found["MAC UE Creation"]
         self.assertEqual(procedures.latencies(mac, "start", "done"), [674])

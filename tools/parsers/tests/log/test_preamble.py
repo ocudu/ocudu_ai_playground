@@ -30,6 +30,7 @@ class MatchPreambleTest(unittest.TestCase):
 
     def test_no_preamble(self):
         self.assertIsNone(preamble.match_preamble("  continuation line"))
+        self.assertIsNone(preamble.match_preamble("plmns: [00101]"))
 
 
 class TokenizeMultilineLogsTest(unittest.TestCase):

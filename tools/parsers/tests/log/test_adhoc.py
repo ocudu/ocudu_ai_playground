@@ -90,6 +90,8 @@ class AdhocTest(unittest.TestCase):
             with self.subTest(kwargs=kwargs), self.assertRaises(ValueError):
                 adhoc.Spec(**kwargs)
         self.assertEqual(adhoc.Spec("cw[0].tbs").key, "cw[0].tbs")
+        with self.assertRaises(ValueError):
+            self.scan(adhoc.Spec(None, filter="tbs"))
 
 
 if __name__ == "__main__":

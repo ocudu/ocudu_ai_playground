@@ -11,7 +11,10 @@ _PREAMBLE_TAIL = (
     r"(?:\[\s*(?P<sfn>\d+)\.(?P<slot_index>\d+)\])?"
 )
 
-_preamble_pattern = re.compile(r"^(?P<timestamp>\S+)\s\[(?P<layer>.*?)" + _PREAMBLE_TAIL)
+# ISO 8601 timestamp of an entry line, unlike the "key: [value]" lines of the configuration echo.
+_TIMESTAMP = r"^(?P<timestamp>\d{4}-\d\d-\d\dT\S+)"
+
+_preamble_pattern = re.compile(_TIMESTAMP + r"\s\[(?P<layer>.*?)" + _PREAMBLE_TAIL)
 
 # Cache of preamble patterns restricted to one logger name.
 _layer_patterns: dict[str, re.Pattern] = {}
@@ -20,7 +23,7 @@ _layer_patterns: dict[str, re.Pattern] = {}
 def _get_layer_pattern(layer: str) -> re.Pattern:
     if layer not in _layer_patterns:
         _layer_patterns[layer] = re.compile(
-            rf"^(?P<timestamp>\S+)\s\[(?P<layer>{re.escape(layer)})" + _PREAMBLE_TAIL
+            _TIMESTAMP + rf"\s\[(?P<layer>{re.escape(layer)})" + _PREAMBLE_TAIL
         )
     return _layer_patterns[layer]
 

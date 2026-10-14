@@ -104,8 +104,8 @@ def _is_config_echo(m: re.Match, line: str) -> bool:
 
 
 def _at_or_after(ts: str, time: str, ref: str) -> bool:
-    return ts >= ref if "T" in ref else time[: len(ref)] >= ref
+    return (ts if "T" in ref else time)[: len(ref)] >= ref
 
 
 def _at_or_before(ts: str, time: str, ref: str) -> bool:
-    return ts <= ref if "T" in ref else time[: len(ref)] <= ref
+    return (ts if "T" in ref else time)[: len(ref)] <= ref

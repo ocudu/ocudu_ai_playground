@@ -47,6 +47,7 @@ class SearchTest(unittest.TestCase):
     def test_time_bounds(self):
         self.assertEqual(found(search.Filter(after="15:45:02", before="15:45:02.9")), ["[SCHED   ]"])
         self.assertEqual(found(search.Filter(after="2026-07-27T15:45:03")), ["[METRICS ]"])
+        self.assertEqual(found(search.Filter(after="2026-07-27T15:45:02", before="2026-07-27T15:45:02")), ["[SCHED   ]"])
 
     def test_pattern_in_body(self):
         self.assertEqual(found(search.Filter(pattern="^ *reconfigurationwithsync$")), ["[RRC     ]"])

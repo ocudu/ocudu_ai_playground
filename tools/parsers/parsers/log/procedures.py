@@ -61,7 +61,7 @@ GROUPS: list[tuple[str, list[str]]] = [
 
 _LINE_RE = re.compile(
     r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{6}) \[[A-Z0-9 -]+\s*\] \[.\] "
-    r'.*?(?:ue|du_ue)=(\d+).*?proc="([^"]+)": (.*?)\s*$'
+    r'.*?(?<![\w-])(?:ue|du_ue)=(\d+).*?proc="([^"]+)": (.*?)\s*$'
 )
 _KEY_OF_LABEL = {
     proc: {label: key for key, labels in stages for label in ((labels,) if isinstance(labels, str) else labels)}

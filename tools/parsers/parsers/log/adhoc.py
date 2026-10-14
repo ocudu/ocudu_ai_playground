@@ -80,8 +80,10 @@ def scan(path: str, start: int, end: int, first_line: int, spec: Spec) -> dict:
 
     Returns "rows" of (time in seconds since the epoch, line number, line offset, value, split value or None), in
     file order, and "unit", the unit of the values when they have one. Lines without a timestamp take the one of the
-    entry they belong to.
+    entry they belong to. The spec must have a key; see scan_lines() for one without.
     """
+    if spec.key is None:
+        raise ValueError("scan() needs a spec with a key; scan_lines() finds the lines of a filter.")
     values = value_re(spec.key)
     splits = split_re(spec.split_key) if spec.split_key else None
     keep = re.compile(spec.filter, re.IGNORECASE) if spec.filter else None
