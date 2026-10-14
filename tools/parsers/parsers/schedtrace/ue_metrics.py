@@ -81,13 +81,15 @@ class Aggregator:
 
     def __init__(self, bin_s: float = BIN_S) -> None:
         self.bin_s = bin_s
+        # Bin size in microseconds, so that bins are exact.
+        self._bin_us = max(1, round(bin_s * 1e6))
         # Sums of each (bin, RNTI), and of each bin for the cell, with the first record of the bin.
         self.ues: dict[tuple[int, str], dict[str, Any]] = {}
         self.cells: dict[int, dict[str, Any]] = {}
 
     def add(self, record: int, event: dict[str, Any], items: dict[str, list[tuple]]) -> None:
         """Adds a CellSlotEvent of record number record and its slot_items()."""
-        b = int(event["timestamp_us"] / 1e6 // self.bin_s)
+        b = event["timestamp_us"] // self._bin_us
         latency = event.get("latency_us") or 0
         c = self.cells.get(b)
         if c is None:

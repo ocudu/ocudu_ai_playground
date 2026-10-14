@@ -31,7 +31,9 @@ SCALARS: dict[str, tuple[str, int]] = {
     "double": ("d", 8), "float64": ("d", 8),
 }
 
-_TOKEN_RE = re.compile(r'\s+|//[^\n]*|/\*.*?\*/|"[^"]*"|[A-Za-z_][\w.]*|-?[\d.]+(?:[eE][+-]?\d+)?|.', re.DOTALL)
+_TOKEN_RE = re.compile(
+    r'\s+|//[^\n]*|/\*.*?\*/|"[^"]*"|[A-Za-z_][\w.]*|-?0[xX][0-9a-fA-F]+|-?[\d.]+(?:[eE][+-]?\d+)?|.', re.DOTALL
+)
 
 
 @dataclass
@@ -47,7 +49,7 @@ class Field:
     name: str
     type: Type
     # Default of a scalar field, None for "= null", i.e. optional, which is then absent rather than its default.
-    default: int | float | bool | None = 0
+    default: int | float | bool | str | None = 0
     # Slot of the field in the vtable of its table. A union field takes two: its type is in the slot before.
     slot: int = 0
 
@@ -97,7 +99,20 @@ def load(path: str | Path) -> Schema:
     _load_file(Path(path), schema, set())
     for struct in schema.structs.values():
         _layout(struct, schema)
+    for table in [*schema.tables.values(), *schema.structs.values()]:
+        for f in table.fields:
+            if isinstance(f.default, str):
+                f.default = _enum_value(f, schema)
     return schema
+
+
+def _enum_value(f: Field, schema: Schema) -> int:
+    """The value of the enum default of a field, given by name."""
+    enum = schema.enums.get(f.type.name)
+    values = {name: value for value, name in enum.names.items()} if enum else {}
+    if f.default not in values:
+        raise ValueError(f"field {f.name}: default {f.default!r} is not a value of {f.type.name}")
+    return values[f.default]
 
 
 def _load_file(path: Path, schema: Schema, seen: set[Path]) -> None:
@@ -139,6 +154,8 @@ def _load_file(path: Path, schema: Schema, seen: set[Path]) -> None:
                 if tokens[pos] == "=":
                     take("=")
                     value = int(take(), 0)
+                if tokens[pos] not in (",", "}"):
+                    raise ValueError(f"{path.name}: unsupported syntax {tokens[pos]!r} in enum {enum.name}")
                 enum.names[value] = name
                 value += 1
             schema.enums[enum.name] = enum
@@ -147,9 +164,15 @@ def _load_file(path: Path, schema: Schema, seen: set[Path]) -> None:
             take("{")
             index = 1
             while (name := take()) != "}":
-                if name != ",":
-                    union.members[index] = _short(name)
-                    index += 1
+                if name == ",":
+                    continue
+                if tokens[pos] == "=":
+                    take("=")
+                    index = int(take(), 0)
+                if tokens[pos] not in (",", "}"):
+                    raise ValueError(f"{path.name}: unsupported syntax {tokens[pos]!r} in union {union.name}")
+                union.members[index] = _short(name)
+                index += 1
             schema.unions[union.name] = union
         elif keyword in ("table", "struct"):
             name = take()
@@ -164,7 +187,7 @@ def _load_file(path: Path, schema: Schema, seen: set[Path]) -> None:
                     take("]")
                 else:
                     ftype = Type(_short(take()))
-                default: int | float | bool | None = 0
+                default: int | float | bool | str | None = 0
                 if tokens[pos] == "=":
                     take("=")
                     default = _value(take())
@@ -193,11 +216,16 @@ def _short(name: str) -> str:
     return name.rsplit(".", 1)[-1]
 
 
-def _value(token: str) -> int | float | bool | None:
+def _value(token: str) -> int | float | bool | str | None:
+    """The default of a field: a number, a bool, None for null, or the name of an enum value."""
     if token == "null":
         return None
     if token in ("true", "false"):
         return token == "true"
+    if token[:1].isalpha() or token[:1] == "_":
+        return token
+    if token.lstrip("-")[:2].lower() == "0x":
+        return int(token, 16)
     return float(token) if any(c in token for c in ".eE") else int(token, 0)
 
 

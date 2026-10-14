@@ -94,6 +94,13 @@ class UeMetricsTest(unittest.TestCase):
         self.assertEqual((total[0], total[1], values["rnti"], values["dl_mcs"]), (0, 0, "0x4601", 20))
         self.assertAlmostEqual(values["dl_brate"], 60 * 1000 * 8 / 0.03)
 
+    def test_slots_at_a_bin_edge_start_its_bin(self):
+        agg = ue_metrics.Aggregator(bin_s=0.01)
+        e = slot(1_760_000_000_000_000, ue_pdschs=[pdsch(0x4601, 20, 1000)])
+        agg.add(1, e, ue_metrics.slot_items(e, self.cell))
+        self.assertAlmostEqual(agg.ue_rows()[0][0], 1_760_000_000.0)
+        self.assertEqual(list(agg.cells), [176_000_000_000])
+
     def test_merge_equals_one_pass(self):
         events = [slot(t, [ack(0x4601, "Ack")], ue_pdschs=[pdsch(0x4601, 20, 1000)]) for t in range(0, 30000, 500)]
         whole, first, second = ue_metrics.Aggregator(), ue_metrics.Aggregator(), ue_metrics.Aggregator()

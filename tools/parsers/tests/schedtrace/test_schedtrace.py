@@ -8,7 +8,7 @@ import warnings
 from pathlib import Path
 
 from parsers import schedtrace
-from parsers.schedtrace import _generated, codegen, grid
+from parsers.schedtrace import _generated, codegen, grid, schema
 
 # Trace built by data/make_fixtures.sh with flatc from the JSON events, and flatc's decoding of it.
 DATA = Path(__file__).parent / "data"
@@ -107,6 +107,23 @@ class SchedtraceTest(unittest.TestCase):
                          [("slot_tx", 0), ("latency_us", 1), ("inputs", 3), ("decision", 4)])
         self.assertIsNone(next(f for f in tables["VrbAlloc"].fields if f.name == "vrb_second_hop_start").default)
 
+    def schema_of(self, text):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "s.fbs"
+            path.write_text(text)
+            return schema.load(path)
+
+    def test_schema_syntax(self):
+        s = self.schema_of("enum E : ubyte { A = 0x10, B }\nunion U { T, V = 4 }\ntable T { e: E = B; h: int = 0x1e; }\n"
+                           "table V {}\n")
+        self.assertEqual(s.enums["E"].names, {16: "A", 17: "B"})
+        self.assertEqual(s.unions["U"].members, {1: "T", 4: "V"})
+        self.assertEqual([f.default for f in s.tables["T"].fields], [17, 30])
+
+    def test_unsupported_schema_syntax_is_rejected(self):
+        for text in ("union U { T1: T }\ntable T {}\n", "enum E : ubyte { A B }\n", "enum E : ubyte { A }\ntable T { e: E = C; }\n"):
+            with self.assertRaises(ValueError, msg=text):
+                self.schema_of(text)
 
 class FormatVersionTest(unittest.TestCase):
     def setUp(self):
