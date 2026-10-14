@@ -21,6 +21,7 @@ from datetime import datetime
 from typing import Any
 
 from . import preamble
+from .preamble import ENTRY_START_PATTERN
 
 # Event categories, in display order.
 CATEGORIES = ("ra", "lifecycle", "rrc", "mobility", "failure", "warning", "error")
@@ -81,8 +82,6 @@ CANDIDATE_PATTERN = (
     r"|rrcReestablishmentRequest|Trigger intra-CU|Starting HO preparation|RLF detected|Reestablishment"
     r'|ra-ContentionResolutionTimer|"RRC Setup Procedure" timed out|\] \[[WE]\] '
 )
-# Start of the lines that begin a log entry. Other lines continue the previous entry. Usable as a bytes pattern too.
-ENTRY_START_PATTERN = r"\d{4}-\d\d-\d\dT"
 
 _CANDIDATE_RE = re.compile(CANDIDATE_PATTERN)
 _ENTRY_START_RE = re.compile(ENTRY_START_PATTERN)

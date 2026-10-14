@@ -13,14 +13,8 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-# Entry lines start with an ISO 8601 timestamp, unlike continuation lines and the body of the configuration echo.
-_LINE_RE = re.compile(
-    r"^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6})\s+"
-    r"\[(?P<layer>[A-Z][A-Z0-9_ -]*?)\s*\]\s+"
-    # The level is absent on some loggers, e.g. METRICS.
-    r"(?:\[(?P<lvl>[A-Z])\]\s+)?"
-    r"(?P<msg>.*)$"
-)
+from . import preamble
+
 _UE_RE = re.compile(r"\bue=(\d+)\b")
 _PCI_RE = re.compile(r"\bpci=(\d+)\b")
 _CRNTI_RE = re.compile(r"c-rnti=0x([0-9a-fA-F]+)")
@@ -108,13 +102,13 @@ def summarize(lines: Iterable[str]) -> LogSummary:
             if "reconfigurationWithSync" in raw and "{" in raw:
                 out.ho_count += 1
             continue
-        m = _LINE_RE.match(raw)
+        m = preamble.match_header(raw)
         if not m:
             continue
-        ts = m.group("ts")
+        ts = m.group("timestamp")
         layer = m.group("layer").strip()
-        lvl = m.group("lvl") or ""
-        msg = m.group("msg")
+        lvl = m.group("level") or ""
+        msg = raw[m.end() :].rstrip("\r\n")
         if out.first_ts is None:
             out.first_ts = ts
         out.last_ts = ts

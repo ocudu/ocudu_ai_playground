@@ -14,7 +14,8 @@ import math
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import date
+
+from . import preamble
 
 # Stages of each procedure, in order, as (key, exact label), or (key, labels) for a stage whose label changed between
 # builds. The first opens an instance, the last closes it.
@@ -59,10 +60,8 @@ GROUPS: list[tuple[str, list[str]]] = [
     ("REMOVAL", ["UE Delete", "MAC UE Removal", "UE Context Release"]),
 ]
 
-_LINE_RE = re.compile(
-    r"(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{6}) \[[A-Z0-9 -]+\s*\] \[.\] "
-    r'.*?(?<![\w-])(?:ue|du_ue)=(\d+).*?proc="([^"]+)": (.*?)\s*$'
-)
+# UE, procedure and stage label of the message of a procedure line.
+_PROC_RE = re.compile(r'(?<![\w-])(?:ue|du_ue)=(\d+).*?proc="([^"]+)": (.*?)\s*$')
 _KEY_OF_LABEL = {
     proc: {label: key for key, labels in stages for label in ((labels,) if isinstance(labels, str) else labels)}
     for proc, stages in PROCEDURES.items()
@@ -100,18 +99,20 @@ def instances(lines: Iterable[str]) -> dict[str, list[Instance]]:
     out: dict[str, list[Instance]] = {proc: [] for proc in PROCEDURES}
     open_: dict[tuple[int, str], Instance] = {}
     for line in lines:
-        if 'proc="' not in line or not (m := _LINE_RE.search(line)):
+        if 'proc="' not in line or not (h := preamble.match_header(line)) or not (m := _PROC_RE.search(line, h.end())):
             continue
-        proc, label = m.group(9), m.group(10)
+        proc, label = m.group(2), m.group(3)
         key = _KEY_OF_LABEL.get(proc, {}).get(label)
-        if key is None:
+        # Exact, so that latencies are.
+        t = preamble.to_epoch_us(h.group("timestamp"))
+        if key is None or t is None:
             continue
-        ue = int(m.group(8))
+        ue = int(m.group(1))
         stages = PROCEDURES[proc]
         if key == stages[0][0] and (ue, proc) in open_:
             out[proc].append(open_.pop((ue, proc)))
         inst = open_.setdefault((ue, proc), Instance(proc, ue))
-        inst.stages.setdefault(key, _micros(m))
+        inst.stages.setdefault(key, t)
         if key == stages[-1][0]:
             out[proc].append(open_.pop((ue, proc)))
     return out
@@ -151,9 +152,3 @@ def stats(values: list[float]) -> Stats | None:
 
     return Stats(len(ordered), sum(ordered) / len(ordered), pct(50), pct(90), pct(99), ordered[-1])
 
-
-def _micros(m: re.Match) -> int:
-    """The timestamp of a line match, in microseconds since the epoch, exact so that latencies are."""
-    year, month, day, hour, minute, second, us = (int(g) for g in m.groups()[:7])
-    days = date(year, month, day).toordinal() - date(1970, 1, 1).toordinal()
-    return ((days * 24 + hour) * 60 + minute) * 60_000_000 + second * 1_000_000 + us

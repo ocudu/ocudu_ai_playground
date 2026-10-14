@@ -1,20 +1,27 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
-"""Parsing of the OCUDU log line preamble: timestamp, logger, level and slot."""
+"""Parsing of the OCUDU log line preamble: timestamp, logger, level and slot, and of its timestamp."""
 
 import re
+from datetime import datetime, timedelta, timezone
 from typing import Iterable, Iterator
 
-_PREAMBLE_TAIL = (
-    r"\s*\]\s+(?:\[(?P<level>[A-Z])\]\s+)?\s*"
-    r"(?:\[\s*(?P<sfn>\d+)\.(?P<slot_index>\d+)\])?"
-)
+# Start of the lines that begin a log entry, an ISO 8601 date. Other lines continue the previous entry, e.g. the
+# "key: [value]" lines of the configuration echo. Usable as a bytes pattern too.
+ENTRY_START_PATTERN = r"\d{4}-\d\d-\d\dT"
 
-# ISO 8601 timestamp of an entry line, unlike the "key: [value]" lines of the configuration echo.
-_TIMESTAMP = r"^(?P<timestamp>\d{4}-\d\d-\d\dT\S+)"
+# Timestamp at the start of an entry line. Usable as a bytes pattern too.
+TIMESTAMP_PATTERN = ENTRY_START_PATTERN + r"\S+"
 
-_preamble_pattern = re.compile(_TIMESTAMP + r"\s\[(?P<layer>.*?)" + _PREAMBLE_TAIL)
+_TIMESTAMP = rf"^(?P<timestamp>{TIMESTAMP_PATTERN})"
+_LEVEL = r"\s*\]\s+(?:\[(?P<level>[A-Z])\]\s+)?"
+_SLOT = r"\s*(?:\[\s*(?P<sfn>\d+)\.(?P<slot_index>\d+)\])?"
+
+_header_pattern = re.compile(_TIMESTAMP + r"\s\[(?P<layer>.*?)" + _LEVEL)
+_preamble_pattern = re.compile(_TIMESTAMP + r"\s\[(?P<layer>.*?)" + _LEVEL + _SLOT)
+_EPOCH = datetime(1970, 1, 1)
+_MICROSECOND = timedelta(microseconds=1)
 
 # Cache of preamble patterns restricted to one logger name.
 _layer_patterns: dict[str, re.Pattern] = {}
@@ -23,7 +30,7 @@ _layer_patterns: dict[str, re.Pattern] = {}
 def _get_layer_pattern(layer: str) -> re.Pattern:
     if layer not in _layer_patterns:
         _layer_patterns[layer] = re.compile(
-            _TIMESTAMP + rf"\s\[(?P<layer>{re.escape(layer)})" + _PREAMBLE_TAIL
+            _TIMESTAMP + rf"\s\[(?P<layer>{re.escape(layer)})" + _LEVEL + _SLOT
         )
     return _layer_patterns[layer]
 
@@ -33,6 +40,27 @@ def match_preamble(line: str, layer: str | None = None) -> re.Match | None:
     if layer is not None:
         return _get_layer_pattern(layer).match(line)
     return _preamble_pattern.match(line)
+
+
+def match_header(line: str) -> re.Match | None:
+    """Matches the timestamp, logger and level of an entry line, ending where its message starts, slot included."""
+    return _header_pattern.match(line)
+
+
+def to_epoch(timestamp: str) -> float | None:
+    """Seconds since the epoch of a log timestamp, which OCUDU logs as UTC wall clock without a zone, or None."""
+    try:
+        return datetime.fromisoformat(timestamp).replace(tzinfo=timezone.utc).timestamp()
+    except ValueError:
+        return None
+
+
+def to_epoch_us(timestamp: str) -> int | None:
+    """Exact microseconds since the epoch of a log timestamp, see to_epoch(), or None."""
+    try:
+        return (datetime.fromisoformat(timestamp) - _EPOCH) // _MICROSECOND
+    except ValueError:
+        return None
 
 
 def tokenize_multiline_logs(stream: Iterable[str]) -> Iterator[tuple[re.Match | None, list[str]]]:

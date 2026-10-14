@@ -15,7 +15,7 @@ import re
 from concurrent.futures import Executor
 from pathlib import Path
 
-from .events import ENTRY_START_PATTERN
+from .preamble import ENTRY_START_PATTERN
 
 # Start of the lines that begin a log entry, as a bytes pattern.
 ENTRY_START_RE = re.compile(ENTRY_START_PATTERN.encode())

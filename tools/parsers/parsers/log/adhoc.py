@@ -15,22 +15,21 @@ from __future__ import annotations
 import mmap
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
 
-from .chunks import ENTRY_START_RE, count_newlines
+from . import preamble
+from .chunks import count_newlines
 from .metrics import normalize_number
 
 # Characters of a key, as in key=value fields, e.g. c-rnti, cw[0] or dl_bo.
 _KEY_CHARS = r"[\w.\-\[\]]"
 # Timestamp at the start of an entry line.
-_TIMESTAMP_RE = re.compile(rb"(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?)")
+_TIMESTAMP_RE = re.compile(preamble.TIMESTAMP_PATTERN.encode())
 # Bytes looked back for the header of the entry of a continuation line.
 _MAX_LOOKBACK = 1 << 20
 
 
 # Characters of the text of a line kept for each line of scan_lines().
 MAX_TEXT = 500
-_PREAMBLE_RE = re.compile(r"^\S+\s+\[\s*([^\]]*?)\s*\]\s+(?:\[([A-Z])\]\s)?")
 _UE_RE = re.compile(r"(?<![\w-])ue=(\d+)")
 _RNTI_RE = re.compile(r"(?<![\w])(?:c-|tc-)?rnti=(0x[0-9a-fA-F]+)")
 
@@ -146,11 +145,11 @@ def scan_lines(path: str, start: int, end: int, first_line: int, spec: Spec) -> 
                 continue
             line_end = mm.find(b"\n", line_start, end)
             text = mm[line_start: end if line_end == -1 else line_end].decode("utf-8", "replace")
-            pre = _PREAMBLE_RE.match(text)
+            pre = preamble.match_header(text)
             ue = _UE_RE.search(text)
             rnti = _RNTI_RE.search(text)
-            rows.append((t, line_no, line_start, text[:MAX_TEXT], pre.group(1) if pre else None,
-                         pre.group(2) if pre else None, int(ue.group(1)) if ue else None,
+            rows.append((t, line_no, line_start, text[:MAX_TEXT], pre.group("layer").strip() if pre else None,
+                         pre.group("level") if pre else None, int(ue.group(1)) if ue else None,
                          rnti.group(1).lower() if rnti else None))
     return rows
 
@@ -178,11 +177,8 @@ class _EntryTimes:
         pos = line_start
         lowest = max(self._floor, line_start - _MAX_LOOKBACK)
         while True:
-            if ENTRY_START_RE.match(mm, pos) and (m := _TIMESTAMP_RE.match(mm, pos)):
-                try:
-                    return datetime.fromisoformat(m.group(1).decode()).replace(tzinfo=timezone.utc).timestamp()
-                except ValueError:
-                    return None
+            if m := _TIMESTAMP_RE.match(mm, pos):
+                return preamble.to_epoch(m.group().decode())
             # The lines from the one looked up last belong to its entry, so the walk back stops there.
             if pos == self._line:
                 return self._t

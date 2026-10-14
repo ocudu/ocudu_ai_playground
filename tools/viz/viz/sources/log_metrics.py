@@ -8,7 +8,7 @@ from __future__ import annotations
 import itertools
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import timezone
 from importlib import metadata
 from pathlib import Path
 from typing import Any
@@ -32,7 +32,6 @@ _OFFSET_INTERVAL = 1000
 _MIN_CHUNK_SIZE = 4 << 20
 _CHUNKS_PER_WORKER = 4
 _EVENT_CANDIDATE_RE = re.compile(events.CANDIDATE_PATTERN.encode())
-_ENTRY_START_RE = re.compile(events.ENTRY_START_PATTERN.encode())
 # Generic warnings and errors of the same logger, level, UE and message but for its numbers, each within REPEAT_GAP_S of
 # the previous one, are stored as one event, up to REPEAT_MAX_SPAN_S long, with their count and span.
 REPEAT_TYPES = frozenset({"warning", "error"})
@@ -51,21 +50,13 @@ _EVENT_LEVEL_OPTIONS = {
 _TAIL_SIZE = 64 << 10
 
 
-def _epoch(timestamp: str) -> float | None:
-    """Seconds since the epoch of a log timestamp, stored as UTC wall clock since logs carry no zone."""
-    try:
-        return datetime.fromisoformat(timestamp).replace(tzinfo=timezone.utc).timestamp()
-    except ValueError:
-        return None
-
-
 def _last_timestamp(path: Path) -> float | None:
     with path.open("rb") as f:
         f.seek(max(0, path.stat().st_size - _TAIL_SIZE))
         lines = f.read().decode("utf-8", "replace").splitlines()
     for line in reversed(lines):
         m = preamble.match_preamble(line)
-        if m and (t := _epoch(m.group("timestamp"))) is not None:
+        if m and (t := preamble.to_epoch(m.group("timestamp"))) is not None:
             return t
     return None
 
@@ -109,7 +100,7 @@ def _parse_metrics_chunk(path: str, start: int, end: int, first_line: int) -> di
             result["offsets"].append((line_no, offset))
         offset += len(raw) + 1
         if first_t is None and (m := preamble.match_preamble(raw.decode("utf-8", "replace"))):
-            first_t = _epoch(m.group("timestamp"))
+            first_t = preamble.to_epoch(m.group("timestamp"))
         # Cheap check before decoding, most lines are not metrics.
         if b"[METRICS" not in raw:
             continue
@@ -173,7 +164,7 @@ def _parse_events_chunk(path: str, start: int, end: int, first_line: int) -> lis
 
     for line_no, raw in enumerate(chunks.read_lines(path, start, end), start=first_line):
         if pending is not None:
-            if not _ENTRY_START_RE.match(raw):
+            if not chunks.ENTRY_START_RE.match(raw):
                 pending[3].append(raw.decode("utf-8", "replace"))
                 continue
             add(*pending)

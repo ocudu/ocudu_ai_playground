@@ -33,6 +33,23 @@ class MatchPreambleTest(unittest.TestCase):
         self.assertIsNone(preamble.match_preamble("plmns: [00101]"))
 
 
+class HeaderTest(unittest.TestCase):
+    def test_header_ends_at_the_message(self):
+        line = "2026-07-27T15:44:57.314934 [SCHED   ] [I] [  123.14] Slot decisions"
+        m = preamble.match_header(line)
+        self.assertEqual((m.group("timestamp"), m.group("layer"), m.group("level")), ("2026-07-27T15:44:57.314934", "SCHED", "I"))
+        self.assertEqual(line[m.end() :], "[  123.14] Slot decisions")
+        m = preamble.match_header("2025-04-04T15:55:29.878489 [METRICS ] Scheduler cell pci=1 metrics:")
+        self.assertEqual((m.group("layer"), m.group("level")), ("METRICS", None))
+        self.assertIsNone(preamble.match_header("plmns: [00101]"))
+
+    def test_epoch(self):
+        self.assertEqual(preamble.to_epoch("1970-01-01T00:00:01.500000"), 1.5)
+        # An exact integer of microseconds.
+        self.assertEqual(preamble.to_epoch_us("2026-04-21T03:21:49.089871"), 1776741709089871)
+        self.assertIsNone(preamble.to_epoch("2026-04-21T03:21:49.08987x"))
+        self.assertIsNone(preamble.to_epoch_us("plmns:"))
+
 class TokenizeMultilineLogsTest(unittest.TestCase):
     def test_groups_continuation_lines(self):
         lines = [

@@ -10,7 +10,6 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 
 from . import preamble
@@ -49,13 +48,13 @@ def log_run(path: str | os.PathLike[str]) -> LogRun | None:
     build = _build_re.search(first, m.end()) if m else None
     if build is None:
         return None
-    start = _epoch(m.group("timestamp"))
+    start = preamble.to_epoch(m.group("timestamp"))
     if start is None:
         return None
     end = start
     for line in reversed(tail):
         last = preamble.match_preamble(line)
-        if last and (t := _epoch(last.group("timestamp"))) is not None:
+        if last and (t := preamble.to_epoch(last.group("timestamp"))) is not None:
             end = max(start, t)
             break
     return LogRun(build.group("mode"), build.group("commit"), build.group("branch"), start, end)
@@ -66,13 +65,6 @@ def same_run(a: LogRun, b: LogRun, slack_s: float = 60.0) -> bool:
     same_build = (a.mode, a.commit, a.branch) == (b.mode, b.commit, b.branch)
     return same_build and a.start <= b.end + slack_s and b.start <= a.end + slack_s
 
-
-def _epoch(timestamp: str) -> float | None:
-    # OCUDU logs UTC times without a zone, which pcap packet times can then be compared with.
-    try:
-        return datetime.fromisoformat(timestamp).replace(tzinfo=timezone.utc).timestamp()
-    except ValueError:
-        return None
 
 
 def primary_log_in(run_dir: str | os.PathLike[str]) -> Path | None:

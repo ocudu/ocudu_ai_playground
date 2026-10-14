@@ -13,15 +13,7 @@ import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
-from . import config
-
-# Entry lines start with an ISO 8601 timestamp, unlike continuation lines and the body of the configuration echo.
-_HEADER_RE = re.compile(
-    r"^(?P<ts>\d{4}-\d{2}-\d{2}T(?P<time>\d{2}:\d{2}:\d{2}\.\d{6}))\s+"
-    r"\[(?P<layer>[A-Z][A-Z0-9_ -]*?)\s*\]\s+"
-    # The level is absent on some loggers, e.g. METRICS.
-    r"(?:\[(?P<lvl>[A-Z])\]\s+)?"
-)
+from . import config, preamble
 
 
 @dataclass
@@ -55,16 +47,17 @@ class Filter:
 
     def matches(self, entry: list[str]) -> bool:
         """Whether an entry of entries() meets the conditions."""
-        m = _HEADER_RE.match(entry[0])
+        m = preamble.match_header(entry[0])
         if not m:
             return False
-        if self.after and not _at_or_after(m.group("ts"), m.group("time"), self.after):
+        ts = m.group("timestamp")
+        if self.after and not _at_or_after(ts, self.after):
             return False
-        if self.before and not _at_or_before(m.group("ts"), m.group("time"), self.before):
+        if self.before and not _at_or_before(ts, self.before):
             return False
         if self.layer and m.group("layer").strip().upper() != self.layer.upper():
             return False
-        if self._level and not self._level.fullmatch(m.group("lvl") or ""):
+        if self._level and not self._level.fullmatch(m.group("level") or ""):
             return False
         text = "\n".join(entry)
         return all(p is None or p.search(text) for p in (self._ue, self._rnti, self._pci, self._pattern))
@@ -80,7 +73,7 @@ def entries(lines: Iterable[str], include_config_echo: bool = False) -> Iterator
         line = raw.rstrip("\n")
         if not line:
             continue
-        if m := _HEADER_RE.match(line):
+        if m := preamble.match_header(line):
             if entry is not None:
                 yield entry
             skipping = not include_config_echo and _is_config_echo(m, line)
@@ -103,9 +96,14 @@ def _is_config_echo(m: re.Match, line: str) -> bool:
     return m.group("layer").strip() == "CONFIG" and config.is_echo_header(line)
 
 
-def _at_or_after(ts: str, time: str, ref: str) -> bool:
-    return (ts if "T" in ref else time)[: len(ref)] >= ref
+def _at_or_after(ts: str, ref: str) -> bool:
+    return _at_precision(ts, ref) >= ref
 
 
-def _at_or_before(ts: str, time: str, ref: str) -> bool:
-    return (ts if "T" in ref else time)[: len(ref)] <= ref
+def _at_or_before(ts: str, ref: str) -> bool:
+    return _at_precision(ts, ref) <= ref
+
+
+def _at_precision(ts: str, ref: str) -> str:
+    """A timestamp cut to the precision of a bound, an ISO timestamp or a time of day."""
+    return (ts if "T" in ref else ts.partition("T")[2])[: len(ref)]
