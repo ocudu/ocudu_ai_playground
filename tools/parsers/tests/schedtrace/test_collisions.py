@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -43,6 +44,17 @@ class CollisionsTest(unittest.TestCase):
 
     def kinds(self, event):
         return [(c.kind, c.a["item"], c.b["item"], c.overlap) for c in collisions.slot_collisions(event, self.cell)]
+
+    def test_find_raises_the_decode_error_of_a_corrupt_event(self):
+        data = (DATA / "schedtrace_cell0.bin").read_bytes()
+        first = schedtrace.HEADER.size
+        size = int.from_bytes(data[first : first + 4], "little")
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "schedtrace_cell0.bin"
+            path.write_bytes(data[: first + 14] + b"\xff" * (size - 10))
+            with self.assertRaises(Exception) as ctx:
+                list(collisions.find(path))
+            self.assertNotIsInstance(ctx.exception, BufferError)
 
     def test_pdschs(self):
         event = slot(ue_pdschs=[pdsch(1, vrbs(0, 10)), pdsch(2, vrbs(8, 4), sym_start=10, sym_length=4), pdsch(3, vrbs(20, 5))])

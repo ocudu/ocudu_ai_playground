@@ -146,7 +146,8 @@ def offsets(data: bytes | memoryview, start: int | None = None, end: int | None 
 def event_at(data: bytes | memoryview, offset: int, grid_only: bool = False) -> dict[str, Any]:
     """The event at an offset of offsets(), as events() gives it."""
     size = _U32.unpack_from(data, offset)[0]
-    event = _root(grid_only)(memoryview(data)[offset + 4 : offset + 4 + size])
+    # A copy, since a view of an mmap left in a traceback keeps it from closing.
+    event = _root(grid_only)(bytes(data[offset + 4 : offset + 4 + size]))
     value = event.pop("value") or {"type": None}
     return {**event, **value}
 
