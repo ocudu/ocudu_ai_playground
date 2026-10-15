@@ -201,8 +201,8 @@ revision, and regenerate it:
 python -m parsers.schedtrace.codegen --ocudu ~/srs/ocudu [--rev origin/dev]
 ```
 
-`_generated.py` holds the file format version and the hash of the schemas and the generator, and a test fails when it is
-stale. The tests compare the decoder with flatc on a trace that `tests/schedtrace/data/make_fixtures.sh` builds, and
+`_generated.py` holds the file format version and the hash of the schemas, the generator and the schema parser, and a
+test fails when it is stale. The tests compare the decoder with flatc on a trace that `tests/schedtrace/data/make_fixtures.sh` builds, and
 the generated decoder with `schedtrace.flatbuf`. It decodes about 18k slots per second of busy slots.
 
 `schedtrace.collisions` finds the allocations of a slot whose resources overlap: PDSCH with PDSCH, PUSCH with PUSCH,
@@ -285,13 +285,14 @@ first, into one UE each with the identifiers of all of them:
 from parsers.correlate.ues import Context, combine
 
 f1ap = [Context("f1ap.pcap", 0, 10.0, 20.5, {"rnti": "17921", "du_f1ap": "0", "cu_f1ap": "0"})]
-log = [Context("gnb.log", 0, 9.9, 20.5, {"ue": "0", "rnti": "0x4601"})]
+log = [Context("gnb.log", 0, 9.9, 20.5, {"du_ue": "0", "rnti": "0x4601"})]
 for ue in combine(f1ap, log):
-    print(ue.key, ue.ids, ue.parts)  # f1ap.pcap:0 {"rnti": ["0x4601"], "du_f1ap": ["0"], "cu_f1ap": ["0"], "ue": ["0"]} ...
+    print(ue.key, ue.ids, ue.parts)  # f1ap.pcap:0 {"rnti": ["0x4601"], "du_f1ap": ["0"], "cu_f1ap": ["0"], "du_ue": ["0"]} ...
 ```
 
-A context of a later source joins a UE of an earlier one by RNTI with overlapping lifetimes, or without RNTI by
-creation time, e.g. the target of a handover, which a log creates before it knows its RNTI. RNTIs are compared as
+A context of a later source joins a UE of an earlier one by RNTI with overlapping lifetimes, a UE still open at the end
+of its sources living to that end, or without RNTI by creation time, e.g. the target of a handover, which a log creates
+before it knows its RNTI. RNTIs are compared as
 `parsers.ran.rnti` normalizes them.
 
 `parsers.correlate.run` reads the contexts from the files: `log_contexts()` from an OCUDU log (`events.UeTracker`),
