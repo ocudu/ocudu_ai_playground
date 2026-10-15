@@ -159,21 +159,16 @@ def _scale(num: str, exponent: int) -> int | float:
     return value // divisor if value % divisor == 0 else value / divisor
 
 
-def _normalize(num: str, unit: str | None) -> tuple[int | float, str | None, bool]:
-    """Scales a number to its canonical unit, returning (value, unit, unit_is_known)."""
+def normalize_number(num: str, unit: str | None) -> tuple[int | float, str | None, bool]:
+    """Scales a number printed with a unit, e.g. "55.5" and "Mbps", to its canonical unit, as METRICS fields are:
+    (value, unit, unit_is_known).
+    """
     if unit is None:
         return parse_number(num), None, True
     base, exponent = _unit_scale(unit)
     if exponent is None:
         return parse_number(num), base, False
     return _scale(num, exponent), base, True
-
-
-def normalize_number(num: str, unit: str | None) -> tuple[int | float, str | None, bool]:
-    """Scales a number printed with a unit, e.g. "55.5" and "Mbps", to its canonical unit, as METRICS fields are:
-    (value, unit, unit_is_known).
-    """
-    return _normalize(num, unit)
 
 
 def _find_list_end(text: str, start: int) -> int:
@@ -250,7 +245,7 @@ def _parse_list(key: str, base: str, body: str, sink: _FieldSink) -> None:
             continue
         m = _value_re.fullmatch(token)
         if m and m.group("num") is not None:
-            values.append(_normalize(m.group("num"), m.group("unit"))[0])
+            values.append(normalize_number(m.group("num"), m.group("unit"))[0])
         else:
             values.append(None if m and m.group("na") else token)
     sink.add(name, values)
@@ -259,11 +254,11 @@ def _parse_list(key: str, base: str, body: str, sink: _FieldSink) -> None:
 def _add_number(sink: _FieldSink, name: str, num: str, unit: str | None) -> None:
     implied = sink.implied_units.get(name)
     if implied is None or (unit is not None and unit not in _SI_PREFIX):
-        sink.add(name, *_normalize(num, unit))
+        sink.add(name, *normalize_number(num, unit))
     elif implied == "s":
-        sink.add(name, *_normalize(num, (unit or "") + "s"))
+        sink.add(name, *normalize_number(num, (unit or "") + "s"))
     else:
-        sink.add(name, _normalize(num, unit)[0], implied)
+        sink.add(name, normalize_number(num, unit)[0], implied)
 
 
 def _add_value(sink: _FieldSink, name: str, key: str, m: re.Match) -> None:

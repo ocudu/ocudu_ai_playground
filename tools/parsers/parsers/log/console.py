@@ -35,20 +35,20 @@ class ConsoleSummary:
 def summarize(lines: Iterable[str]) -> ConsoleSummary:
     """The summary of the lines of the console output of an application."""
     out = ConsoleSummary()
-    in_table = False
     for raw in lines:
         line = raw.rstrip("\n")
         stripped = line.strip()
         if not stripped:
             continue
-        if "OCUDU gNB (commit" in stripped:
+        # Banners of each application, e.g. "--== OCUDU gNB (commit ...) ==--" or "==== DU started ===".
+        if stripped.startswith("--== OCUDU ") and "(commit" in stripped:
             if m := _COMMIT_RE.search(stripped):
                 out.banner_commit = m.group(1)
         elif stripped.startswith("Cell pci="):
             out.cells.append(stripped)
         elif stripped.startswith("N2:") and "completed" in stripped:
             out.amf_connected = True
-        elif stripped.startswith("==== gNB started ==="):
+        elif stripped.startswith("==== ") and stripped.endswith(" started ==="):
             out.started = True
         elif stripped.startswith("Stopping..."):
             out.stopped = True
@@ -56,8 +56,5 @@ def summarize(lines: Iterable[str]) -> ConsoleSummary:
             if m := _LOGFILE_RE.search(stripped):
                 out.logfile_path = m.group(1)
         elif _METRICS_ROW_RE.match(line):
-            in_table = True
             out.metrics_rows += 1
-        elif in_table and not line.lstrip().startswith("pci") and not line.lstrip().startswith("|"):
-            in_table = False
     return out

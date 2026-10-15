@@ -97,6 +97,8 @@ class SummaryTest(unittest.TestCase):
         self.assertEqual(c.banner_commit, "404c93d34d")
         self.assertEqual(c.cells, ["Cell pci=1, bw=20 MHz, 1T1R, dl_arfcn=368500 (n3)"])
         self.assertEqual((c.amf_connected, c.started, c.stopped, c.metrics_rows), (True, True, True, 2))
+        du = console.summarize(["", "--== OCUDU DU (commit 1a2b3c4d) ==--", "", "==== DU started ==="])
+        self.assertEqual((du.banner_commit, du.started), ("1a2b3c4d", True))
 
     def test_metrics_json(self):
         records = [
