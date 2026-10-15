@@ -36,9 +36,16 @@ class ContextTrackerTest(unittest.TestCase):
                     "f1ap.GNB_DU_UE_F1AP_ID": "7,3", "f1ap.GNB_CU_UE_F1AP_ID": "7"})
         reest = {**messages.message("f1ap", row), "crnti": None}
         self.assertEqual(reest["du_ue_f1ap_id"], "7")
+        self.assertEqual(reest["old_du_ue_f1ap_id"], "3")
         tracker = ContextTracker("f1ap")
-        contexts = [tracker.assign(m) for m in (msg(2.0, "11", du="7", crnti="17921"), reest, msg(2.6, "13", du="7", cu="7"))]
-        self.assertEqual([c.id for c in contexts], [0, 0, 0])
+        # The old context, connected and silent since 1.1 s, then the reestablishment request of the new one.
+        msgs = (msg(1.0, "11", du="3", crnti="17920"), msg(1.1, "13", du="3", cu="3"), msg(2.0, "11", du="7", crnti="17921"),
+                reest, msg(2.6, "13", du="7", cu="7"))
+        self.assertEqual([c.id for m in msgs if (c := tracker.assign(m))], [0, 0, 1, 1, 1])
+        old, new = tracker.contexts
+        # The reestablishment releases the old context, whose identifiers are free again.
+        self.assertEqual((old.released, old.t_end, new.released), (True, 2.5, False))
+        self.assertEqual(tracker.assign(msg(3.0, "11", du="3", crnti="17922")).id, 2)
 
     def test_ue_contexts(self):
         self.assertEqual(len(ue_contexts("f1ap", [msg(1.0, "11", du="0"), msg(2.0, "11", du="1")])), 2)

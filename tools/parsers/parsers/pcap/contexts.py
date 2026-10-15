@@ -59,7 +59,8 @@ class ContextTracker:
     """Assigns the messages of a pcap of proto, "ngap", "f1ap" or "e1ap", to UE contexts, given in file order.
 
     A message belongs to the context of any of its UE identifiers in use. Identifiers are free again once the context
-    is released, since later UEs reuse them.
+    is released, since later UEs reuse them. An F1AP context is also released by the reestablishment that names it by
+    its old gNB-DU UE F1AP ID, as the DU then frees it without a UE context release.
     """
 
     def __init__(self, proto: str):
@@ -90,7 +91,16 @@ class ContextTracker:
             ctx.released = True
             for k, v in ids.items():
                 self._in_use.pop((k, v), None)
+        if (old_id := msg.get("old_du_ue_f1ap_id")) and (old := self._in_use.get(("du_ue_f1ap_id", old_id))) not in (None, ctx):
+            self._release(old, msg["epoch"])
         return ctx
+
+    def _release(self, ctx: UeContext, epoch: float) -> None:
+        """Releases a context at a time, freeing its identifiers."""
+        ctx.released = True
+        ctx.t_end = max(ctx.t_end, epoch)
+        for key in [key for key, c in self._in_use.items() if c is ctx]:
+            del self._in_use[key]
 
 
     def _link_values(self, label: str, values: list[str], msg: dict[str, Any]) -> list[str]:

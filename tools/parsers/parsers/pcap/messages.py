@@ -40,7 +40,7 @@ def messages(tshark: Tshark, pcap: str | os.PathLike[str], proto: str) -> list[d
 
     Each has "frame", "epoch", "code", "procedure" (its name), "outcome" ("initiating", "successful" or
     "unsuccessful"), "info" (the tshark summary, naming the message), the UE identifiers of UE_ID_FIELDS by label, None
-    when absent, and "cause".
+    when absent, "cause", and for F1AP "old_du_ue_f1ap_id", the old gNB-DU UE F1AP ID of a reestablishment, or None.
     """
     names = fields(proto)
     rows = (dict(zip(names, values)) for values in tshark.iter_fields(pcap, names, tag=f"{proto}-messages-v2"))
@@ -102,4 +102,11 @@ def message(proto: str, row: dict[str, str]) -> dict[str, Any] | None:
         # reestablishment.
         **{label: first(row[f]) for label, f in UE_ID_FIELDS[proto]},
         "cause": row[CAUSE_FIELDS[proto]] or None,
+        **({"old_du_ue_f1ap_id": _second(row["f1ap.GNB_DU_UE_F1AP_ID"])} if proto == "f1ap" else {}),
     }
+
+
+def _second(value: str) -> str | None:
+    """Second value of a tshark field of several occurrences, or None."""
+    values = value.split(",")
+    return values[1] or None if len(values) > 1 else None
