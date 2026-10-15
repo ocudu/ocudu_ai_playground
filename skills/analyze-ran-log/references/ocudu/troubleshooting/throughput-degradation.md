@@ -22,7 +22,7 @@ In `gnb.log` the `[METRICS]` rows are the per-period summary. The
 | CQI / RI | `metrics.json` → `ue_list[].cqi` / `.dl_ri` | Low CQI ⇒ poor radio conditions |
 | BLER | `metrics.json` → `ue_list[].dl_nof_nok / (dl_nof_ok + dl_nof_nok)` | Or columns `nok` and `(%)` in `stdout.log` |
 | Late HARQs | `metrics.json` → `cell_metrics.late_dl_harqs` / `.late_ul_harqs` | Signal that the scheduler couldn't honour the HARQ timing |
-| Failed PDCCH allocations | `metrics.json` → `cell_metrics.nof_failed_pdcch_allocs` | Scheduler overload / coreset crowded |
+| Failed PDCCH allocations | `metrics.json` → `cell_metrics.failed_dl_pdcch` + `failed_ul_pdcch` (`failed_common_*_pdcch` are part of them; builds before June 2026: `nof_failed_pdcch_allocs`) | Scheduler overload / coreset crowded |
 | MAC error indications | `metrics.json` → `cell_metrics.error_indication_count` | Should be 0 in healthy runs |
 | Buffer status | `dl_bs` / `bsr` columns in `stdout.log` | Persistent high values without throughput ⇒ scheduler/PDCCH issue |
 | Power headroom | `phr` in `stdout.log` | <10 = UE near its TX power limit |

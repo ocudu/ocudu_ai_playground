@@ -16,8 +16,10 @@ from pathlib import Path
 from typing import Any
 
 
-# Cell metrics of the failed PDCCH allocations.
-_FAILED_PDCCH_KEYS = ("failed_dl_pdcch", "failed_ul_pdcch", "failed_common_dl_pdcch", "failed_common_ul_pdcch")
+# Cell metrics of the failed DL and UL PDCCH allocations, of which those of common search spaces are a part, and of
+# builds before June 2026 the one of both.
+_FAILED_PDCCH_KEYS = ("failed_dl_pdcch", "failed_ul_pdcch")
+_FAILED_PDCCH_OLD_KEY = "nof_failed_pdcch_allocs"
 
 
 @dataclass
@@ -33,7 +35,7 @@ class MetricsRollup:
     max_latency_us: float = 0.0
     late_dl_harqs: int = 0
     late_ul_harqs: int = 0
-    # Failed DL and UL PDCCH allocations, of UEs and of common channels.
+    # Failed DL and UL PDCCH allocations.
     failed_pdcch: int = 0
     failed_uci: int = 0
     # Error indications.
@@ -79,7 +81,10 @@ def rollup(records: Iterable[Any]) -> MetricsRollup:
             cm = cell.get("cell_metrics", {})
             out.late_dl_harqs += cm.get("late_dl_harqs", 0) or 0
             out.late_ul_harqs += cm.get("late_ul_harqs", 0) or 0
-            out.failed_pdcch += sum(cm.get(k, 0) or 0 for k in _FAILED_PDCCH_KEYS)
+            if any(k in cm for k in _FAILED_PDCCH_KEYS):
+                out.failed_pdcch += sum(cm.get(k, 0) or 0 for k in _FAILED_PDCCH_KEYS)
+            else:
+                out.failed_pdcch += cm.get(_FAILED_PDCCH_OLD_KEY, 0) or 0
             out.failed_uci += cm.get("nof_failed_uci_allocs", 0) or 0
             out.errors += cm.get("error_indication_count", 0) or 0
             out.msg3_ok += cm.get("msg3_nof_ok", 0) or 0
