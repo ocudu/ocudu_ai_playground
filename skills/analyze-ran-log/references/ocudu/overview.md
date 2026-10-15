@@ -20,19 +20,19 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_summary.py <run-dir>
 
 Emits, in one pass:
 
-- Build info (commit, branch, build mode) and binary identity.
-- Cell config(s) — pci, band, BW, ARFCN, dl/ul freq, antennas.
-- AMF endpoint and NG setup outcome (`success` / `failure (cause=...)`).
-- Run start/end time and duration.
-- Enabled log layers (derived from `ocudu_gnb.yml` overrides).
-- Procedure counts: UE creations/releases, RRC reconfigurations, handovers
-  (`reconfigurationWithSync` body present), reestablishments, PRACH attempts,
-  PHY CRC failures, bearer setups/releases.
-- Aggregate scheduler metrics (peak DL/UL bitrate, max latency, late HARQs,
-  failed PDCCH/UCI counts).
-- Shutdown disposition: clean (`Workers stopped successfully`) vs abnormal.
-- Anomalies: warnings/errors in `gnb.log`, NGAP failures, msg3 NACKs, late HARQs
-  > 0, RRC release without a prior `UEContextReleaseCommand`.
+- Build: commit and branch of the log, and the stdout banner commit when it differs.
+- Configuration, from the config file or else the log echo: node type and planes, gnb_id, cell (pci, band, BW, SCS,
+  ARFCN, antennas), duplex (unknown without either), AMF endpoint, log levels, enabled pcaps.
+- Run lifecycle: first and last log time, duration, AMF SCTP connection, NG setup outcome, clean shutdown.
+- Cells and UEs: cells created, UE creations, Initial Context Setups completed, releases.
+- Procedure counts: RRC reconfigurations, handovers (`reconfigurationWithSync` in RRC bodies), NGAP handover messages,
+  reestablishments, bearer setups/modifications/releases, PRACHs, PHY CRC failures, with a note when the logging
+  levels make them unreliable.
+- Scheduler metrics: from `metrics.json` when present (peak DL/UL bitrate per UE, max latency, late HARQs, failed
+  PDCCH/UCI allocations, error indications, Msg3 outcomes, events), else the METRICS line count and last row.
+- Anomalies: abnormal exit, NG setup failure or no response, reestablishments, incomplete Initial Context Setups,
+  high CRC failures, Msg3 failures, error and warning line totals with the first of each, late HARQs, failed PDCCH
+  allocations, error indications, fewer releases than creations at a clean shutdown.
 
 If the script is absent or fails, fall back to the grep recipes in
 `reference/log-format.md` § Key grep recipes to collect the same info manually.
