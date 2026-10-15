@@ -84,6 +84,15 @@ class AdhocTest(unittest.TestCase):
         rows = adhoc.scan_lines(str(self.path), 0, self.path.stat().st_size, 1, adhoc.Spec(None, filter="tbs="))
         self.assertEqual([(t, line) for t, line, *_ in rows], expected)
 
+    def test_empty_ranges_and_empty_matches(self):
+        self.path.write_text("")
+        self.assertEqual(self.scan(adhoc.Spec("tbs"))["rows"], [])
+        self.assertEqual(adhoc.scan_lines(str(self.path), 0, 0, 1, adhoc.Spec(None, filter="tbs")), [])
+        self.path.write_text(LOG)
+        # A filter matching empty gives each line once, none past the end.
+        rows = adhoc.scan_lines(str(self.path), 0, self.path.stat().st_size, 1, adhoc.Spec(None, filter="^"))
+        self.assertEqual([line for _, line, *_ in rows], [1, 2, 3, 4, 5, 6])
+
     def test_invalid_specs(self):
         for kwargs in ({"key": "a b"}, {"key": "tbs", "filter": "(("}, {"key": "tbs", "split_key": "u e"},
                        {"key": None}, {"key": None, "filter": "x", "split_key": "ue"}):

@@ -88,6 +88,9 @@ def scan(path: str, start: int, end: int, first_line: int, spec: Spec) -> dict:
     keep = re.compile(spec.filter, re.IGNORECASE) if spec.filter else None
     rows: list[tuple] = []
     unit: str | None = None
+    # An empty file, of range (0, 0), cannot be mapped.
+    if end <= start:
+        return {"rows": rows, "unit": unit}
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
         times = _EntryTimes(mm, start)
         line_no, counted_to = first_line, start
@@ -129,13 +132,16 @@ def scan_lines(path: str, start: int, end: int, first_line: int, spec: Spec) -> 
     """
     pattern = re.compile(spec.filter.encode(), re.IGNORECASE | re.MULTILINE)
     rows: list[tuple] = []
+    if end <= start:
+        return rows
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
         times = _EntryTimes(mm, start)
         line_no, counted_to, last_start = first_line, start, -1
         for m in pattern.finditer(mm, start, end):
             newline = mm.rfind(b"\n", start, m.start())
             line_start = newline + 1 if newline != -1 else start
-            if line_start == last_start:
+            # A filter that matches empty, e.g. "^", matches at the end too, where the next range starts.
+            if line_start == last_start or line_start >= end:
                 continue
             last_start = line_start
             line_no += count_newlines(mm, counted_to, line_start)
