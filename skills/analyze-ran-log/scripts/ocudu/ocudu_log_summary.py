@@ -254,6 +254,8 @@ def summarize(path_str: str) -> None:
     if met["records"]:
         print("=== Scheduler Metrics (from metrics.json) ===")
         print(f"  Records             : {met['records']}")
+        if not met["cell_records"]:
+            print("  (no record has OCUDU scheduler cell metrics; the file may be of another format, e.g. srsRAN)")
         print(f"  Peak DL bitrate/UE  : {met['peak_dl_brate']/1e6:.2f} Mbps")
         print(f"  Peak UL bitrate/UE  : {met['peak_ul_brate']/1e6:.2f} Mbps")
         print(f"  Max latency         : {met['max_latency_us']} us")

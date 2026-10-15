@@ -16,17 +16,24 @@ from pathlib import Path
 from typing import Any
 
 
+# Cell metrics of the failed PDCCH allocations.
+_FAILED_PDCCH_KEYS = ("failed_dl_pdcch", "failed_ul_pdcch", "failed_common_dl_pdcch", "failed_common_ul_pdcch")
+
+
 @dataclass
 class MetricsRollup:
     """Rollup of the cell metrics of the records of a metrics.json."""
 
     records: int = 0
+    # Records with scheduler cell metrics, none for a metrics.json of another format, e.g. of srsRAN.
+    cell_records: int = 0
     # Highest bitrate of any UE in any record, in bps.
     peak_dl_brate: float = 0.0
     peak_ul_brate: float = 0.0
     max_latency_us: float = 0.0
     late_dl_harqs: int = 0
     late_ul_harqs: int = 0
+    # Failed DL and UL PDCCH allocations, of UEs and of common channels.
     failed_pdcch: int = 0
     failed_uci: int = 0
     # Error indications.
@@ -66,11 +73,13 @@ def rollup(records: Iterable[Any]) -> MetricsRollup:
     out = MetricsRollup()
     for obj in records:
         out.records += 1
-        for cell in obj.get("cells") or []:
+        cells = obj.get("cells") or []
+        out.cell_records += bool(cells)
+        for cell in cells:
             cm = cell.get("cell_metrics", {})
             out.late_dl_harqs += cm.get("late_dl_harqs", 0) or 0
             out.late_ul_harqs += cm.get("late_ul_harqs", 0) or 0
-            out.failed_pdcch += cm.get("nof_failed_pdcch_allocs", 0) or 0
+            out.failed_pdcch += sum(cm.get(k, 0) or 0 for k in _FAILED_PDCCH_KEYS)
             out.failed_uci += cm.get("nof_failed_uci_allocs", 0) or 0
             out.errors += cm.get("error_indication_count", 0) or 0
             out.msg3_ok += cm.get("msg3_nof_ok", 0) or 0

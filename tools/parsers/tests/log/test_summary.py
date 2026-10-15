@@ -100,7 +100,8 @@ class SummaryTest(unittest.TestCase):
 
     def test_metrics_json(self):
         records = [
-            {"cells": [{"cell_metrics": {"late_dl_harqs": 1, "msg3_nof_ok": 2, "max_latency": 40},
+            {"cells": [{"cell_metrics": {"late_dl_harqs": 1, "msg3_nof_ok": 2, "max_latency": 40, "failed_dl_pdcch": 1,
+                                         "failed_common_ul_pdcch": 2},
                         "ue_list": [{"dl_brate": 1e6, "ul_brate": 2e5}], "event_list": [{"event_type": "ue_create"}]}]},
             {"cells": [{"cell_metrics": {"late_dl_harqs": 2, "msg3_nof_nok": 1, "max_latency": 30},
                         "ue_list": [{"dl_brate": 3e6, "ul_brate": None}]}]},
@@ -108,6 +109,9 @@ class SummaryTest(unittest.TestCase):
         r = metrics_json.rollup(records)
         self.assertEqual((r.records, r.late_dl_harqs, r.msg3_ok, r.msg3_nok, r.max_latency_us), (2, 3, 2, 1, 40))
         self.assertEqual((r.peak_dl_brate, r.peak_ul_brate, dict(r.event_counts)), (3e6, 2e5, {"ue_create": 1}))
+        self.assertEqual((r.failed_pdcch, r.cell_records), (3, 2))
+        # Records of another format, e.g. of srsRAN, have no cell metrics to roll up.
+        self.assertEqual(metrics_json.rollup([{"cell_metrics": {}, "ue_container": []}]).cell_records, 0)
         with tempfile.TemporaryDirectory() as d:
             path = Path(d) / "metrics.json"
             path.write_text(json.dumps(records))
