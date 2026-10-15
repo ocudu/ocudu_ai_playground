@@ -179,7 +179,9 @@ def allocations(slot_event: dict[str, Any], cell: Cell) -> list[dict[str, Any]]:
 
 
 def _add_prach(add: Callable[..., None], index: int, prach: dict[str, Any], cell: Cell) -> None:
-    """Adds the occasions of a Prach of a slot decision, one rectangle per time and frequency occasion."""
+    """Adds the occasions of a Prach of a slot decision, one rectangle per time occasion of its frequency occasion. OCUDU
+    writes one Prach per frequency occasion, index_fd_ra, of the nof_fd_ra (msg1-FDM) of the cell.
+    """
     if cell.prach is None or prach["format"] >= len(PRACH_FORMATS):
         return
     fmt = PRACH_FORMATS[prach["format"]]
@@ -198,10 +200,10 @@ def _add_prach(add: Callable[..., None], index: int, prach: dict[str, Any], cell
     if nof_rbs is None:
         return
     first = cell.ul_bwp["crb_start"] + cell.prach["frequency_start"]
-    for fd in range(prach["index_fd_ra"], prach["index_fd_ra"] + prach["nof_fd_ra"]):
-        for t, (sym_start, sym_length) in enumerate(times):
-            info = {"item": ["prachs", index], "format": fmt, "occasion": t, "fd_ra": fd}
-            add("UL", "PRACH", sym_start, sym_length, [(first + fd * nof_rbs, nof_rbs)], info)
+    fd = prach["index_fd_ra"]
+    for t, (sym_start, sym_length) in enumerate(times):
+        info = {"item": ["prachs", index], "format": fmt, "occasion": t, "fd_ra": fd}
+        add("UL", "PRACH", sym_start, sym_length, [(first + fd * nof_rbs, nof_rbs)], info)
 
 
 def pdcch_crbs(coreset: dict[str, Any], cce: int, nof_cces: int) -> list[tuple[int, int]]:
