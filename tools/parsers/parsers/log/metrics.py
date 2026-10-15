@@ -42,8 +42,6 @@ LAYER_PATTERNS = {
     "pdcp": re.compile(r"^PDCP Metrics:"),
     "nrup": re.compile(r"^NRUP Metrics:"),
     "e1ap": re.compile(r"^CU-UP E1AP metrics:"),
-    "cu_cp_rrc": re.compile(r"^CU-CP RRC metrics:"),
-    "cu_cp_ngap": re.compile(r"^CU-CP NGAP metrics:"),
     "exec": re.compile(r'^Executor metrics\s+"(?P<executor>[^"]+)"[^:]*:'),
     "resource_usage": re.compile(r"^App resource usage:"),
     "buffer_pool": re.compile(r"^Buffer pool:"),

@@ -190,16 +190,15 @@ class MetricsParserTest(unittest.TestCase):
         self.assertEqual(rec["rx_sdu_rate"], 900_000)
         self.assertEqual(rec["rx_num_dds"], 3)
 
-    def test_cu_cp(self):
-        rrc = self.parser.parse("2026-10-01T22:47:12.721144 [METRICS ] CU-CP RRC metrics: [ gnb_du_id=0 "
-                                "mean_nof_rrc_connections=2 attempted_rrc_connection_establishments=[ emergency=0 mo_sig=3 ] ]")
-        self.assertEqual((rrc["layer"], rrc["mean_nof_rrc_connections"], rrc["attempted_rrc_connection_establishments_mo_sig"]),
-                         ("cu_cp_rrc", 2, 3))
-        ngap = self.parser.parse("2026-10-01T22:47:10.720314 [METRICS ] CU-CP NGAP metrics: [ amf_name=amf.5gc connected=true "
-                                 "supported_plmns=[ 00101, ] nof_cn_initiated_paging_requests=0 ], nof_handover_preparations_requested=1")
-        # A PLMN keeps its leading zeros.
-        self.assertEqual((ngap["layer"], ngap["supported_plmns"], ngap["nof_handover_preparations_requested"]),
-                         ("cu_cp_ngap", ["00101"], 1))
+    def test_cu_cp_lines_are_not_parsed(self):
+        # One block per DU, which a flat record cannot keep.
+        line = ("2026-09-29T21:32:08.897270 [METRICS ] CU-CP RRC metrics: [ gnb_du_id=0 mean_nof_rrc_connections=8 ],"
+                "[ gnb_du_id=1 mean_nof_rrc_connections=2 ], nof_handover_executions_requested=0")
+        self.assertIsNone(self.parser.parse(line))
+
+    def test_ids_with_leading_zeros_stay_text(self):
+        self.assertEqual(metrics.parse_number("00101"), "00101")
+        self.assertEqual((metrics.parse_number("0"), metrics.parse_number("10")), (0, 10))
 
     def test_si_prefixes(self):
         fields = metrics.extract_metric_fields("a=1fs b=2E")
