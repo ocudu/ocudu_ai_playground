@@ -55,6 +55,10 @@ class SummaryTest(unittest.TestCase):
         self.assertEqual((len(s.init_ctx_done), len(s.ue_releases)), (1, 1))
         self.assertEqual((s.rrc_reconfigs, s.prach_events, s.crc_fails, s.bearer_setups), (1, 1, 1, 1))
         self.assertEqual((s.benign_warning_count, [w[1] for w in s.warnings], [e[1] for e in s.errors]), (1, ["SCHED"], ["PHY"]))
+        self.assertEqual((s.warning_count, s.error_count), (1, 1))
+        # The lines kept are the first ones, the counts of all of them.
+        many = summary.summarize([f"2026-07-27T15:45:02.{i:06d} [PHY     ] [E] [  12.4] crc=KO\n" for i in range(60)])
+        self.assertEqual((len(many.errors), many.error_count), (summary.MAX_KEPT_LINES, 60))
         self.assertEqual((s.ues_seen, s.rntis_seen, s.pcis_seen), (["0"], ["4601"], [1]))
         self.assertEqual(len(s.rrc_msgs), 2)
         self.assertEqual((s.metrics_rows, s.clean_shutdown, s.shutdown_signal_ts), (1, True, "2026-07-27T15:45:05.000000"))

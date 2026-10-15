@@ -71,10 +71,13 @@ class LogSummary:
     prach_events: int = 0
     # PHY CRC failures (crc=KO).
     crc_fails: int = 0
-    # (time, logger, message) of the first non-benign warnings and of the first errors.
+    # (time, logger, message) of the first non-benign warnings and of the first errors, MAX_KEPT_LINES at most, and the
+    # numbers of all of them.
     warnings: list[tuple[str, str, str]] = field(default_factory=list)
+    warning_count: int = 0
     benign_warning_count: int = 0
     errors: list[tuple[str, str, str]] = field(default_factory=list)
+    error_count: int = 0
     # UE indexes, RNTIs and PCIs seen, sorted.
     ues_seen: list[str] = field(default_factory=list)
     rntis_seen: list[str] = field(default_factory=list)
@@ -131,13 +134,16 @@ def summarize(lines: Iterable[str]) -> LogSummary:
         out.last_ts = ts
 
         if lvl == "E":
+            out.error_count += 1
             if len(out.errors) < MAX_KEPT_LINES:
                 out.errors.append((ts, layer, msg.strip()))
         elif lvl == "W":
             if is_benign_warning(msg):
                 out.benign_warning_count += 1
-            elif len(out.warnings) < MAX_KEPT_LINES:
-                out.warnings.append((ts, layer, msg.strip()))
+            else:
+                out.warning_count += 1
+                if len(out.warnings) < MAX_KEPT_LINES:
+                    out.warnings.append((ts, layer, msg.strip()))
 
         if layer == "GNB" and "Built in" in msg and (bm := _BUILD_RE.search(msg)):
             out.build_commit, out.build_branch = bm.group(1), bm.group(2)

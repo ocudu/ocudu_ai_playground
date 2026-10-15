@@ -303,11 +303,11 @@ def summarize(path_str: str) -> None:
         anomalies.append(f"Msg3 RACH failures: {met['msg3_nok']}/{total} "
                          f"(contention or coverage)")
     if log["errors"]:
-        anomalies.append(f"Error-level log lines: {len(log['errors'])}"
+        anomalies.append(f"Error-level log lines: {log['error_count']}"
                          f" (first: [{log['errors'][0][1]}] {log['errors'][0][2][:80]})")
     if log["warnings"]:
         anomalies.append(
-            f"Warning-level log lines: {len(log['warnings'])}"
+            f"Warning-level log lines: {log['warning_count']}"
             f" (first: [{log['warnings'][0][1]}] {log['warnings'][0][2][:80]})"
         )
     if met["late_dl_harqs"] or met["late_ul_harqs"]:
