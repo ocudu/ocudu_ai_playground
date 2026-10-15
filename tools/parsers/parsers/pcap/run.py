@@ -13,14 +13,16 @@ from .tshark import Tshark, TsharkError
 
 PROTOCOLS = ("mac", "rlc", "f1ap", "e1ap", "ngap")
 PCAP_NAMES = tuple(f"{proto}.pcap" for proto in PROTOCOLS)
+# Prefixes of the pcap names of OCUDU applications, e.g. gnb_f1ap.pcap, preferred over those of other tools.
+OCUDU_PREFIXES = ("gnb", "du", "cu", "cu_cp", "cu_up")
 # Dissectors of the pcaps, one of which tshark binds on the first frame of each.
 KNOWN_DISSECTORS = ("ngap", "f1ap", "e1ap", "mac-nr", "rlc-nr")
 
 
 def pcap_proto(path: str | os.PathLike[str]) -> str | None:
-    """Protocol of a pcap by its file name, <proto>.pcap or with a prefix, e.g. gnb_f1ap.pcap, or None."""
+    """Protocol of a pcap by its file name, <proto>.pcap or .pcapng, or with a prefix, e.g. gnb_f1ap.pcap, or None."""
     p = Path(path)
-    if p.suffix != ".pcap":
+    if p.suffix not in (".pcap", ".pcapng"):
         return None
     for proto in PROTOCOLS:
         if p.stem == proto or p.stem.endswith((f"_{proto}", f"-{proto}")):
@@ -30,17 +32,24 @@ def pcap_proto(path: str | os.PathLike[str]) -> str | None:
 
 def find_pcaps(run_dir: str | os.PathLike[str]) -> dict[str, Path | None]:
     """The pcaps of a run directory by protocol, e.g. "mac", None for the missing ones. Of several pcaps of a protocol,
-    <proto>.pcap, else the first by name.
+    <proto>.pcap, else one of an OCUDU prefix, else the first by name.
     """
     p = Path(run_dir)
     if not p.is_dir():
         raise FileNotFoundError(f"not a directory: {p}")
     out: dict[str, Path | None] = dict.fromkeys(PROTOCOLS)
-    for full in sorted(p.glob("*.pcap"), key=lambda f: (f.stem not in PROTOCOLS, f.name)):
+    for full in sorted(p.glob("*.pcap*"), key=_preference):
         proto = pcap_proto(full)
         if proto is not None and out[proto] is None and full.is_file():
             out[proto] = full
     return out
+
+
+def _preference(path: Path) -> tuple[int, str]:
+    if path.stem in PROTOCOLS:
+        return 0, path.name
+    prefix = path.stem.rpartition("_")[0] or path.stem.rpartition("-")[0]
+    return (1 if prefix in OCUDU_PREFIXES else 2), path.name
 
 
 def is_run_dir(path: str | os.PathLike[str]) -> bool:

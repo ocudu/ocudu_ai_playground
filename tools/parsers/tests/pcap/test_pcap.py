@@ -113,6 +113,16 @@ class UeIdsTest(unittest.TestCase):
         ues = ngap.ue_ids(FakeTshark(rows), "ngap.pcap")
         self.assertEqual([(u["ran_ue_ngap_id"], u["amf_ue_ngap_id"]) for u in ues], [("1", "9")])
 
+    def test_ngap_procedures_by_ran_ue_id(self):
+        rows = [
+            ["1", "10.0", "21", "", "", "", ""],
+            ["2", "11.0", "15", "1", "", "", ""],
+            # Several values of an id field, of which the first is the UE's own.
+            ["3", "12.0", "14", "1,4", "7", "", ""],
+        ]
+        by_ue = ngap.procedures(FakeTshark(rows), "ngap.pcap")
+        self.assertEqual({ue: [m["frame"] for m in msgs] for ue, msgs in by_ue.items()}, {"(no-ran-ue-id)": [1], "1": [2, 3]})
+
     def test_e1ap_ue_ids_names(self):
         ues = e1ap.ue_ids(FakeTshark([["5", "1.5", "8", "3", "9"]]), "e1ap.pcap")
         self.assertEqual(ues[0]["e1_cp_ue_id"], "3")
@@ -160,7 +170,14 @@ class RunDirTest(unittest.TestCase):
         # The unprefixed name wins over a prefixed one.
         self.assertEqual((pcaps["f1ap"].name, pcaps["ngap"].name, pcaps["mac"]), ("gnb_f1ap.pcap", "ngap.pcap", None))
         self.assertTrue(run.is_run_dir(self.dir))
-        self.assertEqual([run.pcap_proto(n) for n in ("du-e1ap.pcap", "f1ap.pcapng", "snap.pcap")], ["e1ap", None, None])
+        self.assertEqual([run.pcap_proto(n) for n in ("du-e1ap.pcap", "f1ap.pcapng", "snap.pcap", "f1ap.txt")],
+                         ["e1ap", "f1ap", None, None])
+
+    def test_ocudu_pcaps_are_preferred(self):
+        for name in ("amarisoft_mac.pcap", "gnb_mac.pcap", "ue-rlc.pcap", "du_rlc.pcapng"):
+            (self.dir / name).write_bytes(b"x")
+        pcaps = run.find_pcaps(self.dir)
+        self.assertEqual((pcaps["mac"].name, pcaps["rlc"].name), ("gnb_mac.pcap", "du_rlc.pcapng"))
 
     def test_check_empty_pcap(self):
         (self.dir / "mac.pcap").write_bytes(b"")

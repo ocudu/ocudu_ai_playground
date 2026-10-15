@@ -25,6 +25,9 @@ class NasTest(unittest.TestCase):
         self.assertEqual(nas.nas_name("0x67", "0xc7"), "PDUSessionAuthenticationResult")
         self.assertEqual(nas.nas_name("0x7f", None), "5GMM(0x7f)")
         self.assertIsNone(nas.nas_name("", ""))
+        # A frame of two NAS messages, e.g. an RRCReconfiguration with two dedicatedNAS-Messages.
+        self.assertEqual(nas.nas_name("0x68,0x68", "0xc2,0xcb"), "PDUSessionEstablishmentAccept,PDUSessionModificationCommand")
+        self.assertEqual(nas.nas_name("0x54,0x54", ""), "ConfigurationUpdateCommand")
 
 
 class RrcTest(unittest.TestCase):

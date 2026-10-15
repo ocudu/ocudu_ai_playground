@@ -11,7 +11,7 @@ from typing import Any
 
 from ._ues import ue_ids_by_key
 from .tshark import Tshark
-from .values import epoch_to_iso
+from .values import epoch_to_iso, first
 
 PROCEDURE_FIELDS = [
     "frame.number",
@@ -49,6 +49,7 @@ def procedures(
     for frame, epoch, code, ran_id, amf_id, unsucc, cause in tshark.iter_fields(
         pcap, PROCEDURE_FIELDS, display_filter=display_filter, tag=tag
     ):
+        ran_id, amf_id = first(ran_id), first(amf_id)
         by_ue[ran_id or "(no-ran-ue-id)"].append({
             "frame": int(frame) if frame else None,
             "epoch": float(epoch) if epoch else None,
