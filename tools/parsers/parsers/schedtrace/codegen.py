@@ -111,11 +111,11 @@ def _union_vector(buf, types_at, values_at, members):
 
 
 def source_hash() -> str:
-    """Hash of the sources of the generated decoder: the schemas of fbs/ and this file, without their license headers,
-    which the header annotator rewrites.
+    """Hash of the sources of the generated decoder: the schemas of fbs/, this file and the schema parser, without their
+    license headers, which the header annotator rewrites.
     """
     h = hashlib.sha256()
-    for path in [*sorted(FBS_DIR.glob("*.fbs")), Path(__file__)]:
+    for path in [*sorted(FBS_DIR.glob("*.fbs")), Path(__file__), Path(fbs.__file__)]:
         h.update(path.name.encode() + b"\0")
         for line in path.read_text().splitlines():
             if "SPDX-" not in line:
