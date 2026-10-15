@@ -15,12 +15,15 @@ RRC_MESSAGE_TYPES = [
     "rrcReconfiguration", "rrcResume", "rrcRelease", "rrcReestablishment",
     "securityModeCommand", "dlInformationTransfer", "ueCapabilityEnquiry",
     "counterCheck", "mobilityFromNRCommand", "ueInformationRequest_r16", "dlDedicatedMessageSegment_r16",
+    "dlInformationTransferMRDC_r16", "loggedMeasurementConfiguration_r16",
     # UL-DCCH.
     "measurementReport", "rrcReconfigurationComplete", "rrcSetupComplete",
     "rrcReestablishmentComplete", "rrcResumeComplete", "securityModeComplete",
     "securityModeFailure", "ulInformationTransfer", "ueCapabilityInformation",
     "counterCheckResponse", "ueAssistanceInformation", "failureInformation", "ueInformationResponse_r16",
     "ulDedicatedMessageSegment_r16", "mcgFailureInformation_r16", "locationMeasurementIndication",
+    "scgFailureInformation", "scgFailureInformationEUTRA", "ulInformationTransferMRDC", "dedicatedSIBRequest_r16",
+    "iabOtherInformation_r16", "ulInformationTransferIRAT_r16", "sidelinkUEInformationNR_r16",
 ]
 # Size of the UL-CCCH1 messages, of 64 bits, whose only one is rrcResumeRequest1; UL-CCCH ones are of 48 bits.
 _UL_CCCH1_BYTES = 8
