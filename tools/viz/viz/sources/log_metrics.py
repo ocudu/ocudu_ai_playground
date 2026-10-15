@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import functools
+import hashlib
 import itertools
 import logging
 import re
@@ -13,8 +15,9 @@ from importlib import metadata
 from pathlib import Path
 from typing import Any
 
+import parsers
 from parsers.log import chunks, config, events, metrics, preamble
-from parsers.log.run import log_run
+from parsers.log.run import last_time, log_run
 
 from .. import parallel
 from .base import DatasetWriter, EventWriter, ProgressFn, RunIdentity, column_type, column_value
@@ -46,19 +49,6 @@ _EVENT_LEVEL_OPTIONS = {
     "cu": "handover",
     "ngap": "handover preparation",
 }
-# Bytes read from the end of the log to find its last timestamp.
-_TAIL_SIZE = 64 << 10
-
-
-def _last_timestamp(path: Path) -> float | None:
-    with path.open("rb") as f:
-        f.seek(max(0, path.stat().st_size - _TAIL_SIZE))
-        lines = f.read().decode("utf-8", "replace").splitlines()
-    for line in reversed(lines):
-        m = preamble.match_preamble(line)
-        if m and (t := preamble.to_epoch(m.group("timestamp"))) is not None:
-            return t
-    return None
 
 
 def _event_notes(path: Path) -> list[str]:
@@ -82,15 +72,16 @@ def _event_notes(path: Path) -> list[str]:
 def _parse_metrics_chunk(path: str, start: int, end: int, first_line: int) -> dict[str, Any]:
     """Parses the metrics of the byte range [start, end) of a log, which starts at line first_line.
 
-    Returns the record offsets, the first timestamp, the units seen and, per layer, the rows grouped by their field
-    names in order of first appearance: each group with the column types of each field and the rows as tuples of
-    time, line number and column values, ready to store.
+    Returns the record offsets, the first timestamp, the units seen, the warnings about units and, per layer, the rows
+    grouped by their field names in order of first appearance: each group with the column types of each field and the
+    rows as tuples of time, line number and column values, ready to store.
     """
-    result: dict[str, Any] = {"offsets": [], "first_t": None, "units": {}, "layers": {}}
+    result: dict[str, Any] = {"offsets": [], "first_t": None, "units": {}, "warnings": {}, "layers": {}}
     if end <= start:
         return result
     lines = chunks.read_lines(path, start, end)
-    parser = metrics.MetricsParser()
+    # Warnings are returned, to be logged once across chunks.
+    parser = metrics.MetricsParser(log_warnings=False)
     # Per layer, the groups of rows by field names: the field names, the column types of each field and the rows.
     layers: dict[str, dict[tuple, tuple[tuple, dict[str, set[str]], list[tuple]]]] = {}
     first_t = None
@@ -125,6 +116,7 @@ def _parse_metrics_chunk(path: str, start: int, end: int, first_line: int) -> di
 
     result["first_t"] = first_t
     result["units"] = parser.units
+    result["warnings"] = parser.warnings
     result["layers"] = {layer: list(groups.values()) for layer, groups in layers.items()}
     return result
 
@@ -192,11 +184,18 @@ def _chunk_ranges(path: Path) -> list[tuple[int, int]]:
     return chunks.chunk_ranges(path, nof_chunks)
 
 
+@functools.lru_cache(maxsize=1)
 def _parsers_version() -> str:
+    """Version of the parsers package, with a hash of its sources, since its version number is not bumped on changes."""
     try:
-        return metadata.version("ocudu-parsers")
+        version = metadata.version("ocudu-parsers")
     except metadata.PackageNotFoundError:
-        return "unknown"
+        version = "unknown"
+    h = hashlib.sha256()
+    root = Path(parsers.__file__).parent
+    for path in sorted(root.rglob("*.py")):
+        h.update(str(path.relative_to(root)).encode() + b"\0" + path.read_bytes())
+    return f"{version}-{h.hexdigest()[:12]}"
 
 
 class LogMetricsSource:
@@ -237,6 +236,10 @@ class LogMetricsSource:
             for layer, groups in res["layers"].items():
                 for fields, types, rows in groups:
                     writer.add_rows(layer, fields, types, rows)
+            for key, msg in res["warnings"].items():
+                if key not in warned:
+                    warned.add(key)
+                    logger.warning(msg)
             for layer, chunk_units in res["units"].items():
                 for field, unit in chunk_units.items():
                     known = all_units[layer].setdefault(field, unit)
@@ -248,7 +251,7 @@ class LogMetricsSource:
             if progress:
                 progress(end, total)
 
-        last_t = _last_timestamp(path)
+        last_t = last_time(path)
         if first_t is not None and last_t is not None:
             writer.set_time_range(first_t, last_t)
         for layer, units in all_units.items():

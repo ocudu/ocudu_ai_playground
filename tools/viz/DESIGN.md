@@ -95,7 +95,8 @@ the bundled packages to `THIRD-PARTY-LICENSES.txt`, served with the frontend.
   parameterized SQL, never passed through as SQL.
 - Cache location: a per-user directory (mode 0700) under the system temp dir of the host (honours
   `$TMPDIR`), e.g. `/tmp/ocudu-viz-<uid>/`, mounted into the container at the same path. Cleared on reboot.
-- Cache key: source path, size and mtime, plus the parser version. Stale caches are rebuilt.
+- Cache key: source path, size and mtime, plus the parser version, which holds a hash of the sources of the parsers
+  package, since its version number is not bumped on changes. Stale caches are rebuilt.
 - Size cap (default 2 GB), evicting the least recently used caches.
 - Flags: `--cache-dir DIR` (persistent location), `--no-cache` (in-memory database), `--clear-cache`.
 - Live tail (F10) appends rows to the source database.

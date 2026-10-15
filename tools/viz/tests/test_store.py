@@ -6,6 +6,7 @@ import unittest
 from unittest import mock
 from pathlib import Path
 
+from viz.sources import log_metrics
 from viz.sources.log_metrics import LogMetricsSource
 from viz import store as store_module
 from viz.store import QueryError, StoreCache
@@ -377,6 +378,16 @@ class StoreCacheTest(unittest.TestCase):
         store = cache.open(self.log, LogMetricsSource())
         self.assertEqual(len(store.series("mac", "nof_slots")["series"][0]["v"]), 10)
         self.assertFalse((self.dir / "cache").exists())
+
+
+class MetricsChunkTest(unittest.TestCase):
+    def test_unit_warnings_are_returned(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "gnb.log"
+            path.write_text("2026-06-29T14:10:11.000000 [METRICS ] Scheduler cell pci=1 metrics: foo=3dB\n")
+            with self.assertNoLogs("parsers", "WARNING"):
+                res = log_metrics._parse_metrics_chunk(str(path), 0, path.stat().st_size, 1)
+        self.assertEqual(list(res["warnings"]), [("sched", "foo")])
 
 
 if __name__ == "__main__":
