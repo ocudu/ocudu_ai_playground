@@ -33,8 +33,9 @@ MESSAGE_FIELDS = [
     "f1ap.C_RNTI",
     "f1ap.SRBID",
     "f1ap.RRCContainer",
-    "nas-5gs.mm.message_type",
-    "nas-5gs.sm.message_type",
+    # The names before tshark 4.2, which later builds keep as aliases of nas-5gs.*.
+    "nas_5gs.mm.message_type",
+    "nas_5gs.sm.message_type",
 ]
 
 # Procedures carrying an RRC container, and the downlink ones among them.
@@ -125,7 +126,7 @@ def carried(row: dict[str, str], rrc_types: list[str]) -> dict[str, str | None]:
     }
     return {
         "rrc": resolve_rrc(detail),
-        "nas": nas_name(row["nas-5gs.mm.message_type"], row["nas-5gs.sm.message_type"]),
+        "nas": nas_name(row["nas_5gs.mm.message_type"], row["nas_5gs.sm.message_type"]),
         "crnti": row["f1ap.C_RNTI"] or None,
     }
 
