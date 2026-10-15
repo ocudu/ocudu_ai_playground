@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from collections import Counter
 from pathlib import Path
@@ -34,7 +35,9 @@ PROTO_FIELDS: dict[str, dict[str, Any]] = {
         "ue": [("cp", "e1ap.GNB_CU_CP_UE_E1AP_ID"), ("up", "e1ap.GNB_CU_UP_UE_E1AP_ID")],
         "failure_filter": "e1ap.unsuccessfulOutcome_element",
     },
-    "mac": {"proc": [], "ue": [("rnti", "mac-nr.rnti")], "failure_filter": None},
+    # Only C-RNTIs are of UEs, not the SI-, P- and RA-RNTIs of common channels.
+    "mac": {"proc": [], "ue": [("rnti", "mac-nr.rnti")], "failure_filter": None,
+            "ue_type": ("mac-nr.rnti-type", {"3"})},
     "rlc": {"proc": [], "ue": [("ueid", "rlc-nr.ueid")], "failure_filter": None},
 }
 
@@ -52,8 +55,12 @@ def summarise(tshark: Tshark, pcap: Path, *, top: int = 5) -> dict[str, Any]:
     fields = ["frame.time_epoch"]
     if spec:
         fields += spec["proc"] + [f for _, f in spec["ue"]]
+        if "ue_type" in spec:
+            fields.append(spec["ue_type"][0])
 
-    rows = list(tshark.iter_fields(pcap, fields, tag=f"overview-{proto}-v3"))
+    # The fields are part of the tag, since they depend on the protocol and this code.
+    tag = f"overview-{proto}-" + hashlib.sha256("\0".join(fields).encode()).hexdigest()[:16]
+    rows = list(tshark.iter_fields(pcap, fields, tag=tag))
     out["packets"] = len(rows)
     if not rows:
         out["empty"] = True
@@ -73,7 +80,10 @@ def summarise(tshark: Tshark, pcap: Path, *, top: int = 5) -> dict[str, Any]:
         ue_start = 1 + len(spec["proc"])
         # Per label, so that one NGAP UE with both a RAN and an AMF identifier does not count as two.
         per_label: dict[str, set[str]] = {label: set() for label, _ in spec["ue"]}
+        ue_types = spec["ue_type"][1] if "ue_type" in spec else None
         for r in rows:
+            if ue_types is not None and r[-1] not in ue_types:
+                continue
             for (label, _), val in zip(spec["ue"], r[ue_start:ue_start + len(spec["ue"])]):
                 if val := first(val):
                     per_label[label].add(val)

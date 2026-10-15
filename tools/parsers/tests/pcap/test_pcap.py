@@ -144,6 +144,15 @@ class FramesWithoutTsharkTest(unittest.TestCase):
             self.assertIsNone(frames.time_span(f.name))
 
 
+class TimelineTest(unittest.TestCase):
+    def test_ue_filter_of_mac_rntis(self):
+        mac = {"file": "mac", "ue_ids": ["0x4601"], "summary": "rnti=0x4601 dir=DL"}
+        f1 = {"file": "f1ap", "ue_ids": ["17921"], "summary": "procCode=11"}
+        self.assertEqual([timeline._has_ue(mac, ue) for ue in ("0x4601", "17921", "17922")], [True, True, False])
+        # Protocol ids are matched as they are, not as RNTIs.
+        self.assertEqual([timeline._has_ue(f1, ue) for ue in ("17921", "0x4601")], [True, False])
+
+
 class RunDirTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -226,10 +235,19 @@ class F1apPcapTest(unittest.TestCase):
         pcap = Path(self.tmp.name) / "f1ap.pcap"
         data = F1AP_PCAP.read_bytes()
         pcap.write_bytes(data[:-20])
+        # The time span ends at the last complete frame, as tshark reads it.
+        self.assertEqual(frames.time_span(pcap)[1], frames.summaries(self.tshark, F1AP_PCAP)[-2]["epoch"])
         # Each read warns, the partial records not being cached.
         for _ in range(2):
             with self.assertWarnsRegex(UserWarning, "cut short"):
                 self.assertEqual(len(frames.summaries(self.tshark, pcap)), 31)
+
+    def test_pcap_without_frames(self):
+        # Only the header, of a process that wrote no frame: the protocol of its name.
+        pcap = Path(self.tmp.name) / "gnb_f1ap.pcap"
+        pcap.write_bytes(F1AP_PCAP.read_bytes()[:24])
+        cap = capture.read(self.tshark, pcap)
+        self.assertEqual((cap.proto, cap.frames, cap.messages), ("f1ap", [], []))
 
     def test_check_pcap(self):
         res = run.check_pcap(self.tshark, F1AP_PCAP)

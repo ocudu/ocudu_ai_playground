@@ -12,7 +12,7 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import f1ap, frames, messages
+from . import f1ap, frames, messages, run
 from .tshark import Tshark
 
 # Protocol of a pcap by the dissector of its first frame.
@@ -38,10 +38,13 @@ class Capture:
 
 def read(tshark: Tshark, pcap: str | os.PathLike[str]) -> Capture:
     """Reads a pcap: its protocol from its first frame, then all its frames in one pass with the fields of that
-    protocol only, since each field adds to the time of a pass.
+    protocol only, since each field adds to the time of a pass. A pcap without frames, e.g. of a process that wrote only
+    its header, has the protocol of its file name, see run.pcap_proto().
     """
     first = tshark.run(["-r", str(tshark.stage(pcap)), "-c", "1", "-T", "fields", "-e", "frame.protocols"])
-    frame_protocols = first[0] if first else ""
+    if not first:
+        return Capture(run.pcap_proto(pcap), "")
+    frame_protocols = first[0]
     tokens = frame_protocols.split(":")
     proto = next((PROTOCOLS[d] for d in PROTOCOLS if d in tokens), None)
     rrc_types = f1ap.valid_rrc_types(tshark, pcap) if proto == "f1ap" else []

@@ -47,7 +47,8 @@ def is_pcap(path: str | os.PathLike[str]) -> bool:
 
 
 def time_span(path: str | os.PathLike[str]) -> tuple[float, float] | None:
-    """Epochs of the first and last packets of a classic pcap, from its record headers, or None if it has none.
+    """Epochs of the first and last complete packets of a classic pcap, from its record headers, or None if it has
+    none. A last packet cut short is left out, as tshark leaves it out.
 
     pcapng captures give None.
     """
@@ -58,13 +59,15 @@ def time_span(path: str | os.PathLike[str]) -> tuple[float, float] | None:
             if fmt is None or len(header) < 24:
                 return None
             order, resolution = fmt
+            size = os.fstat(f.fileno()).st_size
             first = last = None
             while len(rec := f.read(16)) == 16:
                 sec, frac, incl_len, _ = struct.unpack(order + "IIII", rec)
+                if f.seek(incl_len, os.SEEK_CUR) > size:
+                    break
                 t = sec + frac * resolution
                 first = t if first is None else first
                 last = t
-                f.seek(incl_len, os.SEEK_CUR)
     except OSError:
         return None
     return None if first is None else (first, last)

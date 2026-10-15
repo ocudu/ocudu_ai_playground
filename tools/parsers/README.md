@@ -118,8 +118,9 @@ error lines as generic `warning` and `error` events, with the `ue=` and RNTI of 
 A log entry can hold several events, and some messages change format with the log level: the scheduler prints its slot
 events inline at info level (`prach(...)`, one event per preamble) and one per continuation line at debug level
 (`- PRACH: ...`), and the RRC adds the SRB and size of its messages at debug level. Patterns are bound to the level of
-the entry where the format differs. An RLF is the one the DU manager logs, which it does for those the MAC detects too. To read a log line by line without `iter_events()`, pass
-the continuation lines of the entries for which `events.has_body()` is true to `events.parse()`.
+the entry where the format differs. An RLF is the one the DU manager logs, which it does for those the MAC detects too.
+To read a log line by line without `iter_events()`, pass the continuation lines of the entries for which
+`events.has_body()` is true to `events.parse()`.
 
 ### Configuration
 
@@ -159,11 +160,12 @@ only lets it read under `/tmp`, and dissects the MAC and RLC PDUs of `mac.pcap` 
 records, with a warning. Field extractions are cached in the work directory by pcap path, size and mtime, and a tag, by
 default the fields and filter. `run.find_pcaps()` finds the pcaps of each protocol by file name, `<proto>.pcap` or with
 a prefix, e.g. `gnb_f1ap.pcap`.
-`run.check_pcap()` checks that a pcap has a frame that one of the known dissectors binds. `messages.messages()` lists
+`run.check_pcap()` checks that one of the known dissectors binds the first frame of a pcap. `messages.messages()` lists
 the NGAP, F1AP or E1AP messages of a pcap with their procedure, outcome, UE identifiers and cause, `frames.summaries()`
 the one-line tshark summary of each frame and `frames.decode()` decodes one frame. `frames.time_span()` reads the time
-span of a pcap from its packet headers, without `tshark`. `capture.read()` gives the protocol, the frame summaries and
-the messages or PDUs of a pcap in one pass over its frames, after reading its first frame for the protocol.
+span of a classic pcap from its complete packets' headers, without `tshark`, and gives None for pcapng. `capture.read()`
+gives the protocol, the frame summaries and the messages or PDUs of a pcap in one pass over its frames, after reading
+its first frame for the protocol, or its file name for a pcap without frames.
 `contexts.ContextTracker` assigns the NGAP, F1AP or E1AP messages to UE contexts, by their UE identifiers until the
 release of the context, with the C-RNTI of the F1AP ones.
 

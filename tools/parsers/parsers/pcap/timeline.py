@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+from ..ran.rnti import normalize as normalize_rnti
 from .run import find_pcaps
 from .tshark import Tshark, TsharkError
 from .values import epoch_to_iso, first
@@ -73,17 +74,20 @@ def run_events(
 ) -> list[dict[str, Any]]:
     """The events of the pcaps of a run directory in time order, see events().
 
-    around keeps the events within window_ms centred on an epoch, and ue the events with that UE identifier. Missing or
-    unreadable pcaps, and pcaps whose time spans do not overlap, are logged as warnings.
+    around keeps the events within window_ms centred on an epoch, and ue the events with that UE identifier: a protocol
+    UE id as the pcap has it, or an RNTI in decimal or 0x hexadecimal, which MAC events match however they print it.
+    Missing pcaps are logged as one warning, and unreadable pcaps and pcaps whose time spans do not overlap as warnings.
     """
     run_dir = Path(run_dir)
     pcaps = find_pcaps(run_dir)
     spans: list[tuple[str, float, float]] = []
     out: list[dict[str, Any]] = []
+    missing = [proto for proto in protocols if pcaps.get(proto) is None]
+    if missing:
+        logger.warning("no pcap of %s in %s", ", ".join(missing), run_dir)
     for proto in protocols:
         pcap = pcaps.get(proto)
         if pcap is None:
-            logger.warning("missing %s.pcap in %s", proto, run_dir)
             continue
         try:
             ev = events(tshark, pcap, proto)
@@ -112,5 +116,7 @@ def run_events(
 def _has_ue(event: dict[str, Any], ue: str) -> bool:
     if ue in event["ue_ids"]:
         return True
+    if event["file"] == "mac" and (rnti := normalize_rnti(ue)) is not None:
+        return any(normalize_rnti(v) == rnti for v in event["ue_ids"])
     # MAC and RLC events without identifiers in ue_ids still name them in the summary.
     return any(f"{tag}={ue} " in event["summary"] + " " for tag in ("rnti", "ueid"))
