@@ -194,9 +194,11 @@ def ue_traces(ues: list[Ue], cores: list[Context] = ()) -> list[UeTrace]:
             unmatched.append((node, core))
         for teid, t in core.links.get("teid", {}).items():
             by_teid.setdefault(teid, []).append((node, t))
-    # NGAP contexts that no identifier links join the UE context created nearest them that has no NGAP context yet.
+    # NGAP contexts that no identifier links join the UE context created nearest them whose trace has no NGAP context
+    # yet.
     for node, core in unmatched:
-        near = [i for i, ue in enumerate(ues) if i not in with_ngap and abs(ue.created - core.t_start) <= CREATION_SLACK_S]
+        roots = {find(i) for i in with_ngap}
+        near = [i for i, ue in enumerate(ues) if find(i) not in roots and abs(ue.created - core.t_start) <= CREATION_SLACK_S]
         if near:
             i = min(near, key=lambda i: abs(ues[i].created - core.t_start))
             union(node, i)

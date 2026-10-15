@@ -79,6 +79,18 @@ class UeTracesTest(unittest.TestCase):
         # Each UE context gets its trace and the identifiers of its NGAP and E1AP contexts.
         self.assertEqual({k: ues[1].ids[k] for k in ("ue_trace", "ran_ngap", "cu_cp_e1ap")}, {"ue_trace": ["0"], "ran_ngap": ["0"], "cu_cp_e1ap": ["0"]})
 
+    def test_ngap_contexts_without_link_join_traces_without_ngap(self):
+        f1ap = [
+            # A UE handed over to 0x4602, whose NGAP context links by NAS, and another UE created just after it.
+            Context("f1ap", 0, 10.0, 20.5, {"rnti": "0x4601"}, links={"nas": {"n1": 10.1}, "ho_rnti": {"0x4602": 20.0}}),
+            Context("f1ap", 1, 20.0, 30.0, {"rnti": "0x4602"}),
+            Context("f1ap", 2, 10.5, 30.0, {"rnti": "0x4603"}),
+        ]
+        cores = [Context("ngap", 0, 10.1, 30.0, {"ran_ngap": "0"}, links={"nas": {"n1": 10.1}}),
+                 Context("ngap", 1, 10.2, 30.0, {"ran_ngap": "1"})]
+        self.assertEqual([(t.ues, t.cores) for t in ue_traces(combine(f1ap), cores)],
+                         [(["f1ap:0", "f1ap:1"], [("ngap", 0)]), (["f1ap:2"], [("ngap", 1)])])
+
     def test_nas_pdus_of_several_ues_link_none(self):
         # Both UEs send the same authentication response, "auth", but registration requests of their own.
         f1ap = [
