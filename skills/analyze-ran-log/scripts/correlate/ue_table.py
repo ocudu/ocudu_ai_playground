@@ -54,6 +54,7 @@ sys.path.insert(0, str(SCRIPT_DIR.parent / "ocudu"))
 from ocudu_log_summary import primary_log_in, resolve_run_dir  # noqa: E402
 from parsers.correlate import run  # noqa: E402
 from parsers.correlate.ues import Ue, UeTrace  # noqa: E402
+from parsers.pcap.run import find_pcaps  # noqa: E402
 from parsers.pcap.tshark import Tshark  # noqa: E402
 from parsers.ran.rnti import normalize as normalize_rnti  # noqa: E402
 
@@ -141,15 +142,17 @@ def main(argv=None) -> int:
     path = Path(args.path)
     run_dir = path.parent if path.is_file() else resolve_run_dir(args.path)
     log = Path(args.log) if args.log else (path if path.is_file() else primary_log_in(run_dir))
-    f1ap = Path(args.f1ap) if args.f1ap else run_dir / "f1ap.pcap"
-    if not f1ap.is_file():
-        print(f"note: no F1AP pcap at {f1ap}; the UEs are the ones of the log only.", file=sys.stderr)
+    # The pcaps of the run, <proto>.pcap or with a prefix, e.g. gnb_f1ap.pcap.
+    pcaps = find_pcaps(run_dir) if run_dir.is_dir() else {}
+    f1ap = Path(args.f1ap) if args.f1ap else pcaps.get("f1ap")
+    if f1ap is None or not f1ap.is_file():
+        print(f"note: no F1AP pcap in {run_dir}; the UEs are the ones of the log only.", file=sys.stderr)
         f1ap = None
     if log is None or not log.is_file():
         print(f"error: no OCUDU log under {run_dir}", file=sys.stderr)
         return 1
 
-    cores = [p for p in (run_dir / "ngap.pcap", run_dir / "e1ap.pcap") if p.is_file()]
+    cores = [p for p in (pcaps.get("ngap"), pcaps.get("e1ap")) if p is not None]
     ues, traces = run.run_traces(Tshark(), f1ap, [log], cores)
     # A log UE without DU UE index and F1AP context is a random access of no UE, e.g. a failed RA.
     ra_only = {ue.key for ue in ues if "du_ue" not in ue.ids and "du_f1ap" not in ue.ids}
