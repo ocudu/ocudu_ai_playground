@@ -109,13 +109,14 @@ error lines as generic `warning` and `error` events, with the `ue=` and RNTI of 
 | `lifecycle` | `ue_create`, `ue_delete`                                           |
 | `rrc`       | `rrc_setup_complete`, `rrc_release`, `rrc_reest_request`           |
 | `mobility`  | `ho_trigger`, `ho_preparation`                                     |
-| `failure`   | `rlf`, `rrc_reest_failed`, `rrc_reest_rejected`, `conres_timeout`, `rrc_setup_timeout` |
+| `failure`   | `rlf`, `rrc_reest_failed`, `rrc_reest_rejected`, `conres_timeout`, `conres_unacked`, `rrc_setup_timeout` |
 | `warning`   | `warning` (other `[W]` lines)                                      |
 | `error`     | `error` (other `[E]` lines)                                        |
 
 A log entry can hold several events, and some messages change format with the log level: the scheduler prints its slot
 events inline at info level (`prach(...)`, one event per preamble) and one per continuation line at debug level
-(`- PRACH: ...`). Patterns are bound to the level of the entry. To read a log line by line without `iter_events()`, pass
+(`- PRACH: ...`), and the RRC adds the SRB and size of its messages at debug level. Patterns are bound to the level of
+the entry where the format differs. An RLF is the one the DU manager logs, which it does for those the MAC detects too. To read a log line by line without `iter_events()`, pass
 the continuation lines of the entries for which `events.has_body()` is true to `events.parse()`.
 
 ### Configuration

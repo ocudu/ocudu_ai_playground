@@ -20,12 +20,17 @@ LINES = {
     "rrc_setup_complete": "2026-07-30T20:53:14.500000 [RRC     ] [I] ue=0 c-rnti=0x4601: DCCH UL rrcSetupComplete",
     "rrc_release": "2026-07-30T20:53:40.000000 [RRC     ] [I] ue=12 c-rnti=0x460f: DCCH DL rrcRelease",
     "rrc_reest_request": "2026-07-30T21:10:01.000000 [RRC     ] [I] ue=10 c-rnti=0x460d: CCCH UL rrcReestablishmentRequest",
+    "rrc_setup_complete_debug": "2026-07-30T20:53:14.500000 [RRC     ] [D] ue=0 c-rnti=0x4601: Rx SRB1 DCCH UL rrcSetupComplete (96 B)",
+    "rrc_containerized": "2026-07-30T20:53:14.500010 [RRC     ] [D] ue=0 c-rnti=0x4601: Containerized rrcSetupComplete: [",
     "ho_trigger": "2026-07-30T20:53:30.000000 [CU-CP   ] [I] ue=0: Trigger intra-CU (inter-DU) handover from source_du=1 to target_du=0",
     "ho_preparation": "2026-07-30T21:01:50.000000 [NGAP    ] [I] ue=3 ran_ue=3 amf_ue=109: Starting HO preparation",
     "rlf_mac": "2026-07-30T21:10:05.000000 [MAC     ] [I] [   268.6] ue=11: RLF detected. Cause: 100 consecutive HARQ-ACK KOs",
     "rlf_du": '2026-07-30T21:10:05.100000 [DU-MNG  ] [W] ue=11 rnti=0x460f: RLF detected with cause "RLC max ReTxs reached". Timer of 1000 msec to release UE started...',
     "reest_failed": '2026-07-30T21:10:09.000000 [RRC     ] [W] ue=12 c-rnti=0x460f: "RRC Reestablishment Procedure" for old_ue=3 failed. Cause: timed out after 4000ms',
     "reest_rejected": "2026-07-30T21:10:10.000000 [RRC     ] [I] ue=18 c-rnti=0x4617: Rejecting RRC Reestablishment to old UE c-rnti=0x4611, pci=1. Cause: Old UE bearers were not fully established. Fallback to RRC Setup Procedure...",
+    "conres_unacked": "2026-10-05T20:09:22.471074 [SCHED   ] [I] ue=202 rnti=0x46d5: ra-ContentionResolutionTimer (64ms) expired, but the scheduler never got back a positive ACK. The scheduler will stop retransmitting the ConRes CE",
+    "reest_failed_no_cause": '2026-07-30T21:10:09.500000 [RRC     ] [I] ue=13 c-rnti=0x4610: "RRC Reestablishment Procedure" for old_ue=4 failed. Requesting UE context release',
+    "warning_ra_rnti": "2026-10-05T20:11:10.300000 [MAC     ] [W] [  468.13] ra-rnti=0x10b: Discarding RAR. Cause: no PDCCH",
     "conres_timeout": "2026-10-05T20:09:22.471074 [SCHED   ] [W] [   959.6] ue=201 rnti=0x46d4: ra-ContentionResolutionTimer, for prach/msg3 rx at slot=952.18, expired (64ms) before ConRes CE was scheduled. UE will stop being scheduled",
     "rrc_setup_timeout": '2026-10-05T20:09:24.415087 [RRC     ] [W] ue=201 c-rnti=0x46d4: "RRC Setup Procedure" timed out after 2000ms',
     "warning_rnti": "2026-10-05T20:11:10.204373 [MAC     ] [W] [  468.12] UL rnti=0x5ec8 lcid=0x3a CE: Discarding PDU. Cause: C-RNTI in C-RNTI CE is not associated with any existing UE.",
@@ -41,6 +46,9 @@ PRACH_DEBUG_BODY = [
     "- RACH ind: slot_rx=48.19 PRACHs: preamble=63 ta=0us",
     "- PRACH: slot=48.19 preamble=63 msgb-rnti=0x470b temp_crnti=0x4601 ta_cmd=0",
     "- PRACH: slot=48.19 preamble=12 ra-rnti=0x10b temp_crnti=0x4602 ta_cmd=3",
+    # Of newer builds, with the SSB, and of older ones, with the PCI.
+    "- PRACH: slot=48.19 preamble=7 ssb=0 ra-rnti=0x10b temp_crnti=0x4603 ta_cmd=3",
+    "- PRACH: slot=48.19 pci=1 preamble=8 ra-rnti=0x10b temp_crnti=0x4604 ta_cmd=3",
 ]
 
 
@@ -72,7 +80,8 @@ class EventsTest(unittest.TestCase):
         self.assertTrue(events.has_body(preamble.match_preamble(line)))
         self.assertFalse(events.has_body(preamble.match_preamble(LINES["prach"])))
         found = parse_all("prach_debug", PRACH_DEBUG_BODY)
-        self.assertEqual([(e["type"], e["rnti"], e["level"]) for e in found], [("prach", "0x4601", "D"), ("prach", "0x4602", "D")])
+        self.assertEqual([(e["type"], e["rnti"], e["level"]) for e in found],
+                         [("prach", "0x4601", "D"), ("prach", "0x4602", "D"), ("prach", "0x4603", "D"), ("prach", "0x4604", "D")])
         self.assertEqual(found[0]["text"], "PRACH: slot=48.19 preamble=63 msgb-rnti=0x470b temp_crnti=0x4601 ta_cmd=0")
         self.assertEqual(parse_all("prach_debug"), [])
 
@@ -96,7 +105,8 @@ class EventsTest(unittest.TestCase):
             PRACH_DEBUG_BODY[1] + "\n",
         ]
         self.assertEqual([(n, e["type"], e["rnti"]) for n, e in events.iter_events(log)],
-                         [(2, "prach", "0x4601"), (2, "prach", "0x4602"), (6, "msg3", "0x4601"), (7, "prach", "0x4601")])
+                         [(2, "prach", "0x4601"), (2, "prach", "0x4602"), (2, "prach", "0x4603"), (2, "prach", "0x4604"),
+                          (8, "msg3", "0x4601"), (9, "prach", "0x4601")])
 
     def test_lifecycle(self):
         e = parse("ue_create")
@@ -109,27 +119,41 @@ class EventsTest(unittest.TestCase):
         self.assertEqual(parse("rrc_setup_complete")["type"], "rrc_setup_complete")
         self.assertEqual(parse("rrc_release")["rnti"], "0x460f")
         self.assertEqual(parse("rrc_reest_request")["category"], "rrc")
+        # At debug, with the direction, SRB and size, and the JSON of the message after, which is no event.
+        self.assertEqual((parse("rrc_setup_complete_debug")["type"], parse("rrc_setup_complete_debug")["rnti"]),
+                         ("rrc_setup_complete", "0x4601"))
+        self.assertIsNone(parse("rrc_containerized"))
+        old = events.parse("2024-04-22T16:04:26.563020 [RRC     ] [D] ue=1 c-rnti=0x4602: Rx CCCH UL rrcReestablishmentRequest (6 B)")
+        self.assertEqual([e["type"] for e in old], ["rrc_reest_request"])
 
     def test_mobility(self):
         self.assertEqual((parse("ho_trigger")["type"], parse("ho_trigger")["ue"]), ("ho_trigger", 0))
         self.assertEqual(parse("ho_preparation")["type"], "ho_preparation")
 
     def test_failures_with_cause(self):
-        mac, du = parse("rlf_mac"), parse("rlf_du")
-        self.assertEqual((mac["type"], mac["ue"], mac["cause"]), ("rlf", 11, "100 consecutive HARQ-ACK KOs"))
+        # The DU manager logs every RLF, those that the MAC detects too, so those of the MAC are no events of their own.
+        self.assertIsNone(parse("rlf_mac"))
+        du = parse("rlf_du")
         self.assertEqual((du["type"], du["rnti"], du["cause"]), ("rlf", "0x460f", "RLC max ReTxs reached"))
         self.assertEqual(parse("reest_failed")["cause"], "timed out after 4000ms")
+        no_cause = parse("reest_failed_no_cause")
+        self.assertEqual((no_cause["type"], no_cause["ue"], no_cause["cause"]), ("rrc_reest_failed", 13, None))
         self.assertEqual(parse("reest_rejected")["cause"], "Old UE bearers were not fully established")
 
     def test_attach_timeouts(self):
         conres, setup = parse("conres_timeout"), parse("rrc_setup_timeout")
         self.assertEqual((conres["type"], conres["category"], conres["ue"], conres["rnti"]), ("conres_timeout", "failure", 201, "0x46d4"))
         self.assertEqual((setup["type"], setup["category"], setup["ue"], setup["rnti"]), ("rrc_setup_timeout", "failure", 201, "0x46d4"))
+        # The ConRes CE sent but never ACKed, at info.
+        unacked = parse("conres_unacked")
+        self.assertEqual((unacked["type"], unacked["category"], unacked["ue"]), ("conres_unacked", "failure", 202))
 
     def test_generic_warning_ue(self):
         w = parse("warning_rnti")
         self.assertEqual((w["type"], w["ue"], w["rnti"]), ("warning", None, "0x5ec8"))
         self.assertEqual((parse("warning")["ue"], parse("warning")["rnti"]), (4, None))
+        # The RA-RNTI of a random access is no UE's.
+        self.assertEqual((parse("warning_ra_rnti")["ue"], parse("warning_ra_rnti")["rnti"]), (None, None))
 
     def test_warning_and_error_levels(self):
         w, e = parse("warning"), parse("error")
@@ -182,6 +206,28 @@ class EventsTest(unittest.TestCase):
         self.assertEqual((first.t_end - first.t_start).seconds, 5)
         self.assertEqual((retry.du_ue, retry.created, retry.t_end), (None, False, None))
         self.assertEqual((created.du_ue, created.rnti), (1, "0x4602"))
+
+    def test_ue_tracker_indexes(self):
+        def ev(t, type_, layer, ue=None, rnti=None):
+            return {"timestamp": datetime(2026, 1, 1, 0, 0, t), "type": type_, "layer": layer, "ue": ue, "rnti": rnti}
+
+        tracker = events.UeTracker()
+        assigned = [
+            tracker.assign(e)
+            for e in [
+                ev(0, "ue_create", "DU-MNG", ue=3, rnti="0x4601"),
+                # CU-CP UE index 3 of another UE, and the DU UE index 3 of RLC.
+                ev(1, "rrc_setup_complete", "RRC", ue=3, rnti="0x4602"),
+                ev(2, "warning", "RLC", ue=3),
+                # The CU-UP UE index, of no event.
+                ev(3, "warning", "GTPU", ue=3),
+                # DU UE index 3 reused by another RNTI, its deletion not logged.
+                ev(4, "conres_timeout", "SCHED", ue=3, rnti="0x4603"),
+                ev(5, "warning", "SCHED", ue=3),
+            ]
+        ]
+        self.assertEqual(assigned, [0, 1, 0, None, 2, 2])
+        self.assertEqual([lane.du_ue for lane in tracker.lanes], [None, None, 3])
 
     def test_categories_cover_patterns(self):
         self.assertTrue({p.category for p in events.EVENT_PATTERNS} <= {*events.CATEGORIES, events.BINDING})

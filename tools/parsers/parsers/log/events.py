@@ -51,7 +51,13 @@ def _p(type_: str, category: str, layer: str, pattern: str, item: str | None = N
 
 
 _PRACH_INFO = r"prach\((?:ra|msgb)-rnti=0x\w+ preamble=(?P<preamble>\d+)(?: ssb=\d+)? tc-rnti=(?P<rnti>0x\w+)\)"
-_PRACH_DEBUG = r"^- PRACH: slot=\S+ preamble=(?P<preamble>\d+) (?:ra|msgb)-rnti=0x\w+ temp_crnti=(?P<rnti>0x\w+)"
+# The pci is of older builds, the ssb of newer ones.
+_PRACH_DEBUG = (r"^- PRACH: slot=\S+ (?:pci=\d+ )?preamble=(?P<preamble>\d+) (?:ssb=\d+ )?(?:ra|msgb)-rnti=0x\w+ "
+                r"temp_crnti=(?P<rnti>0x\w+)")
+# RRC messages as the RRC logs them at info, e.g. "DCCH UL rrcSetupComplete", or at debug, with the direction, SRB and
+# size, e.g. "Rx SRB1 DCCH UL rrcSetupComplete (96 B)", or of older builds without the SRB.
+_RRC_PREFIX = r"ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): (?:[RT]x (?:SRB\d+ )?)?"
+_RRC_SUFFIX = r"(?: \(\d+ B\))?$"
 
 EVENT_PATTERNS = (
     _p("prach", "ra", "SCHED", r"^Processed slot events pci=\d+: ", _PRACH_INFO, level="I"),
@@ -62,16 +68,19 @@ EVENT_PATTERNS = (
     # A UE created without its RNTI, e.g. the target of a handover, gets it at its first configuration.
     _p("ue_config", BINDING, "DU-MNG", r'ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+) proc="UE Configuration": Procedure started'),
     _p("ue_delete", "lifecycle", "DU-MNG", r'ue=(?P<ue>\d+) proc="UE Delete": Procedure finished successfully'),
-    _p("rrc_setup_complete", "rrc", "RRC", r"ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): DCCH UL rrcSetupComplete$"),
-    _p("rrc_release", "rrc", "RRC", r"ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): DCCH DL rrcRelease$"),
-    _p("rrc_reest_request", "rrc", "RRC", r"ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): CCCH UL rrcReestablishmentRequest$"),
+    _p("rrc_setup_complete", "rrc", "RRC", _RRC_PREFIX + r"DCCH UL rrcSetupComplete" + _RRC_SUFFIX),
+    _p("rrc_release", "rrc", "RRC", _RRC_PREFIX + r"DCCH DL rrcRelease" + _RRC_SUFFIX),
+    _p("rrc_reest_request", "rrc", "RRC", _RRC_PREFIX + r"CCCH UL rrcReestablishmentRequest" + _RRC_SUFFIX),
     _p("ho_trigger", "mobility", "CU-CP", r"ue=(?P<ue>\d+): Trigger intra-CU \((?:inter|intra)-DU\) handover"),
     _p("ho_preparation", "mobility", "NGAP", r"ue=(?P<ue>\d+) ran_ue=\d+ amf_ue=\d+: Starting HO preparation"),
-    _p("rlf", "failure", "MAC", r"ue=(?P<ue>\d+): RLF detected\. Cause: (?P<cause>.*)"),
     _p("rlf", "failure", "DU-MNG", r'ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+): RLF detected with cause "(?P<cause>[^"]+)"'),
-    _p("rrc_reest_failed", "failure", "RRC", r'ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): "RRC Reestablishment Procedure".* failed\. Cause: (?P<cause>.*)'),
+    _p("rrc_reest_failed", "failure", "RRC",
+       r'ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): "RRC Reestablishment Procedure".* failed\.(?: Cause: (?P<cause>.*))?'),
     _p("rrc_reest_rejected", "failure", "RRC", r"ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): Rejecting RRC Reestablishment.*Cause: (?P<cause>.*?)\.(?: |$)"),
-    _p("conres_timeout", "failure", "SCHED", r"ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+): ra-ContentionResolutionTimer.* expired"),
+    _p("conres_timeout", "failure", "SCHED", r"ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+): ra-ContentionResolutionTimer, .* expired"),
+    # The ConRes CE was sent, but never ACKed.
+    _p("conres_unacked", "failure", "SCHED",
+       r"ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+): ra-ContentionResolutionTimer \(.*\) expired, but"),
     _p("rrc_setup_timeout", "failure", "RRC", r'ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): "RRC Setup Procedure" timed out'),
 )
 
@@ -87,7 +96,8 @@ _CANDIDATE_RE = re.compile(CANDIDATE_PATTERN)
 _ENTRY_START_RE = re.compile(ENTRY_START_PATTERN)
 _LEVEL_EVENTS = {"W": "warning", "E": "error"}
 # UE identifiers of the warning and error lines that no pattern recognizes, in one pass over the message.
-_GENERIC_IDS_RE = re.compile(r"\bue=(?P<ue>\d+)\b|\b(?:c-|tc-)?rnti=(?P<rnti>0x[0-9a-fA-F]+)\b")
+# Not the RA-RNTI or MsgB-RNTI of a random access, which is no UE's.
+_GENERIC_IDS_RE = re.compile(r"\bue=(?P<ue>\d+)\b|(?<![\w-])(?:c-|tc-)?rnti=(?P<rnti>0x[0-9a-fA-F]+)\b")
 _BODY_KEYS = {(p.layer, p.level) for p in EVENT_PATTERNS if p.in_body}
 # Patterns of each logger, in EVENT_PATTERNS order.
 _PATTERNS_BY_LAYER: dict[str, list[EventPattern]] = {}
@@ -192,8 +202,10 @@ def iter_events(lines: Iterable[str]) -> Iterator[tuple[int, dict[str, Any]]]:
             yield pending[0], ev
 
 
-# Loggers of the DU, whose "ue" is the DU UE index. The others log the CU-CP UE index.
-_DU_LOGGERS = frozenset({"MAC", "SCHED", "DU-MNG", "DU-F1", "PHY"})
+# Loggers of the DU, whose "ue" is the DU UE index, and of the CU-UP, whose "ue" is the CU-UP UE index, which no other
+# event names. The others log the CU-CP UE index; PDCP logs it for SRBs, and the CU-UP UE index for DRBs.
+_DU_LOGGERS = frozenset({"MAC", "SCHED", "DU-MNG", "DU-F1", "DU-F1-U", "RLC", "PHY"})
+_CU_UP_LOGGERS = frozenset({"CU-UP", "CU-UP-E1", "CU-F1-U", "SDAP", "GTPU"})
 
 
 @dataclass
@@ -239,6 +251,8 @@ class UeTracker:
 
     def _lane(self, t: Any, type_: str, category: str | None, layer: str, ue: int | None, rnti: str | None) -> UeLane | None:
         du = layer in _DU_LOGGERS
+        if layer in _CU_UP_LOGGERS:
+            ue = None
         if type_ == "ue_create":
             lane = self._by_rnti.get(rnti) if rnti else None
             if lane is None or lane.du_ue is not None:
@@ -264,6 +278,10 @@ class UeTracker:
             if not du and ue is not None:
                 self._cu_ue_rnti[ue] = rnti
             lane = self._by_du_ue.get(ue) if du and ue is not None else None
+            # A DU UE index of another RNTI is of a context whose deletion was not logged, and reused.
+            if lane is not None and lane.rnti is not None and lane.rnti != rnti:
+                lane.du_ue = None
+                lane = None
             if lane is None:
                 lane = self._by_rnti.get(rnti) or self._new_lane(t, rnti)
             if lane.rnti is None:
