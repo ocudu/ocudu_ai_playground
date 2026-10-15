@@ -152,6 +152,12 @@ class TimelineTest(unittest.TestCase):
         # Protocol ids are matched as they are, not as RNTIs.
         self.assertEqual([timeline._has_ue(f1, ue) for ue in ("17921", "0x4601")], [True, False])
 
+    def test_mac_events_of_common_channels_name_no_ue(self):
+        rows = [["1", "1.0", "0x4601", "1", "3"], ["2", "1.1", "0x010b", "1", "2"], ["3", "1.2", "0xffff", "1", "4"]]
+        ev = timeline.events(FakeTshark(rows), "mac.pcap", "mac")
+        self.assertEqual([e["ue_ids"] for e in ev], [["0x4601"], [], []])
+        self.assertEqual([e["frame"] for e in ev if timeline._has_ue(e, "267")], [])
+
 
 class RunDirTest(unittest.TestCase):
     def setUp(self):

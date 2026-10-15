@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -19,6 +20,8 @@ logger = logging.getLogger("parsers")
 
 PROTOCOLS = ("ngap", "f1ap", "e1ap", "mac", "rlc")
 
+# The mac-nr.rnti-type of a C-RNTI.
+_C_RNTI_TYPE = "3"
 # Fields of the events of each protocol.
 EVENT_FIELDS: dict[str, list[str]] = {
     "ngap": ["frame.number", "frame.time_epoch", "ngap.procedureCode", "ngap.RAN_UE_NGAP_ID", "ngap.AMF_UE_NGAP_ID"],
@@ -26,7 +29,7 @@ EVENT_FIELDS: dict[str, list[str]] = {
     "e1ap": [
         "frame.number", "frame.time_epoch", "e1ap.procedureCode", "e1ap.GNB_CU_CP_UE_E1AP_ID", "e1ap.GNB_CU_UP_UE_E1AP_ID",
     ],
-    "mac": ["frame.number", "frame.time_epoch", "mac-nr.rnti", "mac-nr.direction"],
+    "mac": ["frame.number", "frame.time_epoch", "mac-nr.rnti", "mac-nr.direction", "mac-nr.rnti-type"],
     "rlc": ["frame.number", "frame.time_epoch", "rlc-nr.ueid", "rlc-nr.bearer-type", "rlc-nr.bearer-id"],
 }
 
@@ -37,7 +40,10 @@ def events(tshark: Tshark, pcap: str | os.PathLike[str], proto: str) -> list[dic
     Each has "epoch", "iso", "file" (the protocol), "frame", "ue_ids" and "summary".
     """
     out: list[dict[str, Any]] = []
-    for frame, epoch, *rest in tshark.iter_fields(pcap, EVENT_FIELDS[proto], tag=f"correlate-{proto}"):
+    fields = EVENT_FIELDS[proto]
+    # The fields are part of the tag, since they depend on the protocol and this code.
+    tag = f"correlate-{proto}-" + hashlib.sha256("\0".join(fields).encode()).hexdigest()[:16]
+    for frame, epoch, *rest in tshark.iter_fields(pcap, fields, tag=tag):
         try:
             ts = float(epoch)
         except ValueError:
@@ -46,7 +52,8 @@ def events(tshark: Tshark, pcap: str | os.PathLike[str], proto: str) -> list[dic
             ue_ids = [v for v in map(first, rest[1:]) if v]
             summary = f"procCode={rest[0]}"
         elif proto == "mac":
-            ue_ids = [rest[0]] if rest[0] else []
+            # Only C-RNTIs are of UEs, not the SI-, P- and RA-RNTIs of common channels.
+            ue_ids = [rest[0]] if rest[0] and rest[2] == _C_RNTI_TYPE else []
             dir_label = {"0": "UL", "1": "DL"}.get(rest[1], rest[1] or "?")
             summary = f"rnti={rest[0] or '-'} dir={dir_label}"
         else:
