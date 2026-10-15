@@ -97,7 +97,9 @@ def decoder() -> Decoder:
 
 
 def schema_hash() -> str:
-    """Hash of the schemas and the file format version of fbs/ and of the generator of the decoders."""
+    """Hash of the schemas and the file format version of fbs/, and of the generator and schema parser of the
+    decoders.
+    """
     return _generated.SCHEMA_HASH
 
 
@@ -150,6 +152,21 @@ def event_at(data: bytes | memoryview, offset: int, grid_only: bool = False) -> 
     event = _root(grid_only)(bytes(data[offset + 4 : offset + 4 + size]))
     value = event.pop("value") or {"type": None}
     return {**event, **value}
+
+
+def start_event(data: bytes | memoryview, name: str | None = None, grid_only: bool = False) -> dict[str, Any]:
+    """The start event of the cell of the contents of a trace, its first event, as event_at() gives it. Raises
+    FormatError, see first_offset(), or ValueError without a complete start event, e.g. of a trace just opened. Messages
+    start with name if given.
+    """
+    pos = first_offset(data, name)
+    size = _U32.unpack_from(data, pos)[0] if pos + 4 <= len(data) else None
+    if size is not None and size <= MAX_EVENT_SIZE and pos + 4 + size <= len(data):
+        event = event_at(data, pos, grid_only)
+        if event["type"] == "CellStartEvent":
+            return event
+    prefix = f"{name}: " if name else ""
+    raise ValueError(f"{prefix}the trace does not start with the start event of its cell.")
 
 
 def read(path: str | os.PathLike[str], grid_only: bool = False) -> Iterator[dict[str, Any]]:

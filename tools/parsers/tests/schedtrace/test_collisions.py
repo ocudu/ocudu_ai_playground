@@ -3,6 +3,7 @@
 
 import tempfile
 import unittest
+import warnings
 from pathlib import Path
 
 from parsers import schedtrace
@@ -44,6 +45,18 @@ class CollisionsTest(unittest.TestCase):
 
     def kinds(self, event):
         return [(c.kind, c.a["item"], c.b["item"], c.overlap) for c in collisions.slot_collisions(event, self.cell)]
+
+    def test_find_warns_once_of_a_corrupt_size(self):
+        data = bytearray((DATA / "schedtrace_cell0.bin").read_bytes())
+        second = schedtrace.offsets(data)[1]
+        data[second : second + 4] = (schedtrace.MAX_EVENT_SIZE + 1).to_bytes(4, "little")
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "schedtrace_cell0.bin"
+            path.write_bytes(data)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                self.assertEqual(list(collisions.find(path)), [])
+        self.assertEqual(len(caught), 1)
 
     def test_find_raises_the_decode_error_of_a_corrupt_event(self):
         data = (DATA / "schedtrace_cell0.bin").read_bytes()

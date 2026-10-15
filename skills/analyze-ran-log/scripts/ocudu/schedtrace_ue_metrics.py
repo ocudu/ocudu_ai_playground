@@ -89,8 +89,9 @@ def read_chunk(path: str, start: int | None, end: int | None, opts: dict) -> dic
     nof_slots, t_min, t_max, latencies = 0, None, None, []
     rntis, ues = set(opts["rntis"]), set(opts["ues"])
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
-        cell = grid.cell_of(schedtrace.event_at(mm, schedtrace.first_offset(mm, path), grid_only=True))
-        for offset in schedtrace.offsets(mm, start, end):
+        cell = grid.cell_of(schedtrace.start_event(mm, path, grid_only=True))
+        # From the first event, without checking the version again.
+        for offset in schedtrace.offsets(mm, schedtrace.HEADER.size if start is None else start, end):
             event = schedtrace.event_at(mm, offset, grid_only=True)
             if event["type"] != "CellSlotEvent":
                 continue
@@ -230,7 +231,8 @@ def main() -> int:
             workers = min(MAX_DEFAULT_WORKERS, os.cpu_count() or 1) if path.stat().st_size >= PARALLEL_MIN_SIZE else 1
         try:
             res = read_trace(path, workers, opts)
-        except schedtrace.FormatError as e:
+        # FormatError, of an unsupported trace, is a ValueError too, as is a trace without its start event.
+        except ValueError as e:
             print(f"ERROR: {e}", file=sys.stderr)
             status = 1
             continue
