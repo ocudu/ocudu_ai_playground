@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import datetime
+import argparse
 import sys
 from pathlib import Path
 
@@ -47,6 +48,7 @@ def parse_cfg(cfg_path: Path, gnb_log: Path) -> dict:
     elif gnb_log.exists():
         with open(gnb_log, encoding="utf-8", errors="replace") as f:
             cfg = config.from_log(f)
+    found = cfg is not None
     cfg = cfg or config.AppConfig(planes=[])
     levels = {k: cfg.levels[k] for k in LEVEL_OPTIONS if k in cfg.levels}
     # MAC details, SCHED lines (gated by mac_level, there is no sched_level) and DU proc=... traces need info.
@@ -59,7 +61,8 @@ def parse_cfg(cfg_path: Path, gnb_log: Path) -> dict:
         "node_type": NODE_TYPES.get(cfg.node_type, cfg.node_type),
         "planes": cfg.planes,
         "l2_traces_suppressed": suppressed,
-        "tdd": cfg.tdd,
+        # Unknown without a configuration file or echo.
+        "tdd": cfg.tdd if found else None,
         "amf_addrs": cfg.amf_addrs,
         "amf_port": cfg.amf_port,
         "amf_bind_addrs": cfg.amf_bind_addrs,
@@ -168,7 +171,10 @@ def summarize(path_str: str) -> None:
         cell_bits.append(f"{raw['nof_antennas_dl']}T{raw['nof_antennas_ul']}R")
     if cell_bits:
         print(f"  Cell cfg      : {' '.join(cell_bits)}")
-    print(f"  Duplex        : {'TDD' if cfg['tdd'] else 'FDD'}")
+    if cfg["tdd"] is not None:
+        print(f"  Duplex        : {'TDD' if cfg['tdd'] else 'FDD'}")
+    else:
+        print("  Duplex        : unknown (no configuration file or echo)")
     if cfg["amf_addrs"]:
         port = cfg["amf_port"] or 38412
         print(f"  AMF           : {cfg['amf_addrs'][0]}:{port}"
@@ -334,12 +340,12 @@ def summarize(path_str: str) -> None:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print(f"Usage: {sys.argv[0]} <gnb.log|du.log|cu*.log | run-dir | component-dir | test-dir>",
-              file=sys.stderr)
-        sys.exit(1)
+    ap = argparse.ArgumentParser(description="Summary of an OCUDU run: build, configuration, UE lifecycle, scheduler "
+                                             "metrics and anomalies.")
+    ap.add_argument("path", help="gnb.log, du.log or cu*.log, or a run, component or test directory")
+    args = ap.parse_args()
     try:
-        summarize(sys.argv[1])
+        summarize(args.path)
     except FileNotFoundError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

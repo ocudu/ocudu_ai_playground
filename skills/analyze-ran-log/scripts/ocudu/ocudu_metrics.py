@@ -21,7 +21,8 @@ Usage:
 Options:
   --layer <L>         Metrics layer, e.g. sched_ue, sched, mac, rlc, exec. Without it, lists the layers.
   --fields <a,b,...>  Fields to show (default: all numeric fields for stats, all fields for rows).
-  --where <k=v>       Keep rows whose field k equals v (numbers compare numerically, 0x values as text). Repeatable.
+  --where <k=v>       Keep rows whose field k equals v (numbers compare numerically, 0x values as text, rnti in any
+                      form: 4601, 0x4601 or 17921). Repeatable.
   --after/--before    Time window, as an ISO timestamp or a HH:MM:SS[.ffffff] time of day.
   --by <field>        Statistics per value of a context field, e.g. ue, rnti, pci.
   --rows              Print the rows (line number, time and fields) instead of statistics.
@@ -117,16 +118,17 @@ def stats_line(name: str, values: list, unit: str | None) -> str:
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="Query the METRICS lines of an OCUDU log")
-    ap.add_argument("path")
-    ap.add_argument("--layer")
-    ap.add_argument("--fields")
-    ap.add_argument("--where", action="append", default=[])
-    ap.add_argument("--after")
-    ap.add_argument("--before")
-    ap.add_argument("--by")
-    ap.add_argument("--rows", action="store_true")
-    ap.add_argument("--max-rows", type=int, default=200)
-    ap.add_argument("-j", type=int)
+    ap.add_argument("path", help="a log file or a run directory")
+    ap.add_argument("--layer", help="metrics layer, e.g. sched_ue, sched, mac, rlc, exec; without it, lists the layers")
+    ap.add_argument("--fields", help="fields to show, comma-separated (default: all numeric fields for stats, all for rows)")
+    ap.add_argument("--where", action="append", default=[], metavar="K=V",
+                    help="keep rows whose field equals the value; rnti in any form; repeatable")
+    ap.add_argument("--after", help="start of the window: ISO timestamp or HH:MM:SS[.ffffff]")
+    ap.add_argument("--before", help="end of the window: ISO timestamp or HH:MM:SS[.ffffff]")
+    ap.add_argument("--by", help="statistics per value of a context field, e.g. ue, rnti, pci")
+    ap.add_argument("--rows", action="store_true", help="print the rows instead of statistics")
+    ap.add_argument("--max-rows", type=int, default=200, help="rows printed at most")
+    ap.add_argument("-j", type=int, help="worker processes (default: one per CPU up to 8 for logs over 64 MB)")
     args = ap.parse_args(argv)
 
     try:
@@ -189,6 +191,11 @@ def main(argv=None) -> int:
         return 0
     if args.fields:
         fields = [f.strip() for f in args.fields.split(",") if f.strip()]
+        known = {k for r in recs for k in r}
+        if unknown := [f for f in fields if f not in known]:
+            print(f"Error: no field {', '.join(unknown)} in layer {args.layer}; it has: {', '.join(sorted(known))}",
+                  file=sys.stderr)
+            return 1
     elif args.rows:
         fields = list(dict.fromkeys(k for r in recs for k in r if k not in ("timestamp", "layer")))
     else:
@@ -208,7 +215,9 @@ def main(argv=None) -> int:
     groups = defaultdict(list)
     for rec in recs:
         groups[rec.get(args.by) if args.by else None].append(rec)
-    for key, group in sorted(groups.items(), key=lambda kv: (kv[0] is None, str(kv[0]))):
+    # Numbers in numeric order, e.g. ue=2 before ue=10.
+    for key, group in sorted(groups.items(), key=lambda kv: (kv[0] is None, not is_number(kv[0]),
+                                                             kv[0] if is_number(kv[0]) else str(kv[0]))):
         if args.by:
             print(f"\n{args.by}={key}: {len(group)} rows")
         for f in fields:

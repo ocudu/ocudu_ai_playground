@@ -226,7 +226,12 @@ def main() -> int:
             "grants": args.grants}
 
     status = 0
-    for path in traces_in(args.path):
+    try:
+        paths = traces_in(args.path)
+    except FileNotFoundError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    for path in paths:
         workers = args.j
         if workers is None:
             workers = min(MAX_DEFAULT_WORKERS, os.cpu_count() or 1) if path.stat().st_size >= PARALLEL_MIN_SIZE else 1

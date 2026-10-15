@@ -9,18 +9,19 @@ Measures DU-MNG / MAC / SCHED / DU-F1 procedure stages for UE creation,
 (re)configuration and removal, with parsers.log.procedures of this repo.
 Stages that a build does not log are skipped (reports only present stages).
 
-Usage: ocudu_ue_proc_latency.py <gnb.log|srsdu.log> [proc-filter-substr]
+Usage: ocudu_ue_proc_latency.py <gnb.log|srsdu.log|run dir> [proc-filter-substr]
 """
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent / "_lib"))
 
-from parsers.log import procedures  # noqa: E402
+from parsers.log import procedures, run  # noqa: E402
 
 
 def fmt(us: float) -> str:
@@ -34,18 +35,24 @@ def report(proc: str, insts: list[procedures.Instance]) -> None:
     print("-" * len(hdr))
     for label, frm, to in procedures.transitions(proc):
         st = procedures.stats(procedures.latencies(insts, frm, to))
+        # A stage that the build does not log.
         if st is None:
-            print(f"{label:34} {0:>5}       -")
             continue
         print(f"{label:34} {st.n:>5} {fmt(st.mean):>9} {fmt(st.p50):>9} {fmt(st.p90):>9} {fmt(st.p99):>9} "
               f"{fmt(st.max):>10}")
 
 
 def main() -> int:
-    if len(sys.argv) < 2:
-        sys.exit("usage: ocudu_ue_proc_latency.py <gnb.log|srsdu.log> [proc-filter-substr]")
-    path = sys.argv[1]
-    filt = sys.argv[2] if len(sys.argv) > 2 else None
+    ap = argparse.ArgumentParser(description="Per-stage latencies of the DU UE procedures of an OCUDU log.")
+    ap.add_argument("path", help="OCUDU log, or run directory holding one")
+    ap.add_argument("filter", nargs="?", help="keep the procedures whose name contains this text")
+    args = ap.parse_args()
+    try:
+        path = run.find_log(args.path)
+    except FileNotFoundError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    filt = args.filter
     with open(path, errors="replace") as f:
         found = procedures.instances(f)
     print(f"# log: {path}")

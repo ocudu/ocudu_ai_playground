@@ -44,6 +44,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     protocols = [p.strip() for p in args.protocols.split(",") if p.strip()]
+    if unknown := [p for p in protocols if p not in timeline.PROTOCOLS]:
+        print(f"error: unknown --protocols {', '.join(unknown)}; known: {', '.join(timeline.PROTOCOLS)}", file=sys.stderr)
+        return 1
     events = timeline.run_events(
         utils.TSHARK, run_dir, protocols, around=args.around, window_ms=args.window_ms, ue=args.ue
     )
