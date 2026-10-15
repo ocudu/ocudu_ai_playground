@@ -549,17 +549,20 @@ class MetricsParser:
             preamble_match = preamble.match_preamble(line)
         if not preamble_match or preamble_match.group("layer") != "METRICS":
             return None
+        timestamp = preamble.to_datetime(preamble_match.group("timestamp"))
+        if timestamp is None:
+            return None
 
         text = line[preamble_match.end():].rstrip("\n")
         for layer in self.layers:
             m = LAYER_PATTERNS[layer].match(text)
             if m:
-                return self._make_record(layer, m, text[m.end():], preamble_match)
+                return self._make_record(layer, m, text[m.end():], timestamp)
         return None
 
-    def _make_record(self, layer: str, context_m: re.Match, text: str, preamble_match: re.Match) -> dict[str, Any]:
+    def _make_record(self, layer: str, context_m: re.Match, text: str, timestamp: datetime) -> dict[str, Any]:
         record: dict[str, Any] = {
-            "timestamp": datetime.fromisoformat(preamble_match.group("timestamp")),
+            "timestamp": timestamp,
             "layer": layer,
         }
         record.update({k: parse_number(v) for k, v in context_m.groupdict().items()})

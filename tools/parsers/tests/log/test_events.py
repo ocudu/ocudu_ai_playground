@@ -81,6 +81,11 @@ class EventsTest(unittest.TestCase):
         self.assertEqual(events.parse(info_as_debug), [])
         self.assertEqual(events.parse(LINES["prach_debug"].replace("[D]", "[I]"), PRACH_DEBUG_BODY), [])
 
+    def test_lines_of_a_garbled_timestamp_are_skipped(self):
+        # A line cut short, with the next one written after it.
+        line = "2026-07-30T21:10:12.0000002026-07-30T21:10:12.100000 [PHY     ] [E] [   300.1] Something failed"
+        self.assertEqual(events.parse(line), [])
+
     def test_iter_events(self):
         log = [
             LINES["noise"] + "\n",

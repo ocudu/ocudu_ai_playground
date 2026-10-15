@@ -49,6 +49,10 @@ class HeaderTest(unittest.TestCase):
         self.assertEqual(preamble.to_epoch_us("2026-04-21T03:21:49.089871"), 1776741709089871)
         self.assertIsNone(preamble.to_epoch("2026-04-21T03:21:49.08987x"))
         self.assertIsNone(preamble.to_epoch_us("plmns:"))
+        # A zone, which OCUDU does not log, is taken into account.
+        self.assertEqual(preamble.to_epoch_us("1970-01-01T01:00:01+01:00"), 1_000_000)
+        self.assertEqual(preamble.to_epoch("1970-01-01T01:00:01+01:00"), 1.0)
+
 
 class TokenizeMultilineLogsTest(unittest.TestCase):
     def test_groups_continuation_lines(self):

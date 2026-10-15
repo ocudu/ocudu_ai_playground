@@ -47,20 +47,27 @@ def match_header(line: str) -> re.Match | None:
     return _header_pattern.match(line)
 
 
-def to_epoch(timestamp: str) -> float | None:
-    """Seconds since the epoch of a log timestamp, which OCUDU logs as UTC wall clock without a zone, or None."""
+def to_datetime(timestamp: str) -> datetime | None:
+    """UTC time without a zone of a log timestamp, which OCUDU logs as UTC wall clock without a zone, or None if it
+    is not one, e.g. two timestamps run together in a line cut short.
+    """
     try:
-        return datetime.fromisoformat(timestamp).replace(tzinfo=timezone.utc).timestamp()
+        t = datetime.fromisoformat(timestamp)
     except ValueError:
         return None
+    return t.astimezone(timezone.utc).replace(tzinfo=None) if t.tzinfo else t
+
+
+def to_epoch(timestamp: str) -> float | None:
+    """Seconds since the epoch of a log timestamp, see to_datetime(), or None."""
+    t = to_datetime(timestamp)
+    return None if t is None else t.replace(tzinfo=timezone.utc).timestamp()
 
 
 def to_epoch_us(timestamp: str) -> int | None:
-    """Exact microseconds since the epoch of a log timestamp, see to_epoch(), or None."""
-    try:
-        return (datetime.fromisoformat(timestamp) - _EPOCH) // _MICROSECOND
-    except ValueError:
-        return None
+    """Exact microseconds since the epoch of a log timestamp, see to_datetime(), or None."""
+    t = to_datetime(timestamp)
+    return None if t is None else (t - _EPOCH) // _MICROSECOND
 
 
 def tokenize_multiline_logs(stream: Iterable[str]) -> Iterator[tuple[re.Match | None, list[str]]]:

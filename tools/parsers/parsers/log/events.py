@@ -118,7 +118,7 @@ def parse(line: str, body: Sequence[str] = (), preamble_match: re.Match | None =
     """
     if preamble_match is None:
         preamble_match = preamble.match_preamble(line)
-    if not preamble_match:
+    if not preamble_match or (timestamp := preamble.to_datetime(preamble_match.group("timestamp"))) is None:
         return []
     layer = preamble_match.group("layer").strip()
     level = preamble_match.group("level")
@@ -151,7 +151,6 @@ def parse(line: str, body: Sequence[str] = (), preamble_match: re.Match | None =
                     break
         found.append((level_type, level_type, groups, text))
 
-    timestamp = datetime.fromisoformat(preamble_match.group("timestamp"))
     return [
         {
             "timestamp": timestamp,

@@ -239,6 +239,9 @@ class MetricsParserTest(unittest.TestCase):
     def test_non_metrics_logger_returns_none(self):
         self.assertIsNone(self.parser.parse("2026-06-29T14:10:11.345195 [SCHED   ] [I] Scheduler cell pci=1 metrics: nof_ues=1"))
 
+    def test_garbled_timestamp_returns_none(self):
+        self.assertIsNone(self.parser.parse("2026-06-29T14:10:11.342026-06-29T14:10:11.345650" + SCHED_UE_LINE[26:]))
+
     def test_unknown_metrics_line_returns_none(self):
         self.assertIsNone(self.parser.parse("2026-06-29T14:10:11.345195 [METRICS ] Foo metrics: a=1"))
 
