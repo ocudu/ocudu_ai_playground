@@ -10,6 +10,7 @@ from collections import defaultdict
 from typing import Any
 
 from ._ues import ue_ids_by_key
+from .messages import cause, cause_fields
 from .tshark import Tshark
 from .values import epoch_to_iso, first
 
@@ -20,7 +21,7 @@ PROCEDURE_FIELDS = [
     "ngap.RAN_UE_NGAP_ID",
     "ngap.AMF_UE_NGAP_ID",
     "ngap.unsuccessfulOutcome_element",
-    "ngap.cause",
+    *cause_fields("ngap"),
 ]
 
 
@@ -44,11 +45,10 @@ def procedures(
     if failures_only:
         unsuccess = "ngap.unsuccessfulOutcome_element"
         display_filter = f"({display_filter}) && ({unsuccess})" if display_filter else unsuccess
-    tag = f"ngap-proc-{ue or 'all'}-{int(failures_only)}"
+    tag = f"ngap-proc-v2-{ue or 'all'}-{int(failures_only)}"
     by_ue: dict[str, list[dict[str, Any]]] = defaultdict(list)
-    for frame, epoch, code, ran_id, amf_id, unsucc, cause in tshark.iter_fields(
-        pcap, PROCEDURE_FIELDS, display_filter=display_filter, tag=tag
-    ):
+    for values in tshark.iter_fields(pcap, PROCEDURE_FIELDS, display_filter=display_filter, tag=tag):
+        frame, epoch, code, ran_id, amf_id, unsucc = values[:6]
         ran_id, amf_id = first(ran_id), first(amf_id)
         by_ue[ran_id or "(no-ran-ue-id)"].append({
             "frame": int(frame) if frame else None,
@@ -57,6 +57,6 @@ def procedures(
             "procedureCode": code,
             "amfUeId": amf_id or None,
             "failure": bool(unsucc),
-            "cause": cause or None,
+            "cause": cause("ngap", dict(zip(PROCEDURE_FIELDS, values))),
         })
     return dict(by_ue)

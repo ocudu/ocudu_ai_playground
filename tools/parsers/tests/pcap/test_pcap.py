@@ -144,6 +144,16 @@ class FramesWithoutTsharkTest(unittest.TestCase):
             self.assertIsNone(frames.time_span(f.name))
 
 
+class CauseTest(unittest.TestCase):
+    def test_cause_of_its_group(self):
+        row = {"ngap.radioNetwork": "", "ngap.protocol": "6"}
+        with mock.patch.object(messages, "_cause_names", return_value={"ngap.protocol": {"6": "unspecified"}}):
+            self.assertEqual(messages.cause("ngap", row), "protocol:unspecified")
+            # A value without a name, e.g. of a newer release than the tshark build, keeps its number.
+            self.assertEqual(messages.cause("f1ap", {"f1ap.misc": "9"}), "misc:9")
+            self.assertIsNone(messages.cause("e1ap", {}))
+
+
 class TimelineTest(unittest.TestCase):
     def test_ue_filter_of_mac_rntis(self):
         mac = {"file": "mac", "ue_ids": ["0x4601"], "summary": "rnti=0x4601 dir=DL"}

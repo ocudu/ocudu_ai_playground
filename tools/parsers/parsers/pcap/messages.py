@@ -5,7 +5,11 @@
 
 from __future__ import annotations
 
+import functools
+import hashlib
 import os
+import shutil
+import subprocess
 from typing import Any
 
 from ..ran.procedures import proc_name
@@ -32,7 +36,12 @@ LINK_FIELDS: dict[str, dict[str, list[str]]] = {
     "e1ap": {"teid": ["e1ap.gTP_TEID"]},
 }
 # Fields of the cause of a message, of the protocols that have one.
-CAUSE_FIELDS = {"ngap": "ngap.cause", "f1ap": "f1ap.cause", "e1ap": "e1ap.cause"}
+# Groups of the Cause of each protocol, a CHOICE whose value tshark has in the field of its group, e.g. ngap.protocol.
+CAUSE_GROUPS = {
+    "ngap": ("radioNetwork", "transport", "nas", "protocol", "misc"),
+    "f1ap": ("radioNetwork", "transport", "protocol", "misc"),
+    "e1ap": ("radioNetwork", "transport", "protocol", "misc"),
+}
 
 
 def messages(tshark: Tshark, pcap: str | os.PathLike[str], proto: str) -> list[dict[str, Any]]:
@@ -43,7 +52,9 @@ def messages(tshark: Tshark, pcap: str | os.PathLike[str], proto: str) -> list[d
     when absent, "cause", and for F1AP "old_du_ue_f1ap_id", the old gNB-DU UE F1AP ID of a reestablishment, or None.
     """
     names = fields(proto)
-    rows = (dict(zip(names, values)) for values in tshark.iter_fields(pcap, names, tag=f"{proto}-messages-v2"))
+    # The fields are part of the tag, since they depend on the protocol and this code.
+    tag = f"{proto}-messages-" + hashlib.sha256("\0".join(names).encode()).hexdigest()[:16]
+    rows = (dict(zip(names, values)) for values in tshark.iter_fields(pcap, names, tag=tag))
     return [m for row in rows if (m := message(proto, row)) is not None]
 
 
@@ -56,9 +67,44 @@ def fields(proto: str) -> list[str]:
         f"{proto}.successfulOutcome_element",
         f"{proto}.unsuccessfulOutcome_element",
         "_ws.col.Info",
-        CAUSE_FIELDS[proto],
+        *cause_fields(proto),
         *(f for _, f in UE_ID_FIELDS[proto]),
     ]
+
+
+def cause_fields(proto: str) -> list[str]:
+    """The tshark fields of the causes of proto, read by cause()."""
+    return [f"{proto}.{group}" for group in CAUSE_GROUPS[proto]]
+
+
+def cause(proto: str, row: dict[str, str]) -> str | None:
+    """The cause of a message of proto, given its tshark field values by name, as "<group>:<value>", e.g.
+    "protocol:unspecified", or None without one.
+    """
+    for group in CAUSE_GROUPS[proto]:
+        if value := first(row.get(f"{proto}.{group}")):
+            field = f"{proto}.{group}"
+            return f"{group}:{_cause_names().get(field, {}).get(value, value)}"
+    return None
+
+
+@functools.lru_cache(maxsize=1)
+def _cause_names() -> dict[str, dict[str, str]]:
+    """Names of the values of the cause fields, by field and value, from the value tables of the tshark on PATH, so that
+    they match its build; empty without tshark.
+    """
+    tshark = shutil.which("tshark")
+    if tshark is None:
+        return {}
+    wanted = {f for proto in CAUSE_GROUPS for f in cause_fields(proto)}
+    names: dict[str, dict[str, str]] = {}
+    with subprocess.Popen([tshark, "-G", "values"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True) as proc:
+        for line in proc.stdout:
+            # Value lines are "V", the field, the value and its name, tab-separated.
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) == 4 and parts[0] == "V" and parts[1] in wanted:
+                names.setdefault(parts[1], {})[parts[2]] = parts[3]
+    return names
 
 
 def link_fields(proto: str) -> list[str]:
@@ -101,7 +147,7 @@ def message(proto: str, row: dict[str, str]) -> dict[str, Any] | None:
         # A message may also name an old identifier after the UE's own, e.g. the old gNB-DU UE F1AP ID of a
         # reestablishment.
         **{label: first(row[f]) for label, f in UE_ID_FIELDS[proto]},
-        "cause": row[CAUSE_FIELDS[proto]] or None,
+        "cause": cause(proto, row),
         # Only the DLRRCMessageTransfer of a reestablishment names an old gNB-DU UE F1AP ID; a Reset lists the ids of
         # several UEs.
         **({"old_du_ue_f1ap_id": _second(row["f1ap.GNB_DU_UE_F1AP_ID"]) if code == "12" else None}

@@ -160,7 +160,8 @@ records, with a warning. Field extractions are cached in the work directory by p
 default the fields and filter. `run.find_pcaps()` finds the pcaps of each protocol by file name, `<proto>.pcap` or with
 a prefix, e.g. `gnb_f1ap.pcap`.
 `run.check_pcap()` checks that one of the known dissectors binds the first frame of a pcap. `messages.messages()` lists
-the NGAP, F1AP or E1AP messages of a pcap with their procedure, outcome, UE identifiers and cause, `frames.summaries()`
+the NGAP, F1AP or E1AP messages of a pcap with their procedure, outcome, UE identifiers and cause, as
+`<group>:<value>` named by the value tables of tshark, e.g. `protocol:unspecified`, `frames.summaries()`
 the one-line tshark summary of each frame and `frames.decode()` decodes one frame. `frames.time_span()` reads the time
 span of a classic pcap from its complete packets' headers, without `tshark`, and gives None for pcapng. `capture.read()`
 gives the protocol, the frame summaries and the messages or PDUs of a pcap in one pass over its frames, after reading
