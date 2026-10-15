@@ -5,11 +5,13 @@
 
 from __future__ import annotations
 
+import glob
 import hashlib
 import os
 import shutil
 import subprocess
 import tempfile
+import uuid
 import warnings
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from pathlib import Path
@@ -104,20 +106,27 @@ class Tshark:
         if str(src).startswith("/tmp/") or self._reads_in_place(src):
             return src
         st = src.stat()
-        digest = hashlib.sha256(f"{src}\0{st.st_size}\0{st.st_mtime_ns}".encode()).hexdigest()[:16]
+        source = hashlib.sha256(str(src).encode()).hexdigest()[:16]
+        version = hashlib.sha256(f"{st.st_size}\0{st.st_mtime_ns}".encode()).hexdigest()[:8]
         stage_dir = self.work_dir / "pcap-stage"
         stage_dir.mkdir(parents=True, exist_ok=True)
-        staged = stage_dir / f"{digest}-{src.name}"
+        staged = stage_dir / f"{source}-{version}-{src.name}"
         if staged.exists():
             return staged
         # A staged pcap counts as complete once it exists, so it appears only once linked or copied whole.
-        tmp = staged.with_name(f"{staged.name}.{os.getpid()}.tmp")
-        tmp.unlink(missing_ok=True)
+        tmp = _temp_path(staged)
         try:
-            os.link(src, tmp)
-        except OSError:
-            shutil.copy2(src, tmp)
-        tmp.replace(staged)
+            try:
+                os.link(src, tmp)
+            except OSError:
+                shutil.copy2(src, tmp)
+            tmp.replace(staged)
+        finally:
+            tmp.unlink(missing_ok=True)
+        # Earlier versions of the pcap, which a copy would otherwise keep in the work directory, e.g. in memory.
+        for old in stage_dir.glob(f"{source}-*-{glob.escape(src.name)}"):
+            if old != staged:
+                old.unlink(missing_ok=True)
         return staged
 
     def _reads_in_place(self, src: Path) -> bool:
@@ -203,11 +212,19 @@ class Tshark:
         if cf is not None and whole:
             cf.parent.mkdir(parents=True, exist_ok=True)
             # A cache file counts as complete once it exists, so it appears only once written.
-            tmp = cf.with_name(f"{cf.name}.{os.getpid()}.tmp")
-            tmp.write_text("\n".join(lines) + ("\n" if lines else ""))
-            tmp.replace(cf)
+            tmp = _temp_path(cf)
+            try:
+                tmp.write_text("\n".join(lines) + ("\n" if lines else ""))
+                tmp.replace(cf)
+            finally:
+                tmp.unlink(missing_ok=True)
         for line in lines:
             yield split_fields(line, len(fields_list))
+
+
+def _temp_path(path: Path) -> Path:
+    """A path to write a file at before renaming it to path, unique across processes and threads."""
+    return path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
 
 
 def _filter_stderr(stderr: str) -> str:

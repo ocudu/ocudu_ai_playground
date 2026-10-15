@@ -74,7 +74,8 @@ class TsharkHelpersTest(unittest.TestCase):
             pcap.write_bytes(b"run B")
             os.utime(pcap, ns=(0, 0))
             self.assertEqual(ts.stage(pcap).read_bytes(), b"run B")
-            self.assertEqual([p.suffix for p in (Path(work) / "pcap-stage").iterdir()], [".pcap", ".pcap"])
+            # Only the current version stays staged, with no temp files.
+            self.assertEqual([p.read_bytes() for p in (Path(work) / "pcap-stage").iterdir()], [b"run B"])
 
 
 class F1apDecodeTest(unittest.TestCase):
