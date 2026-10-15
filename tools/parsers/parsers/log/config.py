@@ -11,7 +11,7 @@ The same text format is used by the YAML configuration files, which parse_config
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 
 from . import events
@@ -55,16 +55,18 @@ _PLANE_SECTIONS = {
     "DU": re.compile(r"(?m)^(?:cells|cell_cfg|ru_sdr|ru_ofh|du_high):"),
 }
 # Scalar options kept in AppConfig.values.
+CELL_KEYS = ("pci", "band", "dl_arfcn", "channel_bandwidth_MHz", "common_scs", "nof_antennas_dl", "nof_antennas_ul")
 VALUE_KEYS = (
     "gnb_id", "ran_node_name", "hex_max_size",
-    "pci", "band", "dl_arfcn", "channel_bandwidth_MHz", "common_scs", "nof_antennas_dl", "nof_antennas_ul",
+    *CELL_KEYS,
     "srate", "device_driver", "sync", "time_alignment_calibration",
     "enable_log", "enable_json", "autostart_stdout_metrics",
 )
+# Parents of the options of a cell, a list item being "-": cell_cfg, or an item of the cells list.
+_CELL_PATHS = (("cell_cfg",), ("cells", "-"))
 # Protocols of the "<proto>_enable: true" options of the pcap section.
 PCAP_PROTOCOLS = ("ngap", "f1ap", "e1ap", "mac", "rlc", "n3", "f1u", "xnap", "e2ap_cu_cp", "e2ap_cu_up", "e2ap_du")
-# Keys may also be the first of a list item, e.g. "  - pci: 1" of the cells list.
-_VALUE_RES = {key: re.compile(rf"^\s*(?:-\s+)?{re.escape(key)}\s*:\s*(.+?)\s*(?:#.*)?$", re.MULTILINE) for key in VALUE_KEYS}
+_SCALAR_RE = re.compile(r"(?P<key>[\w-]+)\s*:\s*(?P<value>.*?)\s*(?:#.*)?$")
 _PCAP_RE = re.compile(r"^\s*(\w+)_enable\s*:\s*true\s*$", re.MULTILINE)
 _TDD_RE = re.compile(r"^\s*(?:-\s+)?duplex\s*:\s*tdd\b", re.MULTILINE)
 _AMF_RE = re.compile(r"^(?P<indent>\s*)amf\s*:\s*(?:#.*)?$")
@@ -138,15 +140,46 @@ def parse_config(text: str, complete: bool = True) -> AppConfig:
         if in_log and (m := _LEVEL_RE.match(line)):
             cfg.levels[m.group("option")] = m.group("level")
     cfg.planes = [plane for plane, pattern in _PLANE_SECTIONS.items() if pattern.search(text)]
-    for key, pattern in _VALUE_RES.items():
-        if values := pattern.findall(text):
-            cfg.values[key] = values[-1].strip().strip('"')
+    for path, key, value in _scalars(text):
+        # Cell options also name neighbour cells, e.g. the pci of the SIB3 neighbours of a cell, deeper.
+        if key in VALUE_KEYS and (key not in CELL_KEYS or path in _CELL_PATHS):
+            cfg.values[key] = value.strip('"')
     for proto in _PCAP_RE.findall(text):
         if proto in PCAP_PROTOCOLS and proto not in cfg.pcaps:
             cfg.pcaps.append(proto)
     cfg.tdd = "tdd_ul_dl_cfg" in text or _TDD_RE.search(text) is not None
     _parse_amf(text, cfg)
     return cfg
+
+
+def _scalars(text: str) -> Iterator[tuple[tuple[str, ...], str, str]]:
+    """The scalar options of a YAML text, as (path, key, value), the path being the keys of their parents, "-" for a
+    list item, in text order.
+    """
+    # Parents of the current line, as (indent, key or "-").
+    stack: list[tuple[int, str]] = []
+    for line in text.splitlines():
+        rest = line.lstrip()
+        if not rest or rest.startswith("#"):
+            continue
+        indent = len(line) - len(rest)
+        if rest.startswith("- "):
+            # A list may sit at the indent of its parent key.
+            while stack and (stack[-1][0] > indent or (stack[-1][0] == indent and stack[-1][1] == "-")):
+                stack.pop()
+            stack.append((indent, "-"))
+            item = rest[2:].lstrip()
+            indent += len(rest) - len(item)
+            rest = item
+        while stack and stack[-1][0] >= indent:
+            stack.pop()
+        m = _SCALAR_RE.fullmatch(rest)
+        if not m:
+            continue
+        if m.group("value"):
+            yield tuple(name for _, name in stack), m.group("key"), m.group("value")
+        else:
+            stack.append((indent, m.group("key")))
 
 
 def _parse_amf(text: str, cfg: AppConfig) -> None:

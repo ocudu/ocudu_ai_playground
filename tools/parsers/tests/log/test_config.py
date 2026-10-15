@@ -103,6 +103,15 @@ if __name__ == "__main__":
         cfg = config.parse_config("cell_cfg:\n  pci: 7\ncells:\n  - pci: 1\n    band: 78\n  - pci: 2\n")
         self.assertEqual((cfg.values["pci"], cfg.values["band"]), ("2", "78"))
 
+    def test_cell_values_of_neighbours_are_left_out(self):
+        # The SIB3 neighbours of a configuration file, and the NTN neighbours of the echo, deeper in the cell.
+        cfg = config.parse_config(
+            "cell_cfg:\n  pci: 1\n  sib:\n    sib3:\n      intra_freq_neigh_cell_list:\n        - pci: 2\n")
+        self.assertEqual(cfg.values["pci"], "1")
+        cfg = config.parse_config(
+            "cells:\n- pci: 3\n  ntn:\n    ncells:\n      - sat_ref: 1\n        pci: 42\n  band: 78\n")
+        self.assertEqual((cfg.values["pci"], cfg.values["band"]), ("3", "78"))
+
 
 # A configuration file, shortened, with a repeated option.
 YAML = """gnb_id: 411
