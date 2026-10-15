@@ -91,6 +91,10 @@ class SchedtraceTest(unittest.TestCase):
             with self.assertWarnsRegex(UserWarning, f"{path}: corrupt"):
                 self.assertEqual(len(list(schedtrace.read(path))), 1)
 
+    def test_offsets_stop_at_the_end_of_the_contents(self):
+        data = (DATA / "schedtrace_cell0.bin").read_bytes()
+        self.assertEqual(schedtrace.offsets(data[:-5], end=len(data)), schedtrace.offsets(data[:-5]))
+
     def test_read_matches_events(self):
         data = (DATA / "schedtrace_cell0.bin").read_bytes()
         self.assertEqual(list(schedtrace.read(DATA / "schedtrace_cell0.bin")), list(schedtrace.events(data)))
@@ -234,3 +238,8 @@ class GridTest(unittest.TestCase):
 
     def test_rbg_size(self):
         self.assertEqual([grid.rbg_size(n) for n in (24, 52, 106, 273)], [2, 4, 8, 16])
+
+    def test_rbgs_past_the_bwp_hold_no_crbs(self):
+        bwp = {"crb_start": 0, "crb_length": 52}
+        # 13 RBGs of 4 CRBs fill the BWP; 20 set bits, as of a corrupt bitmap, give no more.
+        self.assertEqual(grid.rbg_crbs((1 << 20) - 1, 20, bwp), [(0, 52)])

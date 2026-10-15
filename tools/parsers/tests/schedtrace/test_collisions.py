@@ -96,6 +96,15 @@ class CollisionsTest(unittest.TestCase):
     def test_find(self):
         self.assertEqual(list(collisions.find(DATA / "schedtrace_cell0.bin")), [])
 
+    def test_find_of_a_trace_without_its_start_event(self):
+        data = (DATA / "schedtrace_cell0.bin").read_bytes()
+        with tempfile.TemporaryDirectory() as d:
+            path = Path(d) / "schedtrace_cell0.bin"
+            # Just opened: the header and part of the start event.
+            path.write_bytes(data[: schedtrace.HEADER.size + 20])
+            with self.assertRaisesRegex(ValueError, "does not start with the start event"):
+                list(collisions.find(path))
+
 
 class VrbOriginTest(unittest.TestCase):
     """VRBs of PDSCHs of DCI format 1_0 in a common search space count from their CORESET, the others from the BWP."""

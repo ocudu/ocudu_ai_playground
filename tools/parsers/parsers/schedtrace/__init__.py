@@ -129,9 +129,9 @@ def events(data: bytes | memoryview, grid_only: bool = False) -> Iterator[dict[s
 
 def offsets(data: bytes | memoryview, start: int | None = None, end: int | None = None) -> list[int]:
     """The offsets of the complete events of the contents of a trace from start, which must be the offset of an event,
-    or the first one, up to end.
+    or the first one, up to end, at most the end of the contents.
     """
-    end = len(data) if end is None else end
+    end = len(data) if end is None else min(end, len(data))
     out = []
     pos = first_offset(data) if start is None else start
     while pos + 4 <= end:

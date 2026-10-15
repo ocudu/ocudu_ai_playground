@@ -83,9 +83,9 @@ class Aggregator:
     """
 
     def __init__(self, bin_s: float = BIN_S) -> None:
-        self.bin_s = bin_s
-        # Bin size in microseconds, so that bins are exact.
+        # Bin size in microseconds, so that bins are exact, and in seconds, as rounded to it.
         self._bin_us = max(1, round(bin_s * 1e6))
+        self.bin_s = self._bin_us / 1e6
         # Sums of each (bin, RNTI), and of each bin for the cell, with the first record of the bin.
         self.ues: dict[tuple[int, str], dict[str, Any]] = {}
         self.cells: dict[int, dict[str, Any]] = {}
@@ -153,7 +153,9 @@ class Aggregator:
             self._ue(b, rnti, ue, record)["sr_count"] += 1
 
     def merge(self, other: Aggregator) -> None:
-        """Adds the sums of an aggregator of a later part of the trace."""
+        """Adds the sums of an aggregator of a later part of the trace, of the same bin size."""
+        if other._bin_us != self._bin_us:
+            raise ValueError(f"Cannot merge bins of {other.bin_s} s into bins of {self.bin_s} s.")
         for key, o in other.ues.items():
             u = self.ues.get(key)
             if u is None:

@@ -101,6 +101,17 @@ class UeMetricsTest(unittest.TestCase):
         self.assertAlmostEqual(agg.ue_rows()[0][0], 1_760_000_000.0)
         self.assertEqual(list(agg.cells), [176_000_000_000])
 
+    def test_merge_of_other_bins_raises(self):
+        with self.assertRaises(ValueError):
+            ue_metrics.Aggregator(bin_s=1).merge(ue_metrics.Aggregator(bin_s=0.5))
+
+    def test_bin_size_is_whole_microseconds(self):
+        agg = ue_metrics.Aggregator(bin_s=1.5e-6)
+        e = slot(300, ue_pdschs=[pdsch(0x4601, 20, 1000)])
+        agg.add(1, e, ue_metrics.slot_items(e, self.cell))
+        # Bins of 2 us: the slot at 300 us starts bin 150.
+        self.assertEqual((agg.bin_s, agg.ue_rows()[0][0]), (2e-6, 300e-6))
+
     def test_unknown_harq_status_is_counted_as_none(self):
         e = slot(0, [ack(0x4601, 7), ack(0x4601, 2)])
         items = ue_metrics.slot_items(e, self.cell)

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from itertools import combinations
 from typing import Any
 
-from . import event_at, first_offset, offsets
+from . import MAX_EVENT_SIZE, event_at, first_offset, offsets
 from .grid import Cell, allocations, cell_of
 
 KINDS = ("PDSCH-PDSCH", "PUSCH-PUSCH", "PUSCH-PUCCH", "PDCCH-PDSCH", "PDCCH-PDCCH")
@@ -76,7 +76,7 @@ def find(path: str | os.PathLike[str], start: int | None = None, end: int | None
     """
     with open(path, "rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
         pos = first_offset(mm, os.fspath(path))
-        first = event_at(mm, pos) if len(mm) >= pos + 4 else None
+        first = event_at(mm, pos) if offsets(mm, pos, pos + 4 + MAX_EVENT_SIZE)[:1] == [pos] else None
         if first is None or first["type"] != "CellStartEvent":
             raise ValueError(f"{path}: the trace does not start with the start event of its cell.")
         cell = cell_of(first)

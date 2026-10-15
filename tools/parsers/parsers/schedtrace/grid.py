@@ -291,6 +291,9 @@ def rbg_crbs(bitmap: int, nof_rbgs: int, bwp: dict[str, Any]) -> list[tuple[int,
             continue
         lo = start if i == 0 else first_end + (i - 1) * size
         hi = min(end, first_end if i == 0 else lo + size)
+        # RBGs past the BWP, of a bitmap of another RBG size configuration or a corrupt one, hold no CRBs.
+        if hi <= lo:
+            continue
         if ranges and ranges[-1][0] + ranges[-1][1] == lo:
             ranges[-1] = (ranges[-1][0], hi - ranges[-1][0])
         else:
