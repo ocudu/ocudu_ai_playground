@@ -30,6 +30,7 @@ _KIND_OF = {
     ("PUSCH", "PUCCH"): "PUSCH-PUCCH",
     ("PUCCH", "PUSCH"): "PUSCH-PUCCH",
     **{(a, b): "PDCCH-PDSCH" for p in _PDSCHS for a, b in (("PDCCH", p), (p, "PDCCH"))},
+    ("PDCCH", "PDCCH"): "PDCCH-PDCCH",
 }
 
 
@@ -42,27 +43,32 @@ class Collision:
     timestamp_us: int
     # The allocations, as grid.allocations() gives them, without "sym_start", "sym_length", "crb_start" and
     # "crb_length" but with "rects", their (first symbol, symbols, first CRB, CRBs), one per frequency hop or CRB range;
-    # or for PDCCH-PDCCH, PDCCHs with "item", "rnti", "dci_type", "coreset_id", "cce" and "nof_cces".
+    # or for PDCCH-PDCCH in one CORESET and monitoring symbol, PDCCHs with "item", "rnti", "dci_type", "coreset_id",
+    # "cce" and "nof_cces".
     a: dict[str, Any]
     b: dict[str, Any]
     # Overlapping resources: (first symbol, symbols, first CRB, CRBs) of each pair of overlapping rects, or for PDCCHs
-    # the (first CCE, CCEs) they share in their CORESET.
+    # in one CORESET and monitoring symbol the (first CCE, CCEs) they share.
     overlap: list[tuple[int, ...]] = field(default_factory=list)
 
 
 def slot_collisions(event: dict[str, Any], cell: Cell) -> list[Collision]:
     """The collisions of a CellSlotEvent of schedtrace.read()."""
     out: list[Collision] = []
-    pdcchs = _pdcchs(event)
-    for a, b in combinations(_items(allocations(event, cell)), 2):
+    items = _items(allocations(event, cell))
+    # First symbol of each PDCCH, that of the monitoring occasion of its search space.
+    first_symbol = {tuple(i["item"]): i["rects"][0][0] for i in items if i["channel"] == "PDCCH"}
+    for a, b in combinations(items, 2):
         kind = _KIND_OF.get((a["channel"], b["channel"]))
-        if kind is None:
+        # PDCCHs of one CORESET and monitoring occasion collide by their CCEs, below.
+        if kind is None or (kind == "PDCCH-PDCCH" and a["coreset_id"] == b["coreset_id"] and
+                            a["rects"][0][0] == b["rects"][0][0]):
             continue
         overlap = [o for ra in a["rects"] for rb in b["rects"] if (o := _rect_overlap(ra, rb))]
         if overlap:
             out.append(Collision(kind, event["slot_tx"], event["timestamp_us"], a, b, overlap))
-    for a, b in combinations(pdcchs, 2):
-        if a["coreset_id"] != b["coreset_id"]:
+    for a, b in combinations(_pdcchs(event), 2):
+        if a["coreset_id"] != b["coreset_id"] or first_symbol.get(tuple(a["item"])) != first_symbol.get(tuple(b["item"])):
             continue
         lo, hi = max(a["cce"], b["cce"]), min(a["cce"] + a["nof_cces"], b["cce"] + b["nof_cces"])
         if lo < hi:

@@ -95,9 +95,20 @@ class CollisionsTest(unittest.TestCase):
         self.assertEqual(self.kinds(event), [])
 
     def test_pdcchs(self):
-        # Aggregation level 2 is 4 CCEs: 0 to 3 and 2 to 5 share 2 and 3, in CORESET 1 only.
+        # Aggregation level 2 is 4 CCEs: 0 to 3 and 2 to 5 share 2 and 3, in CORESET 1. CORESET 0, of CRBs 10 to 33 in
+        # symbols 0 and 1, overlaps CORESET 1, so its PDCCH of CRBs 16 to 27 shares REs with both of CORESET 1.
         event = slot(dl_pdcchs=[pdcch(1, 1, 0, 2), pdcch(2, 0, 2, 2)], ul_pdcchs=[pdcch(3, 1, 2, 2), pdcch(4, 1, 6, 0)])
-        self.assertEqual(self.kinds(event), [("PDCCH-PDCCH", ["dl_pdcchs", 0], ["ul_pdcchs", 0], [(2, 2)])])
+        self.assertEqual(self.kinds(event), [
+            ("PDCCH-PDCCH", ["dl_pdcchs", 0], ["dl_pdcchs", 1], [(0, 1, 16, 4)]),
+            ("PDCCH-PDCCH", ["dl_pdcchs", 1], ["ul_pdcchs", 0], [(0, 1, 16, 4)]),
+            ("PDCCH-PDCCH", ["dl_pdcchs", 0], ["ul_pdcchs", 0], [(2, 2)]),
+        ])
+
+    def test_pdcchs_of_other_monitoring_symbols(self):
+        # Search space 2 of CORESET 1 monitoring symbol 7: its CCEs are those of another occasion.
+        next(ss for ss in self.cell.search_spaces if ss["id"] == 2)["monitoring_symbols"] = [1 << 7]
+        event = slot(dl_pdcchs=[pdcch(1, 1, 0, 2, ss_id=1), pdcch(2, 1, 0, 2, ss_id=2)])
+        self.assertEqual(self.kinds(event), [])
 
     def test_pdcchs_and_pdschs(self):
         # CCE 1 of CORESET 1 is REG bundle 3, CRBs 38 to 43, in symbol 0 that search space 2 monitors. PDSCHs of DCI
@@ -196,10 +207,10 @@ class PrachTest(unittest.TestCase):
                 for a in allocs]
 
     def test_short_format(self):
-        # Format A1: 2 symbols per occasion, 12 RBs per frequency occasion.
+        # Format A1: 2 symbols per occasion, 12 RBs per frequency occasion. Frequency occasion 1 of the 2 of msg1-FDM,
+        # which has a Prach of its own.
         self.assertEqual(self.rects(format=4, nof_occasions=2, start_symbol=2, index_fd_ra=1, nof_fd_ra=2), [
             ("A1", 0, 1, 2, 2, 15, 12), ("A1", 1, 1, 4, 2, 15, 12),
-            ("A1", 0, 2, 2, 2, 27, 12), ("A1", 1, 2, 4, 2, 27, 12),
         ])
 
     def test_long_format_lasts_past_its_slot(self):
