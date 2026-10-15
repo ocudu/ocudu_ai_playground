@@ -28,6 +28,8 @@ class NasTest(unittest.TestCase):
         # A frame of two NAS messages, e.g. an RRCReconfiguration with two dedicatedNAS-Messages.
         self.assertEqual(nas.nas_name("0x68,0x68", "0xc2,0xcb"), "PDUSessionEstablishmentAccept,PDUSessionModificationCommand")
         self.assertEqual(nas.nas_name("0x54,0x54", ""), "ConfigurationUpdateCommand")
+        # A registration accept and the PDU session establishment accept of a DL NAS transport.
+        self.assertEqual(nas.nas_name("0x42,0x68", "0xc2"), "RegistrationAccept,PDUSessionEstablishmentAccept")
 
 
 class RrcTest(unittest.TestCase):

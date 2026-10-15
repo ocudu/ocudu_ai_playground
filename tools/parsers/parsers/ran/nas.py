@@ -38,12 +38,16 @@ NAS_5GSM_TYPES: dict[int, str] = {
 
 def nas_name(mm_type: str | int | None, sm_type: str | int | None) -> str | None:
     """Name of a NAS message from its 5GSM type, else its 5GMM type, or None without either. A frame of several NAS
-    messages, whose types tshark separates by commas, gives their names separated by commas.
+    messages, whose types tshark separates by commas, gives their names separated by commas, the 5GSM messages in place
+    of the UL and DL NAS transports that carry them.
     """
-    names = [NAS_5GSM_TYPES.get(v, f"5GSM(0x{v:02x})") for v in _to_ints(sm_type)]
-    if not names:
-        names = [NAS_5GMM_TYPES.get(v, f"5GMM(0x{v:02x})") for v in _to_ints(mm_type)]
-    return ",".join(dict.fromkeys(names)) or None
+    sm = [NAS_5GSM_TYPES.get(v, f"5GSM(0x{v:02x})") for v in _to_ints(sm_type)]
+    mm = [NAS_5GMM_TYPES.get(v, f"5GMM(0x{v:02x})") for v in _to_ints(mm_type) if not (sm and v in _TRANSPORTS)]
+    return ",".join(dict.fromkeys(mm + sm)) or None
+
+
+# UL and DL NAS transport, which carry the 5GSM messages.
+_TRANSPORTS = (0x67, 0x68)
 
 
 def _to_ints(value: str | int | None) -> list[int]:

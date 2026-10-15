@@ -37,6 +37,9 @@ class ContextTrackerTest(unittest.TestCase):
         reest = {**messages.message("f1ap", row), "crnti": None}
         self.assertEqual(reest["du_ue_f1ap_id"], "7")
         self.assertEqual(reest["old_du_ue_f1ap_id"], "3")
+        # A Reset lists the ids of several UEs, none of them old.
+        reset = messages.message("f1ap", {**row, "f1ap.procedureCode": "0"})
+        self.assertIsNone(reset["old_du_ue_f1ap_id"])
         tracker = ContextTracker("f1ap")
         # The old context, connected and silent since 1.1 s, then the reestablishment request of the new one.
         msgs = (msg(1.0, "11", du="3", crnti="17920"), msg(1.1, "13", du="3", cu="3"), msg(2.0, "11", du="7", crnti="17921"),

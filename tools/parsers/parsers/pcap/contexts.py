@@ -26,8 +26,8 @@ ID_NAMES = {
     "cu_up_ue_e1ap_id": "cu_up_e1ap",
 }
 # Messages whose GTP TEIDs are the UL ones of the UPF, which NGAP and E1AP share, by protocol: NGAP
-# HandoverResourceAllocation, InitialContextSetup and PDUSessionResourceSetup requests, E1AP BearerContextSetup requests. The TEIDs that the gNB allocates repeat across
-# UEs.
+# HandoverResourceAllocation, InitialContextSetup and PDUSessionResourceSetup requests, E1AP BearerContextSetup
+# requests. The TEIDs that the gNB allocates repeat across UEs.
 _UPF_TEID_CODES = {"ngap": {"13", "14", "29"}, "e1ap": {"8"}}
 # InitialULRRCMessageTransfer, whose RRC reestablishment request holds the old C-RNTI of the UE.
 _INITIAL_UL_RRC_CODE = "11"
@@ -102,8 +102,8 @@ class ContextTracker:
         for key in [key for key, c in self._in_use.items() if c is ctx]:
             del self._in_use[key]
 
-
     def _link_values(self, label: str, values: list[str], msg: dict[str, Any]) -> list[str]:
+        """The values of a link of a message that link its context, normalized, e.g. NAS PDUs as hashes."""
         if label in ("ho_rnti", "reest_rnti"):
             if label == "reest_rnti" and msg["code"] != _INITIAL_UL_RRC_CODE:
                 return []

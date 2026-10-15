@@ -87,7 +87,8 @@ def main(argv: list[str] | None = None) -> int:
             x["first_iso"],
             x["message"],
             x["rrc"] or "-",
-            x["nas"] or "-",
+            # The names of a frame of several NAS messages, which would split the row at their commas.
+            x["nas"].replace(",", "+") if x["nas"] else "-",
             x["cu_ue_f1ap_id"] or "-",
             x["du_ue_f1ap_id"] or "-",
             x["crnti"] or "-",

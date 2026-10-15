@@ -20,8 +20,8 @@ UE_ID_FIELDS: dict[str, list[tuple[str, str]]] = {
 }
 # Fields whose values link the UE contexts of a run across messages and pcaps, by label: the C-RNTI of the target of a
 # handover (newUE-Identity), in F1AP and in the NGAP handover of a target gNB, and the old C-RNTI of a reestablishment,
-# the NAS PDUs, which F1AP and NGAP both carry, and
-# the GTP TEIDs, of which NGAP and E1AP share the UPF one. Values of several occurrences are comma-separated.
+# the NAS PDUs, which F1AP and NGAP both carry, and the GTP TEIDs, of which NGAP and E1AP share the UPF one. Values of
+# several occurrences are comma-separated.
 LINK_FIELDS: dict[str, dict[str, list[str]]] = {
     "f1ap": {
         "ho_rnti": ["nr-rrc.newUE_Identity"],
@@ -102,7 +102,10 @@ def message(proto: str, row: dict[str, str]) -> dict[str, Any] | None:
         # reestablishment.
         **{label: first(row[f]) for label, f in UE_ID_FIELDS[proto]},
         "cause": row[CAUSE_FIELDS[proto]] or None,
-        **({"old_du_ue_f1ap_id": _second(row["f1ap.GNB_DU_UE_F1AP_ID"])} if proto == "f1ap" else {}),
+        # Only the DLRRCMessageTransfer of a reestablishment names an old gNB-DU UE F1AP ID; a Reset lists the ids of
+        # several UEs.
+        **({"old_du_ue_f1ap_id": _second(row["f1ap.GNB_DU_UE_F1AP_ID"]) if code == "12" else None}
+           if proto == "f1ap" else {}),
     }
 
 
