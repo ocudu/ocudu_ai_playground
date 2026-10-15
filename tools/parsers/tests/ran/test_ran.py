@@ -39,6 +39,8 @@ class RrcTest(unittest.TestCase):
         self.assertEqual(rrc.decode_ccch_type("40", "ul"), "rrcReestablishmentRequest")
         self.assertIsNone(rrc.decode_ccch_type("80", "ul"))
         self.assertIsNone(rrc.decode_ccch_type("zz", "ul"))
+        # A UL-CCCH1 message, of 64 bits: rrcResumeRequest1, with the full I-RNTI.
+        self.assertEqual(rrc.decode_ccch_type("1234567890abcdef", "ul"), "rrcResumeRequest1")
 
 
 

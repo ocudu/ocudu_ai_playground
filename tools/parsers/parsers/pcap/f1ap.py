@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 from typing import Any
 
@@ -32,8 +33,8 @@ MESSAGE_FIELDS = [
     "f1ap.C_RNTI",
     "f1ap.SRBID",
     "f1ap.RRCContainer",
-    "nas_5gs.mm.message_type",
-    "nas_5gs.sm.message_type",
+    "nas-5gs.mm.message_type",
+    "nas-5gs.sm.message_type",
 ]
 
 # Procedures carrying an RRC container, and the downlink ones among them.
@@ -77,7 +78,9 @@ def messages(tshark: Tshark, pcap: str | os.PathLike[str], *, force: bool = Fals
     rrc_types = valid_rrc_types(tshark, pcap)
     fields = rrc_fields(rrc_types)
     rows = []
-    for values in tshark.iter_fields(pcap, fields, tag=f"f1ap-messages-v1-{len(fields)}", force=force):
+    # The fields are part of the tag, since they depend on the tshark build and this code.
+    tag = "f1ap-messages-" + hashlib.sha256("\0".join(fields).encode()).hexdigest()[:16]
+    for values in tshark.iter_fields(pcap, fields, tag=tag, force=force):
         v = dict(zip(fields, values))
         if not v["frame.time_epoch"]:
             continue
@@ -122,7 +125,7 @@ def carried(row: dict[str, str], rrc_types: list[str]) -> dict[str, str | None]:
     }
     return {
         "rrc": resolve_rrc(detail),
-        "nas": nas_name(row["nas_5gs.mm.message_type"], row["nas_5gs.sm.message_type"]),
+        "nas": nas_name(row["nas-5gs.mm.message_type"], row["nas-5gs.sm.message_type"]),
         "crnti": row["f1ap.C_RNTI"] or None,
     }
 
