@@ -214,11 +214,14 @@ of their CCEs (TS 38.211 7.3.2.2). `skills/analyze-ran-log/scripts/ocudu/schedtr
 `schedtrace.ue_metrics` gives the per-UE metrics of a trace: `slot_items()` the DL and UL grants, HARQ-ACK and CSI
 reports and SRs of a slot, per UE, and `Aggregator` their sums per UE and 10 ms bin, as rows named after the fields of
 the METRICS `Scheduler UE` lines where they mean the same (`dl_brate` from the ACKed TBS, `dl_mcs`, `dl_nof_ok`,
-`dl_error_rate`, `cqi`, `dl_ri`, `sr_count`), plus the scheduler latency, PRBs and UEs of the cell per bin.
+`dl_nof_nok` of the NACK and DTX reports, `dl_error_rate`, `cqi` and `dl_ri` as means of a bin, `sr_count`), plus the
+scheduler latency, PRBs and UEs of the cell per bin.
 Aggregators of parts of a trace merge; `Aggregator(bin_s=1)` gives 1 s bins, as METRICS periods, and `ue_totals()` the
 totals of each UE over a span. Bins are whole microseconds, at least one: `Aggregator.bin_s` holds the size rounded to
 them. `skills/analyze-ran-log/scripts/ocudu/schedtrace_ue_metrics.py` prints them. The trace has no UL CRC or buffer
-status: UL rates are of scheduled new transmissions (`ul_sched_brate`), and a DTX report counts as not ok.
+status: UL rates are of scheduled new transmissions (`ul_sched_brate`), and `ul_layers` is of the PUSCHs, not the RI of
+SRS. HARQ processes that time out without a report, or have no feedback, have no trace event, so they count in neither
+`dl_nof_ok` nor `dl_nof_nok`, unlike in METRICS.
 
 ```python
 from parsers import schedtrace

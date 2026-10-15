@@ -5,7 +5,10 @@
 named as the fields of the METRICS "Scheduler UE" lines of OCUDU where they mean the same.
 
 The trace has no UL CRC, buffer status or power headroom, so UL rates are of the scheduled TBS of new transmissions,
-not of the decoded ones. A HARQ-ACK report of DTX counts as not ok.
+not of the decoded ones; ul_layers is the mean layers of the PUSCHs, not the UL RI of SRS. dl_nof_nok counts the
+HARQ-ACK reports of NACK and of DTX, as METRICS does, dl_nof_dtx the latter alone. HARQ processes that time out
+without a report, and those without feedback, e.g. of NTN, have no trace event, so they count in neither dl_nof_ok nor
+dl_nof_nok, unlike in METRICS. cqi and dl_ri are means over the reports of a bin, cqi rounded, as in METRICS.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ ITEM_FIELDS: dict[str, tuple[str, ...]] = {
 ITEM_UNITS = {"tbs": "B", "rsrp": "dBm"}
 UE_FIELDS = ("rnti", "ue_index", "dl_brate", "dl_sched_brate", "dl_mcs", "dl_nof_prbs", "dl_nof_newtx", "dl_nof_retx",
              "dl_nof_ok", "dl_nof_nok", "dl_nof_dtx", "dl_error_rate", "ul_sched_brate", "ul_nof_prbs", "ul_nof_newtx",
-             "ul_nof_retx", "ul_ri", "cqi", "dl_ri", "rsrp", "sr_count")
+             "ul_nof_retx", "ul_layers", "cqi", "dl_ri", "rsrp", "sr_count")
 UE_UNITS = {"dl_brate": "bps", "dl_sched_brate": "bps", "ul_sched_brate": "bps", "dl_error_rate": "%", "rsrp": "dBm"}
 CELL_FIELDS = ("latency_avg", "latency_max", "nof_slots", "dl_nof_prbs", "ul_nof_prbs", "dl_nof_ues", "ul_nof_ues",
                "failed_attempts")
@@ -135,17 +138,17 @@ class Aggregator:
             if status == "Ack":
                 u["dl_nof_ok"] += 1
                 u["dl_ok_bytes"] += tbs or 0
-            elif status == "Nack":
+            elif status in ("Nack", "Dtx"):
                 u["dl_nof_nok"] += 1
-            elif status == "Dtx":
-                u["dl_nof_dtx"] += 1
+                u["dl_nof_dtx"] += status == "Dtx"
         for rnti, ue, cqi, ri, rsrp in items["csi_reports"]:
             u = self._ue(b, rnti, ue, record)
-            # The last report of a bin, as for the METRICS lines.
             if cqi is not None:
-                u["cqi"] = cqi
+                u["cqi_sum"] += cqi
+                u["cqi_n"] += 1
             if ri is not None:
-                u["dl_ri"] = ri
+                u["ri_sum"] += ri
+                u["ri_n"] += 1
             if rsrp is not None:
                 u["rsrp_sum"] += rsrp
                 u["rsrp_n"] += 1
@@ -164,8 +167,8 @@ class Aggregator:
             for k, v in o.items():
                 if k == "record":
                     u[k] = min(u[k], v)
-                elif k in ("ue_index", "cqi", "dl_ri"):
-                    u[k] = v if v is not None else u[k]
+                elif k == "ue_index":
+                    u[k] = v
                 else:
                     u[k] += v
         for b, o in other.cells.items():
@@ -197,8 +200,8 @@ class Aggregator:
                 continue
             spans[rnti][1] = b
             for k, v in u.items():
-                if k in ("ue_index", "cqi", "dl_ri"):
-                    t[k] = v if v is not None else t[k]
+                if k == "ue_index":
+                    t[k] = v
                 elif k != "record":
                     t[k] += v
         return [(spans[rnti][0] * self.bin_s, spans[rnti][1] * self.bin_s, *_ue_values(rnti, t, duration_s))
@@ -214,14 +217,14 @@ class Aggregator:
         u = self.ues.get((b, rnti))
         if u is None:
             u = self.ues[(b, rnti)] = dict.fromkeys(_UE_SUMS, 0)
-            u.update(record=record, ue_index=ue_index, cqi=None, dl_ri=None)
+            u.update(record=record, ue_index=ue_index)
         u["record"] = min(u["record"], record)
         return u
 
 
 def _ue_values(rnti: str, u: dict[str, Any], seconds: float) -> tuple:
     """The values of UE_FIELDS from the sums of a UE over a span of seconds."""
-    reports = u["dl_nof_ok"] + u["dl_nof_nok"] + u["dl_nof_dtx"]
+    reports = u["dl_nof_ok"] + u["dl_nof_nok"]
     return (
         rnti, u["ue_index"], u["dl_ok_bytes"] * 8 / seconds, u["dl_newtx_bytes"] * 8 / seconds,
         u["dl_mcs_sum"] / u["dl_mcs_n"] if u["dl_mcs_n"] else None,
@@ -229,11 +232,12 @@ def _ue_values(rnti: str, u: dict[str, Any], seconds: float) -> tuple:
         100 * (reports - u["dl_nof_ok"]) / reports if reports else None,
         u["ul_newtx_bytes"] * 8 / seconds, u["ul_nof_prbs"], u["ul_nof_newtx"], u["ul_nof_retx"],
         u["ul_layers_sum"] / u["ul_layers_n"] if u["ul_layers_n"] else None,
-        u["cqi"], u["dl_ri"], u["rsrp_sum"] / u["rsrp_n"] if u["rsrp_n"] else None, u["sr_count"],
+        round(u["cqi_sum"] / u["cqi_n"]) if u["cqi_n"] else None, u["ri_sum"] / u["ri_n"] if u["ri_n"] else None,
+        u["rsrp_sum"] / u["rsrp_n"] if u["rsrp_n"] else None, u["sr_count"],
     )
 
 
 # Sums kept per bin and UE.
 _UE_SUMS = ("dl_ok_bytes", "dl_newtx_bytes", "dl_mcs_sum", "dl_mcs_n", "dl_nof_prbs", "dl_nof_newtx", "dl_nof_retx",
             "dl_nof_ok", "dl_nof_nok", "dl_nof_dtx", "ul_newtx_bytes", "ul_nof_prbs", "ul_nof_newtx", "ul_nof_retx",
-            "ul_layers_sum", "ul_layers_n", "rsrp_sum", "rsrp_n", "sr_count")
+            "ul_layers_sum", "ul_layers_n", "cqi_sum", "cqi_n", "ri_sum", "ri_n", "rsrp_sum", "rsrp_n", "sr_count")

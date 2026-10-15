@@ -9,8 +9,9 @@ schedtrace_ue_metrics.py — What the scheduler did for each UE, from OCUDU sche
 Decodes schedtrace_cell<N>.bin with the `parsers` package of this repo and prints, per UE, the throughput, MCS,
 PRBs, retransmissions, HARQ-ACK outcomes, CQI, RI and SRs: a summary over the trace, then one row per period per UE,
 or the grants and reports themselves. Field names follow the METRICS "Scheduler UE" lines where they mean the same:
-dl_brate is of the ACKed TBS. The trace has no UL CRC or buffer status, so UL throughput is of the scheduled new
-transmissions (ul_sched_brate), and a DTX report counts as not ok.
+dl_brate is of the ACKed TBS, dl_nok counts NACK and DTX reports, of which dl_dtx the latter, and cqi and dl_ri are
+means. The trace has no UL CRC or buffer status, so UL throughput is of the scheduled new transmissions
+(ul_sched_brate), and HARQ timeouts without a report are in neither dl_ok nor dl_nok.
 
 Usage:
   python3 schedtrace_ue_metrics.py <path>                              # summary, then 1 s periods per UE

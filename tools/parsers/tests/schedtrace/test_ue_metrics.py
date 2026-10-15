@@ -70,14 +70,25 @@ class UeMetricsTest(unittest.TestCase):
         self.assertEqual((first["dl_brate"], first["dl_sched_brate"]), (2500 * 8 / 0.01, 4000 * 8 / 0.01))
         self.assertEqual((first["dl_mcs"], first["dl_nof_prbs"], first["dl_nof_newtx"], first["dl_nof_retx"]),
                          (15, 20, 1, 1))
-        self.assertEqual((first["dl_nof_ok"], first["dl_nof_nok"], first["dl_nof_dtx"]), (1, 1, 1))
+        # NACKs and DTXs are not ok, as in METRICS.
+        self.assertEqual((first["dl_nof_ok"], first["dl_nof_nok"], first["dl_nof_dtx"]), (1, 2, 1))
         self.assertAlmostEqual(first["dl_error_rate"], 200 / 3)
-        self.assertEqual((first["ul_sched_brate"], first["ul_nof_newtx"], first["ul_nof_retx"], first["ul_ri"]),
+        self.assertEqual((first["ul_sched_brate"], first["ul_nof_newtx"], first["ul_nof_retx"], first["ul_layers"]),
                          (1000 * 8 / 0.01, 1, 1, 1.5))
         self.assertEqual((rows[1]["cqi"], rows[1]["dl_ri"], rows[1]["rsrp"], rows[1]["dl_mcs"]), (12, 2, -80, None))
         cell = [dict(zip(("t", "record", *ue_metrics.CELL_FIELDS), r)) for r in agg.cell_rows()]
         self.assertEqual((cell[0]["latency_avg"], cell[0]["latency_max"], cell[0]["nof_slots"], cell[0]["dl_nof_ues"]),
                          (20, 30, 2, 1))
+
+    def test_cqi_and_ri_are_means_of_a_bin(self):
+        agg = ue_metrics.Aggregator()
+        csi = [{"type": "CsiReportEvent", "slot_rx": 0, "ue_idx": 1, "rnti": 0x4601, "first_tb_wb_cqi": cqi, "ri": ri}
+               for cqi, ri in ((12, 1), (15, 2))]
+        e = slot(1000, csi)
+        agg.add(1, e, ue_metrics.slot_items(e, self.cell))
+        values = dict(zip(ue_metrics.UE_FIELDS, agg.ue_rows()[0][2:]))
+        # CQI 13.5 rounds to 14, as METRICS prints it.
+        self.assertEqual((values["cqi"], values["dl_ri"]), (14, 1.5))
 
     def test_bin_size_and_totals(self):
         # 1 s bins: one bin with all 60 slots, each with a 1000 byte new transmission and its ACK.
@@ -119,7 +130,7 @@ class UeMetricsTest(unittest.TestCase):
         agg = ue_metrics.Aggregator()
         agg.add(1, e, items)
         values = dict(zip(ue_metrics.UE_FIELDS, agg.ue_rows()[0][2:]))
-        self.assertEqual((values["dl_nof_ok"], values["dl_nof_nok"], values["dl_nof_dtx"]), (0, 0, 1))
+        self.assertEqual((values["dl_nof_ok"], values["dl_nof_nok"], values["dl_nof_dtx"]), (0, 1, 1))
 
     def test_merge_equals_one_pass(self):
         events = [slot(t, [ack(0x4601, "Ack")], ue_pdschs=[pdsch(0x4601, 20, 1000)]) for t in range(0, 30000, 500)]
