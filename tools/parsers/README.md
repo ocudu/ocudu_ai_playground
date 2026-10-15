@@ -216,8 +216,9 @@ reports and SRs of a slot, per UE, and `Aggregator` their sums per UE and 10 ms 
 the METRICS `Scheduler UE` lines where they mean the same (`dl_brate` from the ACKed TBS, `dl_mcs`, `dl_nof_ok`,
 `dl_error_rate`, `cqi`, `dl_ri`, `sr_count`), plus the scheduler latency, PRBs and UEs of the cell per bin.
 Aggregators of parts of a trace merge; `Aggregator(bin_s=1)` gives 1 s bins, as METRICS periods, and `ue_totals()` the
-totals of each UE over a span. `skills/analyze-ran-log/scripts/ocudu/schedtrace_ue_metrics.py` prints them. The trace has no UL CRC or buffer status: UL rates are of scheduled new
-transmissions (`ul_sched_brate`), and a DTX report counts as not ok.
+totals of each UE over a span. Bins are whole microseconds, at least one: `Aggregator.bin_s` holds the size rounded to
+them. `skills/analyze-ran-log/scripts/ocudu/schedtrace_ue_metrics.py` prints them. The trace has no UL CRC or buffer
+status: UL rates are of scheduled new transmissions (`ul_sched_brate`), and a DTX report counts as not ok.
 
 ```python
 from parsers import schedtrace
