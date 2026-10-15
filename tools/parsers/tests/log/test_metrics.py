@@ -190,6 +190,21 @@ class MetricsParserTest(unittest.TestCase):
         self.assertEqual(rec["rx_sdu_rate"], 900_000)
         self.assertEqual(rec["rx_num_dds"], 3)
 
+    def test_cu_cp(self):
+        rrc = self.parser.parse("2026-10-01T22:47:12.721144 [METRICS ] CU-CP RRC metrics: [ gnb_du_id=0 "
+                                "mean_nof_rrc_connections=2 attempted_rrc_connection_establishments=[ emergency=0 mo_sig=3 ] ]")
+        self.assertEqual((rrc["layer"], rrc["mean_nof_rrc_connections"], rrc["attempted_rrc_connection_establishments_mo_sig"]),
+                         ("cu_cp_rrc", 2, 3))
+        ngap = self.parser.parse("2026-10-01T22:47:10.720314 [METRICS ] CU-CP NGAP metrics: [ amf_name=amf.5gc connected=true "
+                                 "supported_plmns=[ 00101, ] nof_cn_initiated_paging_requests=0 ], nof_handover_preparations_requested=1")
+        # A PLMN keeps its leading zeros.
+        self.assertEqual((ngap["layer"], ngap["supported_plmns"], ngap["nof_handover_preparations_requested"]),
+                         ("cu_cp_ngap", ["00101"], 1))
+
+    def test_si_prefixes(self):
+        fields = metrics.extract_metric_fields("a=1fs b=2E")
+        self.assertEqual((fields["a"], fields["b"]), (1e-9, 2e18))
+
     def test_e1ap(self):
         rec = self.parser.parse(E1AP_LINE)
         self.assertEqual(rec["layer"], "e1ap")

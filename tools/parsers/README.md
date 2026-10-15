@@ -82,6 +82,8 @@ Supported layers (keys of `metrics.LAYER_PATTERNS`), matching the current OCUDU 
 | `pdcp`           | `PDCP Metrics:`            |
 | `nrup`           | `NRUP Metrics:`            |
 | `e1ap`           | `CU-UP E1AP metrics:`      |
+| `cu_cp_rrc`      | `CU-CP RRC metrics:`       |
+| `cu_cp_ngap`     | `CU-CP NGAP metrics:`      |
 | `exec`           | `Executor metrics "name":` |
 | `resource_usage` | `App resource usage:`      |
 | `buffer_pool`    | `Buffer pool:`             |

@@ -42,6 +42,8 @@ LAYER_PATTERNS = {
     "pdcp": re.compile(r"^PDCP Metrics:"),
     "nrup": re.compile(r"^NRUP Metrics:"),
     "e1ap": re.compile(r"^CU-UP E1AP metrics:"),
+    "cu_cp_rrc": re.compile(r"^CU-CP RRC metrics:"),
+    "cu_cp_ngap": re.compile(r"^CU-CP NGAP metrics:"),
     "exec": re.compile(r'^Executor metrics\s+"(?P<executor>[^"]+)"[^:]*:'),
     "resource_usage": re.compile(r"^App resource usage:"),
     "buffer_pool": re.compile(r"^Buffer pool:"),
@@ -70,7 +72,8 @@ IMPLIED_UNITS = {
 }
 
 # Powers of ten of the SI prefixes.
-_SI_PREFIX = {"": 0, "p": -12, "n": -9, "u": -6, "\u00b5": -6, "m": -3, "k": 3, "M": 6, "G": 9, "T": 12, "P": 15}
+_SI_PREFIX = {"": 0, "a": -18, "f": -15, "p": -12, "n": -9, "u": -6, "\u00b5": -6, "m": -3, "k": 3, "M": 6, "G": 9,
+              "T": 12, "P": 15, "E": 18}
 # Power of ten from seconds to the canonical "us".
 _SECONDS_TO_US = 6
 # Units printed apart from the value, mapped to their canonical name.
@@ -100,7 +103,11 @@ _list_item_sep_re = re.compile(r"[,\s]+")
 
 
 def parse_number(text: str) -> int | float | str:
-    """Converts a numeric string to int or float, returning it unchanged on failure."""
+    """Converts a numeric string to int or float, returning it unchanged on failure, or for digits with leading zeros,
+    which are identifiers, e.g. the PLMN 00101.
+    """
+    if len(text) > 1 and text[0] == "0" and text.isdigit():
+        return text
     try:
         if "." in text or "e" in text or "E" in text:
             return float(text)
