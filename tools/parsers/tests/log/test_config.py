@@ -103,6 +103,10 @@ if __name__ == "__main__":
         cfg = config.parse_config("cell_cfg:\n  pci: 7\ncells:\n  - pci: 1\n    band: 78\n  - pci: 2\n")
         self.assertEqual((cfg.values["pci"], cfg.values["band"]), ("2", "78"))
 
+    def test_values_of_items_of_a_dash_alone(self):
+        cfg = config.parse_config("cells:\n  -\n    pci: 7\n    band: 3\n")
+        self.assertEqual((cfg.values["pci"], cfg.values["band"]), ("7", "3"))
+
     def test_cell_values_of_neighbours_are_left_out(self):
         # The SIB3 neighbours of a configuration file, and the NTN neighbours of the echo, deeper in the cell.
         cfg = config.parse_config(

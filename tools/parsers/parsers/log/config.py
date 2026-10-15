@@ -163,12 +163,15 @@ def _scalars(text: str) -> Iterator[tuple[tuple[str, ...], str, str]]:
         if not rest or rest.startswith("#"):
             continue
         indent = len(line) - len(rest)
-        if rest.startswith("- "):
+        if rest == "-" or rest.startswith(("- ", "-\t")):
             # A list may sit at the indent of its parent key.
             while stack and (stack[-1][0] > indent or (stack[-1][0] == indent and stack[-1][1] == "-")):
                 stack.pop()
             stack.append((indent, "-"))
-            item = rest[2:].lstrip()
+            item = rest[1:].lstrip()
+            # A dash alone starts an item whose keys follow on the next lines.
+            if not item:
+                continue
             indent += len(rest) - len(item)
             rest = item
         while stack and stack[-1][0] >= indent:
