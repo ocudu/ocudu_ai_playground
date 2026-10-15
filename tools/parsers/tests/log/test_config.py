@@ -99,6 +99,10 @@ if __name__ == "__main__":
         self.assertTrue(cfg.tdd)
         self.assertEqual((cfg.amf_addrs, cfg.amf_bind_addrs, cfg.amf_port), (["10.0.0.1"], ["10.0.0.2"], 38412))
 
+    def test_values_of_list_items(self):
+        cfg = config.parse_config("cell_cfg:\n  pci: 7\ncells:\n  - pci: 1\n    band: 78\n  - pci: 2\n")
+        self.assertEqual((cfg.values["pci"], cfg.values["band"]), ("2", "78"))
+
 
 # A configuration file, shortened, with a repeated option.
 YAML = """gnb_id: 411

@@ -63,9 +63,10 @@ VALUE_KEYS = (
 )
 # Protocols of the "<proto>_enable: true" options of the pcap section.
 PCAP_PROTOCOLS = ("ngap", "f1ap", "e1ap", "mac", "rlc", "n3", "f1u", "xnap", "e2ap_cu_cp", "e2ap_cu_up", "e2ap_du")
-_VALUE_RES = {key: re.compile(rf"^\s*{re.escape(key)}\s*:\s*(.+?)\s*(?:#.*)?$", re.MULTILINE) for key in VALUE_KEYS}
+# Keys may also be the first of a list item, e.g. "  - pci: 1" of the cells list.
+_VALUE_RES = {key: re.compile(rf"^\s*(?:-\s+)?{re.escape(key)}\s*:\s*(.+?)\s*(?:#.*)?$", re.MULTILINE) for key in VALUE_KEYS}
 _PCAP_RE = re.compile(r"^\s*(\w+)_enable\s*:\s*true\s*$", re.MULTILINE)
-_TDD_RE = re.compile(r"^\s*duplex\s*:\s*tdd\b", re.MULTILINE)
+_TDD_RE = re.compile(r"^\s*(?:-\s+)?duplex\s*:\s*tdd\b", re.MULTILINE)
 _AMF_RE = re.compile(r"^(?P<indent>\s*)amf\s*:\s*(?:#.*)?$")
 _KEY_VALUE_RE = re.compile(r"^\s*(?P<key>\w+)\s*:\s*(?P<value>[^#]*?)\s*(?:#.*)?$")
 _LIST_ITEM_RE = re.compile(r"^\s*-\s*(?P<value>[^#]*?)\s*(?:#.*)?$")
