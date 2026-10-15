@@ -33,6 +33,13 @@ class LogRunTest(unittest.TestCase):
         self.assertEqual((r.mode, r.commit, r.branch), ("RelWithDebInfo", "17217212e8", "fix_cfra"))
         self.assertAlmostEqual(r.end - r.start, 40.62283, places=5)
 
+    def test_last_entry_with_a_long_body(self):
+        path = write_log(self.dir / "gnb.log", "2026-05-15T12:24:29.000000", "2026-05-15T12:25:10.000000")
+        with path.open("a") as f:
+            f.write("  0000: 00 01 02 03\n" * 20000)
+        r = run.log_run(path)
+        self.assertEqual(r.end - r.start, 41.0)
+
     def test_not_a_run_log(self):
         path = self.dir / "ue.log"
         path.write_text("# lteue version 2026-05-13\n")

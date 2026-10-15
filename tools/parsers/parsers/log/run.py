@@ -11,6 +11,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
 
 from . import preamble
 
@@ -18,8 +19,10 @@ from . import preamble
 LOG_NAMES = ("gnb.log", "du.log", "cu.log", "cu_cp.log", "cu_up.log")
 # Pattern of the names of their configuration files, e.g. ocudu_gnb.yml.
 CONFIG_GLOB = "ocudu_*.yml"
-# Bytes read from the end of a log to find its last timestamp.
+# Bytes read from the end of a log to find its last timestamp, first and at most, since the last entry may have a
+# long body, e.g. an ASN.1 dump.
 _TAIL_BYTES = 64 << 10
+_MAX_TAIL_BYTES = 64 << 20
 _build_re = re.compile(r"Built in (?P<mode>\S+) mode using commit (?P<commit>\S+) on branch (?P<branch>\S+)")
 
 
@@ -39,25 +42,30 @@ def log_run(path: str | os.PathLike[str]) -> LogRun | None:
     try:
         with open(path, "rb") as f:
             first = f.readline(4096).decode("utf-8", "replace")
-            size = f.seek(0, os.SEEK_END)
-            f.seek(max(0, size - _TAIL_BYTES))
-            tail = f.read().decode("utf-8", "replace").splitlines()
+            m = preamble.match_preamble(first)
+            build = _build_re.search(first, m.end()) if m else None
+            start = preamble.to_epoch(m.group("timestamp")) if build else None
+            if start is None:
+                return None
+            end = _last_time(f)
     except OSError:
         return None
-    m = preamble.match_preamble(first)
-    build = _build_re.search(first, m.end()) if m else None
-    if build is None:
-        return None
-    start = preamble.to_epoch(m.group("timestamp"))
-    if start is None:
-        return None
-    end = start
-    for line in reversed(tail):
-        last = preamble.match_preamble(line)
-        if last and (t := preamble.to_epoch(last.group("timestamp"))) is not None:
-            end = max(start, t)
-            break
-    return LogRun(build.group("mode"), build.group("commit"), build.group("branch"), start, end)
+    return LogRun(build.group("mode"), build.group("commit"), build.group("branch"), start, max(start, end or start))
+
+
+def _last_time(f: BinaryIO) -> float | None:
+    """The time of the last entry of an open log, read back from its end in growing tails."""
+    size = f.seek(0, os.SEEK_END)
+    tail_bytes = _TAIL_BYTES
+    while True:
+        f.seek(max(0, size - tail_bytes))
+        for line in reversed(f.read().decode("utf-8", "replace").splitlines()):
+            last = preamble.match_preamble(line)
+            if last and (t := preamble.to_epoch(last.group("timestamp"))) is not None:
+                return t
+        if tail_bytes >= min(size, _MAX_TAIL_BYTES):
+            return None
+        tail_bytes *= 8
 
 
 def same_run(a: LogRun, b: LogRun, slack_s: float = 60.0) -> bool:

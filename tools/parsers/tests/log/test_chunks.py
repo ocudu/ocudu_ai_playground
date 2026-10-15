@@ -71,6 +71,15 @@ class ChunksTest(unittest.TestCase):
         expected = list(metrics.MetricsParser().parse_file(self.log, nof_chunks=1))
         self.assertEqual(list(metrics.MetricsParser().parse_file(self.log, nof_chunks=7)), expected)
 
+    def test_parse_file_warns_once_across_ranges(self):
+        lines = [f"2026-06-29T14:10:{s:02d}.000000 [METRICS ] Scheduler cell pci=1 metrics: foo=3dB\n" for s in range(40)]
+        self.log.write_text("".join(lines))
+        with self.assertLogs("parsers", "WARNING") as logs:
+            parser = metrics.MetricsParser()
+            self.assertEqual(len(list(parser.parse_file(self.log, nof_chunks=4))), 40)
+        self.assertEqual(len(logs.records), 1)
+        self.assertEqual(list(parser.warnings), [("sched", "foo")])
+
     def test_parse_file_in_parallel_matches_a_single_pass(self):
         serial = metrics.MetricsParser()
         expected = list(serial.parse_file(self.log))

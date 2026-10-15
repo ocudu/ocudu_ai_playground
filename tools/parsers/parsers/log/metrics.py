@@ -528,8 +528,10 @@ def _spans_into(text: str, spans: dict[str, tuple[int, int]], prefix: str = "", 
 class MetricsParser:
     """Parses METRICS log lines of the selected layers into flat records."""
 
-    def __init__(self, layers: Sequence[str] | None = None):
-        """Selects the metric layers to parse, or all known layers if None."""
+    def __init__(self, layers: Sequence[str] | None = None, log_warnings: bool = True):
+        """Selects the metric layers to parse, or all known layers if None. Without log_warnings, warnings about the
+        units of fields are only kept in warnings.
+        """
         if layers is None:
             layers = list(LAYER_PATTERNS)
         unknown = [layer for layer in layers if layer not in LAYER_PATTERNS]
@@ -538,8 +540,9 @@ class MetricsParser:
         self.layers = list(layers)
         # Canonical unit of each field, per layer, learned from the parsed lines.
         self.units: dict[str, dict[str, str]] = {layer: {} for layer in self.layers}
-        # (layer, field) pairs already warned about.
-        self._warned: set[tuple[str, str]] = set()
+        # Warning about the unit of each (layer, field), the first one.
+        self.warnings: dict[tuple[str, str], str] = {}
+        self._log_warnings = log_warnings
         # Layouts of the metrics texts seen per layer, most recently matched first.
         self._templates: dict[str, list[_Template]] = {layer: [] for layer in self.layers}
 
@@ -607,7 +610,9 @@ class MetricsParser:
             results = executor.map(parse_range, *zip(*args))
         else:
             results = (parse_range(*a) for a in args)
-        for records, units in results:
+        for records, units, warnings in results:
+            for (layer, field), msg in warnings.items():
+                self._warn_once(layer, field, msg)
             for layer, layer_units in units.items():
                 known_units = self.units[layer]
                 for field, unit in layer_units.items():
@@ -631,9 +636,10 @@ class MetricsParser:
         _parse_text(text, sink)
 
     def _warn_once(self, layer: str, field: str, msg: str) -> None:
-        if (layer, field) not in self._warned:
-            self._warned.add((layer, field))
-            logger.warning(msg)
+        if (layer, field) not in self.warnings:
+            self.warnings[(layer, field)] = msg
+            if self._log_warnings:
+                logger.warning(msg)
 
 
 # Smallest range of a log parsed by one worker of parse_file(), and most ranges by default.
@@ -643,19 +649,19 @@ _MAX_DEFAULT_CHUNKS = 64
 
 def parse_range(
     path: str, start: int, end: int, first_line: int = 1, layers: Sequence[str] | None = None
-) -> tuple[list[tuple[int, dict[str, Any]]], dict[str, dict[str, str]]]:
+) -> tuple[list[tuple[int, dict[str, Any]]], dict[str, dict[str, str]], dict[tuple[str, str], str]]:
     """Parses the metrics of the byte range [start, end) of a log, which starts at line first_line.
 
-    Returns the line number and record of each metrics line, and the units learned. A top-level function, so that it
-    can run in worker processes.
+    Returns the line number and record of each metrics line, the units learned, and the warnings about units, for the
+    caller to log once across ranges. A top-level function, so that it can run in worker processes.
     """
-    parser = MetricsParser(layers)
+    parser = MetricsParser(layers, log_warnings=False)
     records = []
     for line_no, raw in enumerate(chunks.read_lines(path, start, end), start=first_line):
         # Cheap check before decoding, most lines are not metrics.
         if b"[METRICS" in raw and (rec := parser.parse(raw.decode("utf-8", "replace"))) is not None:
             records.append((line_no, rec))
-    return records, parser.units
+    return records, parser.units, parser.warnings
 
 
 def to_dataframe(lines: Iterable[str], layer: str) -> pandas.DataFrame:
