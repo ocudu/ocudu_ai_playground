@@ -19,6 +19,8 @@ _UE_RE = re.compile(r"\bue=(\d+)\b")
 _PCI_RE = re.compile(r"\bpci=(\d+)\b")
 _CRNTI_RE = re.compile(r"c-rnti=0x([0-9a-fA-F]+)")
 _BUILD_RE = re.compile(r"commit (\S+) on branch (\S+)")
+# Older builds print the pci of a slot event in the event, not in the header.
+_SLOT_EVENTS_RE = re.compile(r"Processed slot events(?: pci=(\d+))?:$")
 _NGAP_HO_RE = re.compile(r"\bHandoverRe(?:quired|quest)\b")
 # Warnings expected in healthy runs: per-UE creation latency instrumentation and host notes.
 BENIGN_WARNINGS = (
@@ -95,12 +97,24 @@ def summarize(lines: Iterable[str]) -> LogSummary:
     """The summary of the lines of a log."""
     out = LogSummary()
     ues, rntis, pcis = set(), set(), set()
+    # Time and PCI, if any, of the entry of scheduler slot events at debug, whose continuation lines hold the events.
+    slot_events_ts: str | None = None
+    slot_events_pci: int | None = None
     for raw in lines:
         # The configuration echo and continuation lines do not start with a timestamp, so skip them before matching.
         if not raw or raw[0] not in "0123456789":
             # The handover marker is the ASN.1 or JSON brace of the reconfigurationWithSync of an RRC body.
             if "reconfigurationWithSync" in raw and "{" in raw:
                 out.ho_count += 1
+            # The scheduler prints its slot events one per continuation line at debug.
+            if slot_events_ts is not None:
+                if raw.startswith("- PRACH: "):
+                    out.prach_events += 1
+                elif raw.startswith("- Cell creation: "):
+                    pci = int(pm.group(1)) if (pm := _PCI_RE.search(raw)) else slot_events_pci
+                    if pci is not None:
+                        out.cells_created.append((slot_events_ts, pci))
+                        pcis.add(pci)
             continue
         m = preamble.match_header(raw)
         if not m:
@@ -109,6 +123,9 @@ def summarize(lines: Iterable[str]) -> LogSummary:
         layer = m.group("layer").strip()
         lvl = m.group("level") or ""
         msg = raw[m.end() :].rstrip("\r\n")
+        slot_events_ts = None
+        if layer == "SCHED" and msg.endswith(":") and (sm := _SLOT_EVENTS_RE.search(msg)):
+            slot_events_ts, slot_events_pci = ts, int(sm.group(1)) if sm.group(1) else None
         if out.first_ts is None:
             out.first_ts = ts
         out.last_ts = ts
@@ -142,7 +159,7 @@ def summarize(lines: Iterable[str]) -> LogSummary:
             pcis.add(pci)
 
         if layer == "SCHED" and "prach(" in msg:
-            out.prach_events += 1
+            out.prach_events += msg.count("prach(")
 
         if layer == "PHY" and "crc=KO" in msg:
             out.crc_fails += 1
@@ -161,7 +178,8 @@ def summarize(lines: Iterable[str]) -> LogSummary:
         if layer == "CU-CP" and '"UE Removal Routine" finished successfully' in msg:
             out.ue_releases.append((ts, um.group(1) if (um := _UE_RE.search(msg)) else "?"))
 
-        if layer == "RRC":
+        # At debug, each message is followed by its JSON in an entry of its own, "Containerized <message>: [".
+        if layer == "RRC" and "Containerized " not in msg:
             if "rrcReconfiguration" in msg and "Complete" not in msg:
                 out.rrc_reconfigs += 1
             if "rrcReestablishmentRequest" in msg or "reestablishmentRequest" in msg:

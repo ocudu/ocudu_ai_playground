@@ -59,6 +59,26 @@ class SummaryTest(unittest.TestCase):
         self.assertEqual(len(s.rrc_msgs), 2)
         self.assertEqual((s.metrics_rows, s.clean_shutdown, s.shutdown_signal_ts), (1, True, "2026-07-27T15:45:05.000000"))
 
+    def test_debug_levels(self):
+        log = [
+            # Slot events at debug, of a newer build with the pci in the header, and of an older one in the event.
+            "2026-07-27T15:44:58.200000 [SCHED   ] [D] [  10.1] Processed slot events pci=2:\n",
+            "- Cell creation: idx=0\n",
+            "- PRACH: slot=9.19 preamble=1 ssb=0 ra-rnti=0x10b temp_crnti=0x4601 ta_cmd=0\n",
+            "2024-04-22T16:03:42.381797 [SCHED   ] [D] [ 176.5] Processed slot events:\n",
+            "- Cell creation: idx=1 pci=3\n",
+            # Two preambles of one slot at info.
+            "2026-07-27T15:45:00.000000 [SCHED   ] [I] [  10.1] Processed slot events pci=2: prach(ra-rnti=0x10f preamble=1 "
+            "tc-rnti=0x4602), prach(ra-rnti=0x10f preamble=2 tc-rnti=0x4603)\n",
+            # An RRC message at debug, and its JSON, which is no message of its own.
+            "2026-07-27T15:45:01.100000 [RRC     ] [D] ue=0 c-rnti=0x4601: Tx SRB1 DCCH DL rrcReconfiguration (90 B)\n",
+            "2026-07-27T15:45:01.100001 [RRC     ] [D] ue=0 c-rnti=0x4601: Containerized rrcReconfiguration: [\n",
+            '  "rrcReconfiguration": {\n',
+        ]
+        s = summary.summarize(log)
+        self.assertEqual((s.cells_created, s.pcis_seen), ([("2026-07-27T15:44:58.200000", 2), ("2024-04-22T16:03:42.381797", 3)], [2, 3]))
+        self.assertEqual((s.prach_events, s.rrc_reconfigs, len(s.rrc_msgs)), (3, 1, 1))
+
     def test_handovers(self):
         log = [
             "2026-07-27T15:45:01.100000 [RRC     ] [I] ue=0 c-rnti=0x4601: Tx DL-DCCH rrcReconfiguration\n",

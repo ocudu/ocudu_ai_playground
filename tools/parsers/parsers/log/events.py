@@ -52,7 +52,7 @@ def _p(type_: str, category: str, layer: str, pattern: str, item: str | None = N
 
 _PRACH_INFO = r"prach\((?:ra|msgb)-rnti=0x\w+ preamble=(?P<preamble>\d+)(?: ssb=\d+)? tc-rnti=(?P<rnti>0x\w+)\)"
 # The pci is of older builds, the ssb of newer ones.
-_PRACH_DEBUG = (r"^- PRACH: slot=\S+ (?:pci=\d+ )?preamble=(?P<preamble>\d+) (?:ssb=\d+ )?(?:ra|msgb)-rnti=0x\w+ "
+_PRACH_DEBUG = (r"^- PRACH: slot=[^\s,]+,? (?:pci=\d+ )?preamble=(?P<preamble>\d+) (?:ssb=\d+ )?(?:ra|msgb)-rnti=0x\w+ "
                 r"temp_crnti=(?P<rnti>0x\w+)")
 # RRC messages as the RRC logs them at info, e.g. "DCCH UL rrcSetupComplete", or at debug, with the direction, SRB and
 # size, e.g. "Rx SRB1 DCCH UL rrcSetupComplete (96 B)", or of older builds without the SRB.
@@ -61,7 +61,8 @@ _RRC_SUFFIX = r"(?: \(\d+ B\))?$"
 
 EVENT_PATTERNS = (
     _p("prach", "ra", "SCHED", r"^Processed slot events pci=\d+: ", _PRACH_INFO, level="I"),
-    _p("prach", "ra", "SCHED", r"^Processed slot events pci=\d+:$", _PRACH_DEBUG, level="D", in_body=True),
+    # Older builds print no pci in the header.
+    _p("prach", "ra", "SCHED", r"^Processed slot events(?: pci=\d+)?:$", _PRACH_DEBUG, level="D", in_body=True),
     _p("msg3", "ra", "MAC", r"UL rnti=(?P<rnti>0x\w+) subPDUs: \[CCCH"),
     _p("conres", "ra", "MAC", r"DL PDU: ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+) size=\d+: CON_RES"),
     _p("ue_create", "lifecycle", "DU-MNG", r'ue=(?P<ue>\d+)(?: rnti=(?P<rnti>0x\w+))? proc="UE Create": Procedure started'),

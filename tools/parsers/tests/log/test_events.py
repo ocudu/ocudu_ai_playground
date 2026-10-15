@@ -48,7 +48,7 @@ PRACH_DEBUG_BODY = [
     "- PRACH: slot=48.19 preamble=12 ra-rnti=0x10b temp_crnti=0x4602 ta_cmd=3",
     # Of newer builds, with the SSB, and of older ones, with the PCI.
     "- PRACH: slot=48.19 preamble=7 ssb=0 ra-rnti=0x10b temp_crnti=0x4603 ta_cmd=3",
-    "- PRACH: slot=48.19 pci=1 preamble=8 ra-rnti=0x10b temp_crnti=0x4604 ta_cmd=3",
+    "- PRACH: slot=48.19, pci=1 preamble=8 ra-rnti=0x10b temp_crnti=0x4604 ta_cmd=3",
 ]
 
 
@@ -84,6 +84,9 @@ class EventsTest(unittest.TestCase):
                          [("prach", "0x4601", "D"), ("prach", "0x4602", "D"), ("prach", "0x4603", "D"), ("prach", "0x4604", "D")])
         self.assertEqual(found[0]["text"], "PRACH: slot=48.19 preamble=63 msgb-rnti=0x470b temp_crnti=0x4601 ta_cmd=0")
         self.assertEqual(parse_all("prach_debug"), [])
+        # Older builds print no pci in the header.
+        old = LINES["prach_debug"].replace(" pci=1:", ":")
+        self.assertEqual(len(events.parse(old, PRACH_DEBUG_BODY)), 4)
 
     def test_patterns_bound_to_level(self):
         info_as_debug = LINES["prach"].replace("[I]", "[D]")
