@@ -179,8 +179,8 @@ def allocations(slot_event: dict[str, Any], cell: Cell) -> list[dict[str, Any]]:
 
 
 def _add_prach(add: Callable[..., None], index: int, prach: dict[str, Any], cell: Cell) -> None:
-    """Adds the occasions of a Prach of a slot decision, one rectangle per time occasion of its frequency occasion. OCUDU
-    writes one Prach per frequency occasion, index_fd_ra, of the nof_fd_ra (msg1-FDM) of the cell.
+    """Adds the occasions of a Prach of a slot decision, one rectangle per time occasion of its frequency occasion.
+    OCUDU writes one Prach per frequency occasion, index_fd_ra, of the nof_fd_ra (msg1-FDM) of the cell.
     """
     if cell.prach is None or prach["format"] >= len(PRACH_FORMATS):
         return
