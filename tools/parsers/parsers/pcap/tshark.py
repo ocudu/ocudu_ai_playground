@@ -71,19 +71,24 @@ class Tshark:
         """Runs tshark with args, returning its non-empty stdout lines. Raises TsharkError if it fails and check, except
         for a pcap whose last record is incomplete, whose complete records are returned with a warning.
         """
+        return self._run(args, check)[0]
+
+    def _run(self, args: Sequence[str], check: bool = True) -> tuple[list[str], bool]:
+        """The non-empty stdout lines of tshark run with args, and whether the pcap was read whole, see run()."""
         tshark = shutil.which("tshark")
         if not tshark:
             raise TsharkError("tshark not found on PATH")
         extra = list(_READ_ARGS) if "-r" in args else []
         proc = subprocess.run([tshark, *extra, *args], check=False, capture_output=True, text=True)
+        lines = [line for line in proc.stdout.splitlines() if line]
         if check and proc.returncode != 0:
             err = _filter_stderr(proc.stderr) or proc.stderr.strip()
             # The exit code of a cut-short pcap varies across tshark builds, e.g. 2 or 14.
             if _CUT_SHORT in err:
                 warnings.warn(f"{err}\nOnly its complete records are read.")
-                return [line for line in proc.stdout.splitlines() if line]
+                return lines, False
             raise TsharkError(f"tshark exited {proc.returncode}: {err}\nargs: {' '.join(args)}")
-        return [line for line in proc.stdout.splitlines() if line]
+        return lines, True
 
     def version(self) -> str:
         """First line of "tshark -v"."""
@@ -92,27 +97,27 @@ class Tshark:
 
     def stage(self, pcap: str | os.PathLike[str]) -> Path:
         """Returns a path to the pcap that tshark can read: the pcap itself when tshark reads it, else a link or copy in
-        the work directory.
+        the work directory, of the pcap's current size and mtime.
         """
         src = Path(pcap).resolve()
         # The AppArmor profile of tshark on Ubuntu only lets it read under /tmp and a few system paths.
         if str(src).startswith("/tmp/") or self._reads_in_place(src):
             return src
-        digest = hashlib.sha256(str(src).encode()).hexdigest()[:16]
+        st = src.stat()
+        digest = hashlib.sha256(f"{src}\0{st.st_size}\0{st.st_mtime_ns}".encode()).hexdigest()[:16]
         stage_dir = self.work_dir / "pcap-stage"
         stage_dir.mkdir(parents=True, exist_ok=True)
         staged = stage_dir / f"{digest}-{src.name}"
         if staged.exists():
-            try:
-                if staged.stat().st_mtime >= src.stat().st_mtime:
-                    return staged
-            except FileNotFoundError:
-                pass
-            staged.unlink(missing_ok=True)
+            return staged
+        # A staged pcap counts as complete once it exists, so it appears only once linked or copied whole.
+        tmp = staged.with_name(f"{staged.name}.{os.getpid()}.tmp")
+        tmp.unlink(missing_ok=True)
         try:
-            os.link(src, staged)
+            os.link(src, tmp)
         except OSError:
-            shutil.copy2(src, staged)
+            shutil.copy2(src, tmp)
+        tmp.replace(staged)
         return staged
 
     def _reads_in_place(self, src: Path) -> bool:
@@ -193,8 +198,9 @@ class Tshark:
             args += ["-e", f]
         if display_filter:
             args += ["-Y", display_filter]
-        lines = self.run(args)
-        if cf is not None:
+        lines, whole = self._run(args)
+        # A pcap cut short is read again each time, so that each read warns.
+        if cf is not None and whole:
             cf.parent.mkdir(parents=True, exist_ok=True)
             # A cache file counts as complete once it exists, so it appears only once written.
             tmp = cf.with_name(f"{cf.name}.{os.getpid()}.tmp")

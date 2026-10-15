@@ -1,10 +1,12 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
+import os
 import shutil
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from parsers.pcap import capture, e1ap, f1ap, frames, messages, ngap, overview, run, timeline, values
 from parsers.pcap.tshark import Tshark, _filter_stderr, split_fields
@@ -57,6 +59,22 @@ class TsharkHelpersTest(unittest.TestCase):
         ts = Tshark("/tmp/work")
         self.assertNotEqual(ts.cache_path("a.pcap", "x"), ts.cache_path("a.pcap", "y"))
         self.assertEqual(ts.cache_path("a.pcap", "x").parent, Path("/tmp/work"))
+
+    def test_stage_follows_a_replaced_pcap(self):
+        # Outside /tmp, so that the pcap is staged, as when tshark cannot read it in place.
+        with tempfile.TemporaryDirectory(dir=Path(__file__).parent) as src_dir, tempfile.TemporaryDirectory() as work, \
+                mock.patch.object(Tshark, "_reads_in_place", return_value=False):
+            ts = Tshark(work)
+            pcap = Path(src_dir) / "f1ap.pcap"
+            pcap.write_bytes(b"run A, longer")
+            first = ts.stage(pcap)
+            self.assertEqual((first.read_bytes(), ts.stage(pcap)), (b"run A, longer", first))
+            # Run B at the same path, with an older mtime, as an extracted archive keeps.
+            pcap.unlink()
+            pcap.write_bytes(b"run B")
+            os.utime(pcap, ns=(0, 0))
+            self.assertEqual(ts.stage(pcap).read_bytes(), b"run B")
+            self.assertEqual([p.suffix for p in (Path(work) / "pcap-stage").iterdir()], [".pcap", ".pcap"])
 
 
 class F1apDecodeTest(unittest.TestCase):
@@ -190,8 +208,10 @@ class F1apPcapTest(unittest.TestCase):
         pcap = Path(self.tmp.name) / "f1ap.pcap"
         data = F1AP_PCAP.read_bytes()
         pcap.write_bytes(data[:-20])
-        with self.assertWarnsRegex(UserWarning, "cut short"):
-            self.assertEqual(len(frames.summaries(self.tshark, pcap)), 31)
+        # Each read warns, the partial records not being cached.
+        for _ in range(2):
+            with self.assertWarnsRegex(UserWarning, "cut short"):
+                self.assertEqual(len(frames.summaries(self.tshark, pcap)), 31)
 
     def test_check_pcap(self):
         res = run.check_pcap(self.tshark, F1AP_PCAP)
