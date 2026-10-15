@@ -53,6 +53,15 @@ def log_run(path: str | os.PathLike[str]) -> LogRun | None:
     return LogRun(build.group("mode"), build.group("commit"), build.group("branch"), start, max(start, end or start))
 
 
+def last_time(path: str | os.PathLike[str]) -> float | None:
+    """The time of the last entry of a log, in seconds since the epoch, or None without one."""
+    try:
+        with open(path, "rb") as f:
+            return _last_time(f)
+    except OSError:
+        return None
+
+
 def _last_time(f: BinaryIO) -> float | None:
     """The time of the last entry of an open log, read back from its end in growing tails."""
     size = f.seek(0, os.SEEK_END)
@@ -65,7 +74,7 @@ def _last_time(f: BinaryIO) -> float | None:
                 return t
         if tail_bytes >= min(size, _MAX_TAIL_BYTES):
             return None
-        tail_bytes *= 8
+        tail_bytes = min(tail_bytes * 8, _MAX_TAIL_BYTES)
 
 
 def same_run(a: LogRun, b: LogRun, slack_s: float = 60.0) -> bool:

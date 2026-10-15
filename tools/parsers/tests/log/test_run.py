@@ -1,9 +1,11 @@
 # SPDX-FileCopyrightText: Copyright (C) 2021-2026 Software Radio Systems Limited
 # SPDX-License-Identifier: BSD-3-Clause-Open-MPI
 
+import io
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from parsers.log import run
 
@@ -39,6 +41,21 @@ class LogRunTest(unittest.TestCase):
             f.write("  0000: 00 01 02 03\n" * 20000)
         r = run.log_run(path)
         self.assertEqual(r.end - r.start, 41.0)
+        self.assertEqual(run.last_time(path), r.end)
+        self.assertIsNone(run.last_time(self.dir / "missing.log"))
+
+    def test_tail_reads_stop_at_the_cap(self):
+        class Recording(io.BytesIO):
+            def read(self, *args):
+                data = super().read(*args)
+                reads.append(len(data))
+                return data
+
+        reads = []
+        # No entry header in the last 5000 bytes.
+        with mock.patch.object(run, "_TAIL_BYTES", 100), mock.patch.object(run, "_MAX_TAIL_BYTES", 1000):
+            self.assertIsNone(run._last_time(Recording(b"x" * 5000)))
+        self.assertEqual(reads, [100, 800, 1000])
 
     def test_not_a_run_log(self):
         path = self.dir / "ue.log"
