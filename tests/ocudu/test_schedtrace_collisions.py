@@ -12,6 +12,7 @@ Usage:
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 import tempfile
@@ -49,6 +50,24 @@ class SchedtraceCollisionsTest(unittest.TestCase):
         self.assertEqual(res.returncode, 1)
         self.assertIn("ERROR:", res.stderr)
         self.assertIn("header is missing", res.stderr)
+
+    def test_traces_without_their_start_event(self):
+        with tempfile.TemporaryDirectory() as d:
+            header_only, empty = Path(d) / "schedtrace_cell0.bin", Path(d) / "schedtrace_cell1.bin"
+            header_only.write_bytes(TRACE.read_bytes()[:8])
+            empty.write_bytes(b"")
+            res = run(d)
+        # Both are reported, the run going on past the first.
+        self.assertEqual(res.returncode, 1)
+        self.assertEqual(res.stderr.count("ERROR:"), 2, res.stderr)
+
+    def test_overlap_text(self):
+        spec = importlib.util.spec_from_file_location("schedtrace_collisions", SCRIPT)
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+        cces = script.collisions.Collision("PDCCH-PDCCH", 0, 0, {}, {}, [(2, 2)])
+        rects = script.collisions.Collision("PDCCH-PDCCH", 0, 0, {}, {}, [(0, 1, 16, 4)])
+        self.assertEqual((script.overlap_text(cces), script.overlap_text(rects)), ("cces=[2,4)", "syms=[0,1) crbs=[16,20)"))
 
     def test_unknown_kind(self):
         res = run(str(TRACE), "--kinds", "PUSCH-PDSCH")

@@ -96,16 +96,17 @@ def describe(alloc: dict, kind: str) -> str:
     """One allocation of a collision: its decision item, RNTI and resources."""
     list_name, index = alloc["item"]
     head = f"{list_name}[{index}] rnti={rnti_text(alloc.get('rnti'))}"
-    if kind == "PDCCH-PDCCH":
+    # PDCCHs of one CORESET and monitoring occasion collide by their CCEs, and have no rects.
+    if "rects" not in alloc:
         return f"{head} coreset={alloc['coreset_id']} cces=[{alloc['cce']},{alloc['cce'] + alloc['nof_cces']})"
     rects = " ".join(f"syms=[{s},{s + ns}) crbs=[{c},{c + nc})" for s, ns, c, nc in alloc["rects"])
     return f"{head} {rects}"
 
 
 def overlap_text(c: collisions.Collision) -> str:
-    if c.kind == "PDCCH-PDCCH":
-        return " ".join(f"cces=[{lo},{lo + n})" for lo, n in c.overlap)
-    return " ".join(f"syms=[{s},{s + ns}) crbs=[{lo},{lo + n})" for s, ns, lo, n in c.overlap)
+    # CCEs of PDCCHs of one CORESET and monitoring occasion, else symbols and CRBs.
+    return " ".join(f"cces=[{o[0]},{o[0] + o[1]})" if len(o) == 2 else f"syms=[{o[0]},{o[0] + o[1]}) crbs=[{o[2]},{o[2] + o[3]})"
+                    for o in c.overlap)
 
 
 def time_text(timestamp_us: int) -> str:
@@ -133,8 +134,11 @@ def main() -> int:
         if workers is None:
             workers = min(MAX_DEFAULT_WORKERS, os.cpu_count() or 1) if path.stat().st_size >= PARALLEL_MIN_SIZE else 1
         try:
-            cell = grid.cell_of(next(schedtrace.read(path)))
-        except schedtrace.FormatError as e:
+            with path.open("rb") as f, mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ) as mm:
+                cell = grid.cell_of(schedtrace.start_event(mm, str(path)))
+        # FormatError, of an unsupported trace, is a ValueError too, as is a trace without its start event; mmap
+        # raises ValueError for an empty file.
+        except ValueError as e:
             print(f"ERROR: {e}", file=sys.stderr)
             status = 1
             continue
