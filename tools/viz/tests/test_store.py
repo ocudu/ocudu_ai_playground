@@ -187,7 +187,7 @@ class StoreTest(unittest.TestCase):
         self.assertEqual((prach["rnti"], prach["level"]), ("0x4601", "D"))
         self.assertIn("Processed slot events", store.records(around=prach["record"], count=1)[0]["text"])
         rlf = res["events"][4]
-        self.assertEqual((rlf["category"], rlf["layer"], rlf["ue"], rlf["cause"]), ("failure", "MAC", 1, "100 consecutive HARQ-ACK KOs"))
+        self.assertEqual((rlf["category"], rlf["layer"], rlf["ue"], rlf["cause"]), ("failure", "DU-MNG", 1, "MAC"))
         self.assertIn("RLF detected", store.records(around=rlf["record"], count=1)[0]["text"])
 
     def test_search_across_blocks(self):

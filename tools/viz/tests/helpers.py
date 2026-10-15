@@ -58,7 +58,8 @@ def write_log(
         lines.append(f"{_ts(0.4)} [SCHED   ] [D] [    4.0] Processed slot events pci=1:\n{prachs}")
         for ue in range(nof_ues):
             lines.append(f'{_ts(0.5)} [DU-MNG  ] [I] ue={ue} rnti=0x46{ue:02x} proc="UE Create": Procedure started....\n')
-        lines.append(f"{_ts(3.5)} [MAC     ] [I] [   35.0] ue=1: RLF detected. Cause: 100 consecutive HARQ-ACK KOs\n")
+        lines.append(f'{_ts(3.5)} [DU-MNG  ] [W] ue=1 rnti=0x4601: RLF detected with cause "MAC". Timer of 1000 msec to '
+                     "release UE started...\n")
         lines.append(f"{_ts(6.5)} [SCHED   ] [W] Late slot indication\n")
         lines.sort()
     lines.append(f"{_ts(nof_seconds + 1)} [GNB     ] [I] Stopped\n")
