@@ -101,6 +101,15 @@ class UeMetricsTest(unittest.TestCase):
         self.assertAlmostEqual(agg.ue_rows()[0][0], 1_760_000_000.0)
         self.assertEqual(list(agg.cells), [176_000_000_000])
 
+    def test_unknown_harq_status_is_counted_as_none(self):
+        e = slot(0, [ack(0x4601, 7), ack(0x4601, 2)])
+        items = ue_metrics.slot_items(e, self.cell)
+        self.assertEqual([a[3] for a in items["harq_acks"]], ["Status7", "Dtx"])
+        agg = ue_metrics.Aggregator()
+        agg.add(1, e, items)
+        values = dict(zip(ue_metrics.UE_FIELDS, agg.ue_rows()[0][2:]))
+        self.assertEqual((values["dl_nof_ok"], values["dl_nof_nok"], values["dl_nof_dtx"]), (0, 0, 1))
+
     def test_merge_equals_one_pass(self):
         events = [slot(t, [ack(0x4601, "Ack")], ue_pdschs=[pdsch(0x4601, 20, 1000)]) for t in range(0, 30000, 500)]
         whole, first, second = ue_metrics.Aggregator(), ue_metrics.Aggregator(), ue_metrics.Aggregator()

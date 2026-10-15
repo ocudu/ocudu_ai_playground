@@ -63,7 +63,10 @@ def slot_items(event: dict[str, Any], cell: Cell) -> dict[str, list[tuple]]:
     for i in event.get("inputs") or []:
         kind = i and i.get("type")
         if kind == "HarqAckEvent":
-            status = i["status"] if isinstance(i["status"], str) else _STATUS[i["status"]]
+            status = i["status"]
+            if not isinstance(status, str):
+                # A status of a newer schema than the decoder's, given as its value.
+                status = _STATUS[status] if 0 <= status < len(_STATUS) else f"Status{status}"
             acks.append((normalize(i["rnti"]), i["ue_idx"], i["harq_id"], status, i["tbs"]))
         elif kind == "CsiReportEvent":
             rsrp = i.get("rsrp_dbm") or []
@@ -134,7 +137,7 @@ class Aggregator:
                 u["dl_ok_bytes"] += tbs or 0
             elif status == "Nack":
                 u["dl_nof_nok"] += 1
-            else:
+            elif status == "Dtx":
                 u["dl_nof_dtx"] += 1
         for rnti, ue, cqi, ri, rsrp in items["csi_reports"]:
             u = self._ue(b, rnti, ue, record)

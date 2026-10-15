@@ -121,7 +121,8 @@ class SchedtraceTest(unittest.TestCase):
         self.assertEqual([f.default for f in s.tables["T"].fields], [17, 30])
 
     def test_unsupported_schema_syntax_is_rejected(self):
-        for text in ("union U { T1: T }\ntable T {}\n", "enum E : ubyte { A B }\n", "enum E : ubyte { A }\ntable T { e: E = C; }\n"):
+        for text in ("union U { T1: T }\ntable T {}\n", "enum E : ubyte { A B }\n", "enum E : ubyte { A }\ntable T { e: E = C; }\n",
+                     "table T { a: int (id: 1); b: int (id: 0); }\n"):
             with self.assertRaises(ValueError, msg=text):
                 self.schema_of(text)
 

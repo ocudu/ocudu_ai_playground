@@ -6,8 +6,8 @@ schema file and the ones it includes.
 
 Covers the subset of the FlatBuffers schema language that the schedtrace schemas use: include, namespace, enum,
 struct, table, union, root_type and attribute declarations, scalar, struct, table, union and vector types, and field
-defaults, "null" for optional scalars. Field attributes in parentheses are skipped, and explicit field ids are not
-supported.
+defaults, "null" for optional scalars. Field attributes in parentheses are skipped, except explicit field ids, which
+are rejected, as is other syntax outside the subset.
 """
 
 from __future__ import annotations
@@ -192,8 +192,10 @@ def _load_file(path: Path, schema: Schema, seen: set[Path]) -> None:
                     take("=")
                     default = _value(take())
                 if tokens[pos] == "(":
-                    while take() != ")":
-                        pass
+                    while (attribute := take()) != ")":
+                        # Explicit ids reorder the slots, which fields take in declaration order here.
+                        if attribute == "id":
+                            raise ValueError(f"{path.name}: unsupported attribute id of field {name}.{field_name}")
                 take(";")
                 fields.append(Field(field_name, ftype, default))
             take("}")
