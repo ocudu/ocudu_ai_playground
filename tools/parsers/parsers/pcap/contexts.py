@@ -70,7 +70,9 @@ class ContextTracker:
         self._in_use: dict[tuple[str, str], UeContext] = {}
 
     def assign(self, msg: dict[str, Any]) -> UeContext | None:
-        """Returns the context of a message of messages.messages(), or None for messages of no UE."""
+        """Returns the context of a message, or None for messages of no UE. The messages of capture.read() give contexts
+        their C-RNTI and links; those of messages.messages(), which carry neither, give contexts without them.
+        """
         ids = {f: msg[f] for f in self._fields if msg.get(f)}
         ctx = next((self._in_use[(k, v)] for k, v in ids.items() if (k, v) in self._in_use), None)
         if ctx is None and ids:

@@ -224,6 +224,7 @@ class F1apPcapTest(unittest.TestCase):
     def test_f1ap_messages(self):
         records = f1ap.messages(self.tshark, F1AP_PCAP)
         self.assertEqual(len(records), 32)
+        self.assertEqual(records[0]["epoch"], frames.summaries(self.tshark, F1AP_PCAP)[0]["epoch"])
         self.assertEqual(records[0]["message"], "F1Setup")
         setup_req = next(r for r in records if r["rrc"] == "rrcSetupRequest")
         self.assertEqual((setup_req["message"], setup_req["crnti"]), ("InitialULRRCMessageTransfer", "17921"))
@@ -268,6 +269,7 @@ class F1apPcapTest(unittest.TestCase):
     def test_check_pcap(self):
         res = run.check_pcap(self.tshark, F1AP_PCAP)
         self.assertTrue(res["ok"], res)
+        self.assertTrue(run.check_pcap(self.tshark, str(F1AP_PCAP))["ok"])
         self.assertEqual(res["dissector"], "f1ap")
 
     def test_overview(self):

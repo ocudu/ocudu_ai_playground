@@ -58,6 +58,9 @@ if __name__ == "__main__":  # needed by worker processes that start with "spawn"
 
 Records are flat dicts with `timestamp`, `layer`, the line context fields (e.g. `pci`) and the metric fields:
 
+- `timestamp` is a `datetime` without a zone, of the UTC wall clock that OCUDU logs: `ts.replace(tzinfo=timezone.utc)`
+  or `preamble.to_epoch()` give the epoch that pcap times compare with, while `ts.timestamp()` takes it for local time.
+  The same holds for the timestamps of events.
 - Units are normalized: times to `us`, bitrates to `bps`, SI-prefixed unitless values (`5.74k`) to plain numbers.
   The unit of each field is in `parser.units[layer][field]`.
   Fields that OCUDU prints without a unit (e.g. `dl_bs` in bytes, `pusch_snr_db` in dB) get the one in
@@ -132,7 +135,7 @@ if cfg and not cfg.logs_at("SCHED", "info"):
 ```
 
 `config.from_log()` reads the configuration that OCUDU echoes at the top of its logs (`config_level` info or debug), and
-`config.parse_config()` a YAML configuration file. `AppConfig` has the explicit log levels, the effective level of each
+`config.parse_config()` the text of a YAML configuration file, e.g. `parse_config(Path("gnb.yml").read_text())`. `AppConfig` has the explicit log levels, the effective level of each
 option or logger (`level()`, `logger_level()`, `logs_at()`), and the node planes and type.
 
 ### Pcaps
@@ -167,7 +170,8 @@ span of a classic pcap from its complete packets' headers, without `tshark`, and
 gives the protocol, the frame summaries and the messages or PDUs of a pcap in one pass over its frames, after reading
 its first frame for the protocol, or its file name for a pcap without frames.
 `contexts.ContextTracker` assigns the NGAP, F1AP or E1AP messages to UE contexts, by their UE identifiers until the
-release of the context, with the C-RNTI of the F1AP ones.
+release of the context, with the C-RNTI of the F1AP ones and the links between contexts, given the messages of
+`capture.read()`, which carry them; the messages of `messages.messages()` give contexts without either.
 
 ### Scheduler event traces
 
@@ -191,7 +195,8 @@ out, with a warning.
 `schedtrace.FORMAT_VERSION` is the version of the schemas of `schedtrace/fbs/`, from their `FileFormatVersionMajor`
 and `FileFormatVersionMinor` enums. Traces of another major version, and traces without a header, written before OCUDU versioned the
 format, raise `schedtrace.FormatError`; traces of a newer minor version decode with a warning, without the fields they
-append. `schedtrace.version()` reads the version of a trace.
+append. `schedtrace.version()` reads the version in the header of the contents of a trace, its bytes, e.g.
+`version(Path("schedtrace_cell0.bin").read_bytes()[:8])`.
 
 The decoder is standard-library only: `schedtrace.schema` reads the FlatBuffers schemas of `schedtrace/fbs/`, copies of
 `lib/scheduler/trace/fbs` of OCUDU, and `schedtrace.flatbuf` decodes buffers with them. FlatBuffers' Python code
@@ -260,6 +265,9 @@ res = adhoc.scan("gnb.log", 0, os.path.getsize("gnb.log"), 1, spec)
 for t, line, offset, value, ue in res["rows"]:
     print(t, line, value, ue)
 ```
+
+The filter applies to the line of each value, so it finds the values of an entry header only: at debug level, the
+scheduler writes the grants of a slot decision on continuation lines, which a filter of its header text misses.
 
 ### Log search, summary and UE procedure latencies
 

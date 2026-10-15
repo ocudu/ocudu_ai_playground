@@ -84,11 +84,12 @@ def resolve(path: str | os.PathLike[str]) -> dict[str, Any]:
     return {"kind": "single pcap", "targets": [path], "siblings": siblings}
 
 
-def check_pcap(tshark: Tshark, pcap: Path) -> dict[str, Any]:
+def check_pcap(tshark: Tshark, pcap: str | os.PathLike[str]) -> dict[str, Any]:
     """Checks that a pcap is a non-empty Upper-PDU capture with a known dissector on its first frame.
 
     Returns "file", "path" and "ok", with "reason" when not ok, and "frame_protocols" and "dissector" once read.
     """
+    pcap = Path(pcap)
     out: dict[str, Any] = {"file": pcap.name, "path": str(pcap)}
     try:
         if pcap.stat().st_size == 0:

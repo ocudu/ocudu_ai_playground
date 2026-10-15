@@ -75,7 +75,9 @@ def ue_ids(tshark: Tshark, pcap: str | os.PathLike[str], *, force: bool = False)
 
 
 def messages(tshark: Tshark, pcap: str | os.PathLike[str], *, force: bool = False) -> list[dict[str, Any]]:
-    """The messages of an F1AP pcap in time order, with the RRC message and the NAS message they carry, if any."""
+    """The messages of an F1AP pcap in time order, with the RRC message and the NAS message they carry, if any, and their
+    time as "epoch" and as "first_iso", in milliseconds.
+    """
     rrc_types = valid_rrc_types(tshark, pcap)
     fields = rrc_fields(rrc_types)
     rows = []
@@ -97,6 +99,7 @@ def messages(tshark: Tshark, pcap: str | os.PathLike[str], *, force: bool = Fals
     return [
         {
             "frame": x["frame"],
+            "epoch": x["epoch"],
             "first_iso": epoch_to_iso(x["epoch"]),
             "message": proc_name("f1ap", x["code"], with_code=False),
             "rrc": x["rrc"],
