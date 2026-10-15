@@ -39,6 +39,7 @@ from pathlib import Path
 
 import utils
 from parsers.pcap import f1ap
+from parsers.ran.rnti import normalize, parse_any
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -65,7 +66,10 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.ue:
-        records = [x for x in records if args.ue in (x["cu_ue_f1ap_id"], x["du_ue_f1ap_id"], x["crnti"])]
+        # C-RNTIs in any form, e.g. 17921 as the pcap holds them, or 0x4601 as logs print them.
+        u_rnti = parse_any(args.ue)
+        records = [x for x in records if args.ue in (x["cu_ue_f1ap_id"], x["du_ue_f1ap_id"])
+                   or (u_rnti is not None and x["crnti"] and normalize(x["crnti"]) == u_rnti)]
     if args.rrc:
         records = [x for x in records if x["rrc"]]
     if args.nas:

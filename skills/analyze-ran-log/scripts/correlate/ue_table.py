@@ -70,8 +70,9 @@ def utc(epoch: float) -> datetime:
 def time_bound(ref: str, epoch: float) -> str:
     """The form of a timestamp that compares with a --after/--before value."""
     t = utc(epoch)
+    # Cut to the precision of the bound, so that both bound forms are inclusive alike.
     if "T" in ref:
-        return t.replace(tzinfo=None).isoformat(timespec="microseconds")
+        return t.replace(tzinfo=None).isoformat(timespec="microseconds")[: len(ref)]
     return t.strftime("%H:%M:%S.%f")[: len(ref)]
 
 

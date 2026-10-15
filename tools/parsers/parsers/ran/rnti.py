@@ -22,3 +22,16 @@ def normalize(rnti: str | int | None, bare_hex: bool = False) -> str | None:
     except ValueError:
         return None
     return f"0x{value:04x}" if 0 <= value <= 0xFFFF else None
+
+
+def parse_any(rnti: str | None) -> str | None:
+    """RNTI as normalize() gives it, of a value in any of the forms of the artifacts, e.g. given by a user: 0x4601, 4601
+    as logs print it without 0x, or 17921 as F1AP pcaps hold it. A bare value is hexadecimal unless it is too large for
+    an RNTI as such, then decimal.
+    """
+    if rnti is None or not rnti.strip():
+        return None
+    text = rnti.strip().lower()
+    if text.startswith("0x"):
+        return normalize(text)
+    return normalize(text, bare_hex=True) or normalize(text)

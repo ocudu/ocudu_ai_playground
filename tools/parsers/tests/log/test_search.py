@@ -41,6 +41,11 @@ class SearchTest(unittest.TestCase):
         self.assertEqual(found(search.Filter(level="W|E")), ["[SCHED   ]"])
         self.assertEqual(found(search.Filter(ue="1")), ["[METRICS ]"])
         self.assertEqual(found(search.Filter(rnti="4602")), ["[SCHED   ]", "[METRICS ]"])
+        # Any form of an RNTI: with 0x, as events give it, or decimal, as F1AP pcaps hold it.
+        self.assertEqual(found(search.Filter(rnti="0x4602")), ["[SCHED   ]", "[METRICS ]"])
+        self.assertEqual(found(search.Filter(rnti="17922")), ["[SCHED   ]", "[METRICS ]"])
+        with self.assertRaises(ValueError):
+            search.Filter(rnti="xyz")
         self.assertEqual(found(search.Filter(rnti="4601")), ["[RRC     ]"])
         self.assertEqual(found(search.Filter(pci="1", layer="SCHED")), ["[SCHED   ]"])
 
@@ -48,6 +53,8 @@ class SearchTest(unittest.TestCase):
         self.assertEqual(found(search.Filter(after="15:45:02", before="15:45:02.9")), ["[SCHED   ]"])
         self.assertEqual(found(search.Filter(after="2026-07-27T15:45:03")), ["[METRICS ]"])
         self.assertEqual(found(search.Filter(after="2026-07-27T15:45:02", before="2026-07-27T15:45:02")), ["[SCHED   ]"])
+        # A space between the date and the time, as str(datetime) gives.
+        self.assertEqual(found(search.Filter(after="2026-07-27 15:45:02", before="2026-07-27 15:45:02")), ["[SCHED   ]"])
 
     def test_pattern_in_body(self):
         self.assertEqual(found(search.Filter(pattern="^ *reconfigurationwithsync$")), ["[RRC     ]"])

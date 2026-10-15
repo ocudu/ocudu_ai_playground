@@ -25,6 +25,7 @@ from pathlib import Path
 
 import utils
 from parsers.pcap import f1ap
+from parsers.ran.rnti import normalize, parse_any
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -50,8 +51,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.ue:
         u = args.ue
+        # C-RNTIs in any form, e.g. 17921 as the pcap holds them, or 0x4601 as logs print them.
+        u_rnti = parse_any(u)
         out_list = [r for r in out_list
-                    if u == r["cu_ue_f1ap_id"] or u in r["du_ue_f1ap_ids"] or u in r["crntis"]]
+                    if u == r["cu_ue_f1ap_id"] or u in r["du_ue_f1ap_ids"]
+                    or any(u_rnti is not None and normalize(c) == u_rnti for c in r["crntis"])]
 
     if args.json:
         print(json.dumps(out_list, indent=2))

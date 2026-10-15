@@ -45,6 +45,10 @@ class RrcTest(unittest.TestCase):
 
 
 class RntiTest(unittest.TestCase):
+    def test_parse_any(self):
+        self.assertEqual([rnti.parse_any(v) for v in ("0x4601", "4601", "17921", "0X4601", " ", "zz")],
+                         ["0x4601", "0x4601", "0x4601", "0x4601", None, None])
+
     def test_normalize(self):
         self.assertEqual(rnti.normalize("17921"), "0x4601")
         self.assertEqual(rnti.normalize("0x4601"), "0x4601")

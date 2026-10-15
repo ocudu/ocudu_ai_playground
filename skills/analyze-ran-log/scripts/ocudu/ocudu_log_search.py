@@ -29,8 +29,8 @@ Options:
   --level <REGEX>       Filter by level (D, I, W, E, C). Multiple via regex,
                         e.g. "E|C|W".
   --ue <N>              Filter by `ue=N` token in the message.
-  --rnti <HEX>          Filter by `c-rnti=0x<HEX>` token. Provide hex without
-                        "0x" (e.g. 4601).
+  --rnti <RNTI>         Filter by `rnti=0x..` / `c-rnti=0x..` tokens. Any form:
+                        4601 (hex), 0x4601, or 17921 (decimal, as pcaps hold it).
   --pci <N>             Filter by `pci=N` token.
   --after <ts>          Only include lines at or after the timestamp. Accepts
                         either a full ISO-8601 timestamp or a `HH:MM:SS.mmm`
@@ -66,6 +66,7 @@ Examples:
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -84,7 +85,7 @@ def parse_args(argv=None):
     ap.add_argument("--layer", help="Layer filter (e.g. RRC, NGAP, CU-CP)")
     ap.add_argument("--level", help="Log-level regex (D|I|W|E)")
     ap.add_argument("--ue", help="Match `ue=N` in the message")
-    ap.add_argument("--rnti", help="Match `c-rnti=0x<HEX>` (hex without 0x)")
+    ap.add_argument("--rnti", help="Match `rnti=0x..` tokens; 4601, 0x4601 or 17921")
     ap.add_argument("--pci", help="Match `pci=N` in the message")
     ap.add_argument("--after", help="Start timestamp (ISO or HH:MM:SS.mmm)")
     ap.add_argument("--before", help="End timestamp (ISO or HH:MM:SS.mmm)")
@@ -129,6 +130,7 @@ if __name__ == "__main__":
     args = parse_args()
     try:
         search(args)
-    except FileNotFoundError as e:
+    # A missing log, an invalid --rnti, or an invalid --pattern or --level regex.
+    except (FileNotFoundError, ValueError, re.error) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)

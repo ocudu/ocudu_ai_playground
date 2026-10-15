@@ -13,6 +13,7 @@ import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
 
+from ..ran.rnti import parse_any
 from . import config, preamble
 
 
@@ -26,22 +27,28 @@ class Filter:
     level: str | None = None
     # UE index, matched as a "ue=N" token.
     ue: str | None = None
-    # RNTI in hex without 0x, matched as "rnti=0x", "c-rnti=0x" or "tc-rnti=0x" tokens.
+    # RNTI in any form of ran.rnti.parse_any(), e.g. 4601, 0x4601 or 17921, matched as "rnti=0x", "c-rnti=0x" or
+    # "tc-rnti=0x" tokens.
     rnti: str | None = None
     # PCI, matched as a "pci=N" token.
     pci: str | None = None
-    # Bounds of the time of the entry, inclusive: ISO timestamps, or times of day such as HH:MM:SS.mmm compared to the
-    # same precision.
+    # Bounds of the time of the entry, inclusive: ISO timestamps, with "T" or a space as str(datetime) gives, or times
+    # of day such as HH:MM:SS.mmm, compared to the same precision.
     after: str | None = None
     before: str | None = None
     # Regex searched in the entry, ignoring case, with ^ and $ at its lines.
     pattern: str | None = None
 
     def __post_init__(self) -> None:
+        self.after, self.before = _iso_bound(self.after), _iso_bound(self.before)
         self._level = re.compile(self.level) if self.level else None
         self._ue = re.compile(rf"\bue={re.escape(self.ue)}\b") if self.ue is not None else None
-        self._rnti = (re.compile(rf"(?:c-|tc-)?rnti=0x{re.escape(self.rnti)}\b", re.IGNORECASE)
-                      if self.rnti is not None else None)
+        rnti = parse_any(self.rnti) if self.rnti is not None else None
+        if self.rnti is not None and rnti is None:
+            raise ValueError(f"Not an RNTI: {self.rnti!r}.")
+        # Hex digits without the leading zeros, which logs may or may not print.
+        digits = rnti[2:].lstrip("0") or "0" if rnti else ""
+        self._rnti = re.compile(rf"(?:c-|tc-)?rnti=0x0*{digits}\b", re.IGNORECASE) if rnti else None
         self._pci = re.compile(rf"\bpci={re.escape(self.pci)}\b") if self.pci is not None else None
         self._pattern = re.compile(self.pattern, re.IGNORECASE | re.MULTILINE) if self.pattern else None
 
@@ -94,6 +101,13 @@ def search(lines: Iterable[str], flt: Filter, include_config_echo: bool = False)
 def _is_config_echo(m: re.Match, line: str) -> bool:
     """Whether an entry line is the header of the configuration echo, whose body is the effective configuration."""
     return m.group("layer").strip() == "CONFIG" and config.is_echo_header(line)
+
+
+def _iso_bound(ref: str | None) -> str | None:
+    """A time bound with its date and time separated by "T", e.g. of str(datetime), which has a space."""
+    if ref and len(ref) > 10 and ref[10] == " " and ref[4:5] == "-":
+        return ref[:10] + "T" + ref[11:]
+    return ref
 
 
 def _at_or_after(ts: str, ref: str) -> bool:

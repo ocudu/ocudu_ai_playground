@@ -44,6 +44,7 @@ sys.path.insert(0, str(SCRIPT_DIR.parent / "_lib"))
 
 from parsers.log.run import primary_log_in, resolve_run_dir  # noqa: E402
 from parsers.log import metrics  # noqa: E402
+from parsers.ran.rnti import parse_any  # noqa: E402
 
 # Logs from this size are parsed in parallel by default.
 PARALLEL_MIN_SIZE = 64 << 20
@@ -73,16 +74,21 @@ def parse_value(text: str):
     return text
 
 
-def matches_where(value, wanted) -> bool:
-    """Whether a field value equals a --where value: as text, case-insensitively, for text values."""
+def matches_where(value, wanted, key: str = "") -> bool:
+    """Whether a field value equals a --where value: as text, case-insensitively, for text values, and as RNTIs in any
+    form for the rnti field, e.g. 0x4601, 4601 or 17921.
+    """
+    if key == "rnti":
+        return value is not None and parse_any(str(wanted)) == parse_any(str(value))
     if isinstance(wanted, str):
         return str(value).lower() == wanted.lower()
     return value == wanted
 
 
 def matches_time(ts, ref: str, after: bool) -> bool:
+    # Cut to the precision of the bound, so that both bound forms are inclusive alike.
     if "T" in ref:
-        value, bound = ts.isoformat(timespec="microseconds"), ref
+        value, bound = ts.isoformat(timespec="microseconds")[: len(ref)], ref
     else:
         value, bound = ts.strftime("%H:%M:%S.%f")[: len(ref)], ref
     return value >= bound if after else value <= bound
@@ -154,7 +160,7 @@ def main(argv=None) -> int:
                 continue
             if args.before and not matches_time(rec["timestamp"], args.before, False):
                 continue
-            if not all(matches_where(rec.get(k), v) for k, v in where):
+            if not all(matches_where(rec.get(k), v, k) for k, v in where):
                 continue
             rows.append((line_no, rec))
     finally:
