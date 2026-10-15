@@ -148,6 +148,10 @@ class EventsTest(unittest.TestCase):
         self.assertEqual((conres["type"], conres["category"], conres["ue"], conres["rnti"]), ("conres_timeout", "failure", 201, "0x46d4"))
         self.assertEqual((setup["type"], setup["category"], setup["ue"], setup["rnti"]), ("rrc_setup_timeout", "failure", 201, "0x46d4"))
         # The ConRes CE sent but never ACKed, at info.
+        # Of older builds.
+        old = events.parse("2026-04-09T21:05:55.432032 [SCHED   ] [W] [   799.8] ue=273 rnti=0x7234: ra-ContentionResolutionTimer "
+                           "(64ms) expired before ConRes CE was scheduled. UE will stop being scheduled")
+        self.assertEqual([e["type"] for e in old], ["conres_timeout"])
         unacked = parse("conres_unacked")
         self.assertEqual((unacked["type"], unacked["category"], unacked["ue"]), ("conres_unacked", "failure", 202))
 
@@ -231,6 +235,12 @@ class EventsTest(unittest.TestCase):
         ]
         self.assertEqual(assigned, [0, 1, 0, None, 2, 2])
         self.assertEqual([lane.du_ue for lane in tracker.lanes], [None, None, 3])
+        # An RNTI of a live context with another DU UE index takes no index of it: index 3 is of no context, so its
+        # deletion deletes none.
+        tracker.assign(ev(6, "ue_create", "DU-MNG", ue=4, rnti="0x4604"))
+        tracker.assign(ev(7, "conres_timeout", "SCHED", ue=3, rnti="0x4604"))
+        tracker.assign(ev(8, "ue_delete", "DU-MNG", ue=3))
+        self.assertEqual([(lane.rnti, lane.deleted) for lane in tracker.lanes][2:], [("0x4603", False), ("0x4604", False)])
 
     def test_categories_cover_patterns(self):
         self.assertTrue({p.category for p in events.EVENT_PATTERNS} <= {*events.CATEGORIES, events.BINDING})

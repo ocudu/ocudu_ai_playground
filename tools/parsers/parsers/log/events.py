@@ -78,10 +78,11 @@ EVENT_PATTERNS = (
     _p("rrc_reest_failed", "failure", "RRC",
        r'ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): "RRC Reestablishment Procedure".* failed\.(?: Cause: (?P<cause>.*))?'),
     _p("rrc_reest_rejected", "failure", "RRC", r"ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): Rejecting RRC Reestablishment.*Cause: (?P<cause>.*?)\.(?: |$)"),
-    _p("conres_timeout", "failure", "SCHED", r"ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+): ra-ContentionResolutionTimer, .* expired"),
-    # The ConRes CE was sent, but never ACKed.
+    # The ConRes CE sent but never ACKed, before the timer expiring before the ConRes CE was scheduled, whose format
+    # differs across builds.
     _p("conres_unacked", "failure", "SCHED",
        r"ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+): ra-ContentionResolutionTimer \(.*\) expired, but"),
+    _p("conres_timeout", "failure", "SCHED", r"ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+): ra-ContentionResolutionTimer.* expired"),
     _p("rrc_setup_timeout", "failure", "RRC", r'ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): "RRC Setup Procedure" timed out'),
 )
 
@@ -282,6 +283,7 @@ class UeTracker:
             # A DU UE index of another RNTI is of a context whose deletion was not logged, and reused.
             if lane is not None and lane.rnti is not None and lane.rnti != rnti:
                 lane.du_ue = None
+                del self._by_du_ue[ue]
                 lane = None
             if lane is None:
                 lane = self._by_rnti.get(rnti) or self._new_lane(t, rnti)
