@@ -16,6 +16,9 @@ from dataclasses import dataclass
 from ..ran.rnti import parse_any
 from . import config, preamble
 
+# Start of a bound that has a date, rather than being a time of day.
+_DATE_RE = re.compile(r"\d{4}-\d\d-\d\d")
+
 
 @dataclass
 class Filter:
@@ -32,15 +35,15 @@ class Filter:
     rnti: str | None = None
     # PCI, matched as a "pci=N" token.
     pci: str | None = None
-    # Bounds of the time of the entry, inclusive: ISO timestamps, with "T" or a space as str(datetime) gives, or times
-    # of day such as HH:MM:SS.mmm, compared to the same precision.
+    # Bounds of the time of the entry, inclusive: ISO dates or timestamps, with "T" or a space as str(datetime) gives,
+    # or times of day such as HH:MM:SS.mmm, compared to the same precision.
     after: str | None = None
     before: str | None = None
     # Regex searched in the entry, ignoring case, with ^ and $ at its lines.
     pattern: str | None = None
 
     def __post_init__(self) -> None:
-        self.after, self.before = _iso_bound(self.after), _iso_bound(self.before)
+        self.after, self.before = iso_bound(self.after), iso_bound(self.before)
         self._level = re.compile(self.level) if self.level else None
         self._ue = re.compile(rf"\bue={re.escape(self.ue)}\b") if self.ue is not None else None
         rnti = parse_any(self.rnti) if self.rnti is not None else None
@@ -48,7 +51,8 @@ class Filter:
             raise ValueError(f"Not an RNTI: {self.rnti!r}.")
         # Hex digits without the leading zeros, which logs may or may not print.
         digits = rnti[2:].lstrip("0") or "0" if rnti else ""
-        self._rnti = re.compile(rf"(?:c-|tc-)?rnti=0x0*{digits}\b", re.IGNORECASE) if rnti else None
+        # Not the RA-RNTI or MsgB-RNTI of a random access, which is no UE's.
+        self._rnti = re.compile(rf"(?<![\w-])(?:c-|tc-)?rnti=0x0*{digits}\b", re.IGNORECASE) if rnti else None
         self._pci = re.compile(rf"\bpci={re.escape(self.pci)}\b") if self.pci is not None else None
         self._pattern = re.compile(self.pattern, re.IGNORECASE | re.MULTILINE) if self.pattern else None
 
@@ -103,9 +107,11 @@ def _is_config_echo(m: re.Match, line: str) -> bool:
     return m.group("layer").strip() == "CONFIG" and config.is_echo_header(line)
 
 
-def _iso_bound(ref: str | None) -> str | None:
-    """A time bound with its date and time separated by "T", e.g. of str(datetime), which has a space."""
-    if ref and len(ref) > 10 and ref[10] == " " and ref[4:5] == "-":
+def iso_bound(ref: str | None) -> str | None:
+    """A time bound of Filter with its date and time separated by "T", e.g. "2026-04-21T18:18:30" for
+    "2026-04-21 18:18:30" of str(datetime). Other bounds, e.g. dates or times of day, are returned as they are.
+    """
+    if ref and len(ref) > 10 and ref[10] == " " and _DATE_RE.match(ref):
         return ref[:10] + "T" + ref[11:]
     return ref
 
@@ -119,5 +125,5 @@ def _at_or_before(ts: str, ref: str) -> bool:
 
 
 def _at_precision(ts: str, ref: str) -> str:
-    """A timestamp cut to the precision of a bound, an ISO timestamp or a time of day."""
-    return (ts if "T" in ref else ts.partition("T")[2])[: len(ref)]
+    """A timestamp cut to the precision of a bound, an ISO date or timestamp or a time of day."""
+    return (ts if _DATE_RE.match(ref) else ts.partition("T")[2])[: len(ref)]

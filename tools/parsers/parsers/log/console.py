@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 _COMMIT_RE = re.compile(r"commit ([0-9a-fA-F]+)")
 _LOGFILE_RE = re.compile(r"Logfile stored in (\S+)")
 # A row of the console metrics table starts with the PCI and the RNTI, e.g. "   1 4601 |".
-_METRICS_ROW_RE = re.compile(r"^\s*\d+\s+[0-9a-f]{4}\s+\|")
+_METRICS_ROW_RE = re.compile(r"^\s*\d+\s+[0-9a-f]{1,4}\s+\|")
 
 
 @dataclass
