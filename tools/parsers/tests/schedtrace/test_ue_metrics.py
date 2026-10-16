@@ -43,7 +43,7 @@ class UeMetricsTest(unittest.TestCase):
                                            ue_pdschs=[pdsch(0x4601, 27, 5000, rbs=rbg)], puschs=[pusch(0x4601, 900)]),
                                       self.cell)
         # RBGs 0 and 1: CRBs 2 and 3, then 4 to 7, 6 PRBs.
-        self.assertEqual(items["dl_grants"], [("0x4601", 1, 0, 27, 5000, 6, True, 0, 4)])
+        self.assertEqual(items["dl_grants"], [("0x4601", 1, 0, 27, 5000, 6, True, 0, 4, None)])
         self.assertEqual(items["ul_grants"], [("0x4601", 1, 1, 900, 5, 1, 0, 0, 4)])
         self.assertEqual(items["harq_acks"], [("0x4601", 1, 0, "Ack", 1000)])
         self.assertEqual(items["srs"], [("0x4601", 1)])
@@ -89,6 +89,23 @@ class UeMetricsTest(unittest.TestCase):
         values = dict(zip(ue_metrics.UE_FIELDS, agg.ue_rows()[0][2:]))
         # CQI 13.5 rounds to 14, as METRICS prints it.
         self.assertEqual((values["cqi"], values["dl_ri"]), (14, 1.5))
+
+    def test_dl_mcs_is_the_rounded_mean_of_every_codeword(self):
+        two_cws = pdsch(0x4601, 20, 1000)
+        two_cws["codewords"].append({"mcs_index": 23, "tb_size_bytes": 1500, "new_data": True, "rv_index": 0})
+        e = slot(1000, ue_pdschs=[two_cws, pdsch(0x4601, 22, 1000)])
+        items = ue_metrics.slot_items(e, self.cell)
+        self.assertEqual([(g[3], g[4], g[9]) for g in items["dl_grants"]], [(20, 2500, 23), (22, 1000, None)])
+        agg = ue_metrics.Aggregator()
+        agg.add(1, e, items)
+        values = dict(zip(ue_metrics.UE_FIELDS, agg.ue_rows()[0][2:]))
+        # (20 + 23 + 22) / 3 = 21.67, and the TBS of both codewords.
+        self.assertEqual((values["dl_mcs"], values["dl_sched_brate"]), (22, 3500 * 8 / 0.01))
+        # 20.5 rounds up, as std::round of METRICS, not to the even 20 of round().
+        e = slot(1000, ue_pdschs=[pdsch(0x4601, 20, 1000), pdsch(0x4601, 21, 1000)])
+        agg = ue_metrics.Aggregator()
+        agg.add(1, e, ue_metrics.slot_items(e, self.cell))
+        self.assertEqual(dict(zip(ue_metrics.UE_FIELDS, agg.ue_rows()[0][2:]))["dl_mcs"], 21)
 
     def test_bin_size_and_totals(self):
         # 1 s bins: one bin with all 60 slots, each with a 1000 byte new transmission and its ACK.

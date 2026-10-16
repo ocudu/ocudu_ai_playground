@@ -8,7 +8,8 @@ The trace has no UL CRC, buffer status or power headroom, so UL rates are of the
 not of the decoded ones; ul_layers is the mean layers of the PUSCHs, not the UL RI of SRS. dl_nof_nok counts the
 HARQ-ACK reports of NACK and of DTX, as METRICS does, dl_nof_dtx the latter alone. HARQ processes that time out
 without a report, and those without feedback, e.g. of NTN, have no trace event, so they count in neither dl_nof_ok nor
-dl_nof_nok, unlike in METRICS. cqi and dl_ri are means over the reports of a bin, cqi rounded, as in METRICS.
+dl_nof_nok, unlike in METRICS. cqi and dl_ri are means over the reports of a bin, cqi rounded, as in METRICS. dl_mcs is
+the mean over the codewords of the PDSCHs of a bin, rounded half away from zero, as in METRICS.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from .grid import Cell, rbg_crbs
 BIN_S = 0.01
 # Fields of the rows of each kind of grant or report of slot_items(), all with "rnti" and "ue_index" first.
 ITEM_FIELDS: dict[str, tuple[str, ...]] = {
-    "dl_grants": ("rnti", "ue_index", "harq_id", "mcs", "tbs", "nof_prbs", "new_data", "nof_retxs", "k1"),
+    "dl_grants": ("rnti", "ue_index", "harq_id", "mcs", "tbs", "nof_prbs", "new_data", "nof_retxs", "k1", "mcs2"),
     "ul_grants": ("rnti", "ue_index", "harq_id", "tbs", "nof_prbs", "nof_layers", "rv", "nof_retxs", "k2"),
     "harq_acks": ("rnti", "ue_index", "harq_id", "status", "tbs"),
     "csi_reports": ("rnti", "ue_index", "cqi", "ri", "rsrp"),
@@ -52,14 +53,19 @@ def nof_prbs(rbs: dict[str, Any] | None, bwp: dict[str, Any]) -> int:
 
 def slot_items(event: dict[str, Any], cell: Cell) -> dict[str, list[tuple]]:
     """The grants and reports of the UEs of a CellSlotEvent of schedtrace.read(), as rows of the fields of
-    ITEM_FIELDS by kind, RNTIs as OCUDU logs print them.
+    ITEM_FIELDS by kind, RNTIs as OCUDU logs print them. A DL grant has the MCS and new data flag of its first
+    codeword, the MCS of its second codeword as mcs2, None without one, and the TBS of all its codewords.
     """
     decision = event.get("decision") or {}
     dl = []
     for p in decision.get("ue_pdschs") or []:
-        cw = (p.get("codewords") or [{}])[0]
-        dl.append((normalize(p["rnti"]), p["ue_index"], p["harq_id"], cw.get("mcs_index"), cw.get("tb_size_bytes"),
-                   nof_prbs(p.get("rbs"), cell.dl_bwp), cw.get("new_data"), p["nof_retxs"], p["k1"]))
+        cws = p.get("codewords") or [{}]
+        cw = cws[0]
+        sizes = [c["tb_size_bytes"] for c in cws if c.get("tb_size_bytes") is not None]
+        mcs2 = cws[1].get("mcs_index") if len(cws) > 1 else None
+        dl.append((normalize(p["rnti"]), p["ue_index"], p["harq_id"], cw.get("mcs_index"),
+                   sum(sizes) if sizes else None, nof_prbs(p.get("rbs"), cell.dl_bwp), cw.get("new_data"),
+                   p["nof_retxs"], p["k1"], mcs2))
     ul = [(normalize(p["rnti"]), p["ue_index"], p["harq_id"], p["tb_size_bytes"], nof_prbs(p.get("rbs"), cell.ul_bwp),
            p.get("nof_layers"), p["rv_index"], p["nof_retxs"], p["k2"]) for p in decision.get("puschs") or []]
     acks, csis, srs = [], [], []
@@ -107,16 +113,18 @@ class Aggregator:
         c["latency_max"] = max(c["latency_max"], latency)
         failed = (event.get("decision") or {}).get("failed_attempts") or {}
         c["failed_attempts"] += sum(v for v in failed.values() if isinstance(v, int))
-        for rnti, ue, _, mcs, tbs, prbs, new_data, *_ in items["dl_grants"]:
+        for rnti, ue, _, mcs, tbs, prbs, new_data, _, _, mcs2 in items["dl_grants"]:
             u = self._ue(b, rnti, ue, record)
             if new_data:
                 u["dl_nof_newtx"] += 1
                 u["dl_newtx_bytes"] += tbs or 0
             else:
                 u["dl_nof_retx"] += 1
-            if mcs is not None:
-                u["dl_mcs_sum"] += mcs
-                u["dl_mcs_n"] += 1
+            # The mean of every codeword, as METRICS.
+            for cw_mcs in (mcs, mcs2):
+                if cw_mcs is not None:
+                    u["dl_mcs_sum"] += cw_mcs
+                    u["dl_mcs_n"] += 1
             u["dl_nof_prbs"] += prbs
             c["dl_nof_prbs"] += prbs
             c["dl_ues"].add(rnti)
@@ -227,7 +235,7 @@ def _ue_values(rnti: str, u: dict[str, Any], seconds: float) -> tuple:
     reports = u["dl_nof_ok"] + u["dl_nof_nok"]
     return (
         rnti, u["ue_index"], u["dl_ok_bytes"] * 8 / seconds, u["dl_newtx_bytes"] * 8 / seconds,
-        u["dl_mcs_sum"] / u["dl_mcs_n"] if u["dl_mcs_n"] else None,
+        _round_half_up(u["dl_mcs_sum"] / u["dl_mcs_n"]) if u["dl_mcs_n"] else None,
         u["dl_nof_prbs"], u["dl_nof_newtx"], u["dl_nof_retx"], u["dl_nof_ok"], u["dl_nof_nok"], u["dl_nof_dtx"],
         100 * (reports - u["dl_nof_ok"]) / reports if reports else None,
         u["ul_newtx_bytes"] * 8 / seconds, u["ul_nof_prbs"], u["ul_nof_newtx"], u["ul_nof_retx"],
@@ -235,6 +243,11 @@ def _ue_values(rnti: str, u: dict[str, Any], seconds: float) -> tuple:
         round(u["cqi_sum"] / u["cqi_n"]) if u["cqi_n"] else None, u["ri_sum"] / u["ri_n"] if u["ri_n"] else None,
         u["rsrp_sum"] / u["rsrp_n"] if u["rsrp_n"] else None, u["sr_count"],
     )
+
+
+def _round_half_up(value: float) -> int:
+    """A non-negative value rounded as std::round, unlike round(), which rounds halves to even."""
+    return int(value + 0.5)
 
 
 # Sums kept per bin and UE.
