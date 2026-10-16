@@ -14,7 +14,7 @@ from typing import Any
 
 from ..ran.procedures import proc_name
 from .tshark import Tshark
-from .values import first
+from .values import first, to_int
 
 # UE identifier fields of each protocol, by label.
 UE_ID_FIELDS: dict[str, list[tuple[str, str]]] = {
@@ -35,8 +35,8 @@ LINK_FIELDS: dict[str, dict[str, list[str]]] = {
     "ngap": {"nas": ["ngap.NAS_PDU"], "teid": ["ngap.gTP_TEID"], "ho_rnti": ["nr-rrc.newUE_Identity"]},
     "e1ap": {"teid": ["e1ap.gTP_TEID"]},
 }
-# Fields of the cause of a message, of the protocols that have one.
-# Groups of the Cause of each protocol, a CHOICE whose value tshark has in the field of its group, e.g. ngap.protocol.
+# Groups of the Cause of each protocol, a CHOICE whose value tshark has in the field of its group, e.g. ngap.protocol,
+# in the order of their CHOICE index.
 CAUSE_GROUPS = {
     "ngap": ("radioNetwork", "transport", "nas", "protocol", "misc"),
     "f1ap": ("radioNetwork", "transport", "protocol", "misc"),
@@ -74,18 +74,34 @@ def fields(proto: str) -> list[str]:
 
 def cause_fields(proto: str) -> list[str]:
     """The tshark fields of the causes of proto, read by cause()."""
+    # tshark names the CHOICE index of a Cause IE <proto>.Cause, and that of the cause of a list item <proto>.cause.
+    return [f"{proto}.Cause", f"{proto}.cause", *_group_fields(proto)]
+
+
+def _group_fields(proto: str) -> list[str]:
+    """The tshark fields of the values of the Cause groups of proto."""
     return [f"{proto}.{group}" for group in CAUSE_GROUPS[proto]]
 
 
 def cause(proto: str, row: dict[str, str]) -> str | None:
     """The cause of a message of proto, given its tshark field values by name, as "<group>:<value>", e.g.
     "protocol:unspecified", or None without one.
+
+    It is the message's Cause IE. A message without one but with causes of list items, e.g. the PDU sessions that failed
+    to set up of a PDUSessionResourceSetupResponse, has the cause of its first item.
     """
-    for group in CAUSE_GROUPS[proto]:
-        if value := first(row.get(f"{proto}.{group}")):
-            field = f"{proto}.{group}"
-            return f"{group}:{_cause_names().get(field, {}).get(value, value)}"
-    return None
+    groups = CAUSE_GROUPS[proto]
+    ie_index = to_int(first(row.get(f"{proto}.Cause")))
+    index = ie_index if ie_index is not None else to_int(first(row.get(f"{proto}.cause")))
+    if index is None or index >= len(groups):
+        return None
+    group = groups[index]
+    # Items may have causes of the group of the Cause IE, whose values tshark lists with its value in frame order.
+    # Messages with both list the Cause IE after the item lists, e.g. InitialContextSetupFailure.
+    value = (_last if ie_index is not None else first)(row.get(f"{proto}.{group}"))
+    if not value:
+        return None
+    return f"{group}:{_cause_names().get(f'{proto}.{group}', {}).get(value, value)}"
 
 
 @functools.lru_cache(maxsize=1)
@@ -96,7 +112,7 @@ def _cause_names() -> dict[str, dict[str, str]]:
     tshark = shutil.which("tshark")
     if tshark is None:
         return {}
-    wanted = {f for proto in CAUSE_GROUPS for f in cause_fields(proto)}
+    wanted = {f for proto in CAUSE_GROUPS for f in _group_fields(proto)}
     names: dict[str, dict[str, str]] = {}
     with subprocess.Popen([tshark, "-G", "values"], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True) as proc:
         for line in proc.stdout:
@@ -153,6 +169,11 @@ def message(proto: str, row: dict[str, str]) -> dict[str, Any] | None:
         **({"old_du_ue_f1ap_id": _second(row["f1ap.GNB_DU_UE_F1AP_ID"]) if code == "12" else None}
            if proto == "f1ap" else {}),
     }
+
+
+def _last(value: str | None) -> str | None:
+    """Last value of a tshark field of several occurrences, or None if empty."""
+    return value.rsplit(",", 1)[-1] or None if value else None
 
 
 def _second(value: str) -> str | None:

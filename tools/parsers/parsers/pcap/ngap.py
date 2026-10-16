@@ -45,7 +45,7 @@ def procedures(
     if failures_only:
         unsuccess = "ngap.unsuccessfulOutcome_element"
         display_filter = f"({display_filter}) && ({unsuccess})" if display_filter else unsuccess
-    tag = f"ngap-proc-v2-{ue or 'all'}-{int(failures_only)}"
+    tag = f"ngap-proc-v3-{ue or 'all'}-{int(failures_only)}"
     by_ue: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for values in tshark.iter_fields(pcap, PROCEDURE_FIELDS, display_filter=display_filter, tag=tag):
         frame, epoch, code, ran_id, amf_id, unsucc = values[:6]

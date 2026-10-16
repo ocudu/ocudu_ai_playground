@@ -146,12 +146,27 @@ class FramesWithoutTsharkTest(unittest.TestCase):
 
 class CauseTest(unittest.TestCase):
     def test_cause_of_its_group(self):
-        row = {"ngap.radioNetwork": "", "ngap.protocol": "6"}
+        row = {"ngap.Cause": "3", "ngap.radioNetwork": "", "ngap.protocol": "6"}
         with mock.patch.object(messages, "_cause_names", return_value={"ngap.protocol": {"6": "unspecified"}}):
             self.assertEqual(messages.cause("ngap", row), "protocol:unspecified")
             # A value without a name, e.g. of a newer release than the tshark build, keeps its number.
-            self.assertEqual(messages.cause("f1ap", {"f1ap.misc": "9"}), "misc:9")
+            self.assertEqual(messages.cause("f1ap", {"f1ap.Cause": "3", "f1ap.misc": "9"}), "misc:9")
             self.assertIsNone(messages.cause("e1ap", {}))
+
+    @mock.patch.object(messages, "_cause_names", return_value={})
+    def test_cause_ie_over_item_causes(self, _):
+        # An InitialContextSetupFailure with a failed PDU session, whose item cause precedes the Cause IE.
+        row = {"ngap.Cause": "3", "ngap.cause": "0", "ngap.radioNetwork": "13", "ngap.protocol": "6"}
+        self.assertEqual(messages.cause("ngap", row), "protocol:6")
+        # Items of the group of the Cause IE.
+        row = {"ngap.Cause": "0", "ngap.cause": "0,0", "ngap.radioNetwork": "13,21,26"}
+        self.assertEqual(messages.cause("ngap", row), "radioNetwork:26")
+
+    @mock.patch.object(messages, "_cause_names", return_value={})
+    def test_first_item_cause_without_cause_ie(self, _):
+        row = {"ngap.Cause": "", "ngap.cause": "3,0", "ngap.radioNetwork": "13", "ngap.protocol": "6"}
+        self.assertEqual(messages.cause("ngap", row), "protocol:6")
+        self.assertIsNone(messages.cause("e1ap", {"e1ap.Cause": "", "e1ap.cause": "", "e1ap.misc": ""}))
 
 
 class TimelineTest(unittest.TestCase):
