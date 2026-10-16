@@ -24,7 +24,8 @@ See references/pcap/reference/protocols/f1ap.md § "RRC PDUs inside F1AP contain
 
 Usage:
     f1ap_messages.py <f1ap.pcap>
-    f1ap_messages.py <f1ap.pcap> --ue 640      # filter by any UE identifier value
+    f1ap_messages.py <f1ap.pcap> --ue 640      # messages of this CU or DU F1AP id
+    f1ap_messages.py <f1ap.pcap> --rnti 4601   # messages of this C-RNTI, in any form: 4601, 0x4601, 17921
     f1ap_messages.py <f1ap.pcap> --rrc         # only rows carrying an RRC message
     f1ap_messages.py <f1ap.pcap> --nas         # only rows carrying a NAS message
     f1ap_messages.py <f1ap.pcap> --json
@@ -45,7 +46,9 @@ from parsers.ran.rnti import normalize, parse_any
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pcap", help="path to f1ap.pcap")
-    ap.add_argument("--ue", help="filter rows mentioning this identifier value (cu/du F1AP ID or C-RNTI)")
+    ap.add_argument("--ue", help="keep the messages of this gNB-CU or gNB-DU UE F1AP id")
+    ap.add_argument("--rnti", help="keep the messages of this C-RNTI, in any form: 4601 (hex as logs print it), "
+                                   "0x4601, or 17921 (decimal as the pcap holds it)")
     ap.add_argument("--rrc", action="store_true", help="only rows that carry an RRC message")
     ap.add_argument("--nas", action="store_true", help="only rows that carry a NAS message")
     ap.add_argument("--limit", type=int, default=0,
@@ -55,6 +58,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
+    rnti = parse_any(args.rnti) if args.rnti else None
+    if args.rnti and rnti is None:
+        ap.error(f"not an RNTI: {args.rnti!r}")
     pcap = Path(args.pcap)
     if not pcap.is_file():
         print(f"error: not a file: {pcap}", file=sys.stderr)
@@ -66,10 +72,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.ue:
-        # C-RNTIs in any form, e.g. 17921 as the pcap holds them, or 0x4601 as logs print them.
-        u_rnti = parse_any(args.ue)
-        records = [x for x in records if args.ue in (x["cu_ue_f1ap_id"], x["du_ue_f1ap_id"])
-                   or (u_rnti is not None and x["crnti"] and normalize(x["crnti"]) == u_rnti)]
+        records = [x for x in records if args.ue in (x["cu_ue_f1ap_id"], x["du_ue_f1ap_id"])]
+    if rnti:
+        records = [x for x in records if x["crnti"] and normalize(x["crnti"]) == rnti]
     if args.rrc:
         records = [x for x in records if x["rrc"]]
     if args.nas:

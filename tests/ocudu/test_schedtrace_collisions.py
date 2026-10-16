@@ -69,6 +69,15 @@ class SchedtraceCollisionsTest(unittest.TestCase):
         rects = script.collisions.Collision("PDCCH-PDCCH", 0, 0, {}, {}, [(0, 1, 16, 4)])
         self.assertEqual((script.overlap_text(cces), script.overlap_text(rects)), ("cces=[2,4)", "syms=[0,1) crbs=[16,20)"))
 
+    def test_rnti_in_any_form(self):
+        spec = importlib.util.spec_from_file_location("schedtrace_collisions", SCRIPT)
+        script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(script)
+        self.assertEqual({script.parse_rnti(r) for r in ("4601", "0x4601", "17921")}, {0x4601})
+        res = run(str(TRACE), "--rnti", "zz")
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("not an RNTI", res.stderr)
+
     def test_unknown_kind(self):
         res = run(str(TRACE), "--kinds", "PUSCH-PDSCH")
         self.assertNotEqual(res.returncode, 0)

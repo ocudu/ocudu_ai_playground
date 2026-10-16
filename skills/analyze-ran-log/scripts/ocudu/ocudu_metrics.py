@@ -23,7 +23,8 @@ Options:
   --fields <a,b,...>  Fields to show (default: all numeric fields for stats, all fields for rows).
   --where <k=v>       Keep rows whose field k equals v (numbers compare numerically, 0x values as text, rnti in any
                       form: 4601, 0x4601 or 17921). Repeatable.
-  --after/--before    Time window, as an ISO timestamp or a HH:MM:SS[.ffffff] time of day.
+  --after/--before    Time window, as an ISO timestamp (date and time joined by T or a space), a date, or a
+                      HH:MM:SS[.ffffff] time of day, compared to the same precision.
   --by <field>        Statistics per value of a context field, e.g. ue, rnti, pci.
   --rows              Print the rows (line number, time and fields) instead of statistics.
   --max-rows <N>      Rows printed at most (default: 200).
@@ -35,6 +36,7 @@ from __future__ import annotations
 import argparse
 import multiprocessing
 import os
+import re
 import sys
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
@@ -45,6 +47,7 @@ sys.path.insert(0, str(SCRIPT_DIR.parent / "_lib"))
 
 from parsers.log.run import primary_log_in, resolve_run_dir  # noqa: E402
 from parsers.log import metrics  # noqa: E402
+from parsers.log.search import iso_bound  # noqa: E402
 from parsers.ran.rnti import parse_any  # noqa: E402
 
 # Logs from this size are parsed in parallel by default.
@@ -87,12 +90,18 @@ def matches_where(value, wanted, key: str = "") -> bool:
 
 
 def matches_time(ts, ref: str, after: bool) -> bool:
+    """Whether a time is at or after (or before) a bound: an ISO timestamp, a date, or a time of day."""
+    bound = iso_bound(ref)
     # Cut to the precision of the bound, so that both bound forms are inclusive alike.
-    if "T" in ref:
-        value, bound = ts.isoformat(timespec="microseconds")[: len(ref)], ref
+    if is_date(bound[:10]):
+        value = ts.isoformat(timespec="microseconds")[: len(bound)]
     else:
-        value, bound = ts.strftime("%H:%M:%S.%f")[: len(ref)], ref
+        value = ts.strftime("%H:%M:%S.%f")[: len(bound)]
     return value >= bound if after else value <= bound
+
+
+def is_date(text: str) -> bool:
+    return re.fullmatch(r"\d{4}-\d{2}-\d{2}", text) is not None
 
 
 def is_number(v) -> bool:
@@ -123,8 +132,8 @@ def main(argv=None) -> int:
     ap.add_argument("--fields", help="fields to show, comma-separated (default: all numeric fields for stats, all for rows)")
     ap.add_argument("--where", action="append", default=[], metavar="K=V",
                     help="keep rows whose field equals the value; rnti in any form; repeatable")
-    ap.add_argument("--after", help="start of the window: ISO timestamp or HH:MM:SS[.ffffff]")
-    ap.add_argument("--before", help="end of the window: ISO timestamp or HH:MM:SS[.ffffff]")
+    ap.add_argument("--after", help="start of the window: ISO timestamp, date or HH:MM:SS[.ffffff]")
+    ap.add_argument("--before", help="end of the window: ISO timestamp, date or HH:MM:SS[.ffffff]")
     ap.add_argument("--by", help="statistics per value of a context field, e.g. ue, rnti, pci")
     ap.add_argument("--rows", action="store_true", help="print the rows instead of statistics")
     ap.add_argument("--max-rows", type=int, default=200, help="rows printed at most")

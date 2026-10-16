@@ -65,8 +65,27 @@ class F1apPcapTest(unittest.TestCase):
         self.assertEqual(ue["crntis"], ["17921"])
 
     def test_f1ap_ue_ids_filter(self):
-        self.assertEqual(len(run_json("f1ap_ue_ids.py", "--ue", "17921")), 1)
+        self.assertEqual(len(run_json("f1ap_ue_ids.py", "--ue", "0")), 1)
         self.assertEqual(run_json("f1ap_ue_ids.py", "--ue", "does-not-exist"), [])
+        # An F1AP id only, never a C-RNTI: 4601 is the hex form of the C-RNTI of the UE.
+        self.assertEqual(run_json("f1ap_ue_ids.py", "--ue", "4601"), [])
+        for rnti in ("4601", "0x4601", "17921"):
+            self.assertEqual(len(run_json("f1ap_ue_ids.py", "--rnti", rnti)), 1, rnti)
+        self.assertEqual(run_json("f1ap_ue_ids.py", "--rnti", "4602"), [])
+
+    def test_f1ap_messages_filters(self):
+        nof_ue_messages = len(run_json("f1ap_messages.py", "--ue", "0"))
+        self.assertGreater(nof_ue_messages, 1)
+        self.assertEqual(run_json("f1ap_messages.py", "--ue", "17921"), [])
+        records = run_json("f1ap_messages.py", "--rnti", "4601")
+        self.assertTrue(records)
+        self.assertTrue(all(r["crnti"] == "17921" for r in records))
+
+    def test_invalid_rnti(self):
+        proc = subprocess.run([sys.executable, str(SCRIPTS_DIR / "f1ap_ue_ids.py"), str(PCAP), "--rnti", "zz"],
+                              capture_output=True, text=True)
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertIn("not an RNTI", proc.stderr)
 
 
 if __name__ == "__main__":

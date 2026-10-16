@@ -22,12 +22,14 @@ Usage:
 <path>: a schedtrace_cell<N>.bin, or a directory, whose schedtrace_cell*.bin are all read.
 
 Options:
-  --rnti <R>          Keep this UE, by RNTI, hex (0x4601) or decimal. Repeatable.
+  --rnti <R>          Keep this UE, by RNTI in any form: 4601 (hex as logs print it), 0x4601, or 17921 (decimal as
+                      F1AP pcaps hold it). Repeatable.
   --ue <N>            Keep this UE, by DU UE index. Repeatable.
-  --after <T>         Keep slots at or after T: an ISO time (2026-10-12T13:35:40) or a time of day (13:35:40.5),
-                      compared to the same precision, UTC.
+  --after <T>         Keep slots at or after T: an ISO time (2026-10-12T13:35:40 or 2026-10-12 13:35:40), a date, or
+                      a time of day (13:35:40.5), compared to the same precision, UTC.
   --before <T>        Keep slots at or before T, as --after.
-  --period <S>        Seconds per row of the periods (default: 1, as METRICS).
+  --period <S>        Seconds per row of the periods (default: 1), from whole multiples of it since the epoch,
+                      UTC, unlike METRICS periods, which end at the times of their lines.
   --summary           Print only the summary per UE.
   --grants <K>        Print the grants or reports of kind dl, ul, harq or csi instead of the periods.
   --max-rows <N>      Period, grant or report rows printed at most per trace (default: 200).
@@ -40,6 +42,7 @@ import argparse
 import mmap
 import multiprocessing
 import os
+import re
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime, timezone
@@ -49,7 +52,8 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent / "_lib"))
 
 from parsers import schedtrace  # noqa: E402
-from parsers.ran.rnti import normalize  # noqa: E402
+from parsers.log.search import iso_bound  # noqa: E402
+from parsers.ran.rnti import parse_any  # noqa: E402
 from parsers.schedtrace import grid, ue_metrics  # noqa: E402
 
 # Traces from this size are read in parallel by default.
@@ -76,9 +80,11 @@ def time_text(t: float) -> str:
 
 
 def in_window(ts: str, after: str | None, before: str | None) -> bool:
-    """Whether an ISO time is within the bounds, ISO times or times of day compared to their precision."""
+    """Whether an ISO time is within the bounds, normalized by iso_bound(): ISO times, dates or times of day, compared
+    to their precision.
+    """
     def key(ref: str) -> str:
-        return ts if "T" in ref else ts[11:]
+        return ts if re.fullmatch(r"\d{4}-\d{2}-\d{2}", ref[:10]) else ts[11:]
 
     return (not after or key(after)[: len(after)] >= after) and (not before or key(before)[: len(before)] <= before)
 
@@ -217,12 +223,13 @@ def main() -> int:
     ap.add_argument("-j", type=int, default=None)
     args = ap.parse_args()
 
-    rntis = [normalize(r) for r in args.rnti]
+    rntis = [parse_any(r) for r in args.rnti]
     if None in rntis:
-        ap.error(f"invalid RNTI in {args.rnti}, expected hex (0x4601) or decimal")
+        ap.error(f"invalid RNTI in {args.rnti}, expected 4601, 0x4601 or 17921")
     if args.period <= 0:
         ap.error("--period must be positive")
-    opts = {"rntis": rntis, "ues": args.ue, "after": args.after, "before": args.before, "period": args.period,
+    opts = {"rntis": rntis, "ues": args.ue, "after": iso_bound(args.after), "before": iso_bound(args.before),
+            "period": args.period,
             "grants": args.grants}
 
     status = 0
@@ -245,6 +252,9 @@ def main() -> int:
         print(f"== {path}")
         if not res["nof_slots"]:
             print("no slots in the window")
+            continue
+        if (rntis or args.ue) and not res["agg"].ues:
+            print("no UE matches the filters")
             continue
         print_summary(res)
         if args.summary:

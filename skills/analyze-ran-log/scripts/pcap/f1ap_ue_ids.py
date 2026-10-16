@@ -12,7 +12,8 @@ is one UE seen in F1AP, with the frame and timestamp of the first sighting.
 
 Usage:
     f1ap_ue_ids.py <f1ap.pcap>
-    f1ap_ue_ids.py <f1ap.pcap> --ue 5   # filter by any identifier value
+    f1ap_ue_ids.py <f1ap.pcap> --ue 5          # UEs of this CU or DU F1AP id
+    f1ap_ue_ids.py <f1ap.pcap> --rnti 4601     # UEs of this C-RNTI, in any form: 4601, 0x4601, 17921
     f1ap_ue_ids.py <f1ap.pcap> --json
 """
 
@@ -31,7 +32,9 @@ from parsers.ran.rnti import normalize, parse_any
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("pcap", help="path to f1ap.pcap")
-    ap.add_argument("--ue", help="filter rows mentioning this identifier value")
+    ap.add_argument("--ue", help="keep the UEs of this gNB-CU or gNB-DU UE F1AP id")
+    ap.add_argument("--rnti", help="keep the UEs of this C-RNTI, in any form: 4601 (hex as logs print it), 0x4601, "
+                                   "or 17921 (decimal as the pcap holds it)")
     ap.add_argument("--limit", type=int, default=0,
                     help="cap text output rows (default 0 = no cap; set a positive N to cap)")
     ap.add_argument("--no-cache", action="store_true",
@@ -39,6 +42,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
 
+    rnti = parse_any(args.rnti) if args.rnti else None
+    if args.rnti and rnti is None:
+        ap.error(f"not an RNTI: {args.rnti!r}")
     pcap = Path(args.pcap)
     if not pcap.is_file():
         print(f"error: not a file: {pcap}", file=sys.stderr)
@@ -50,12 +56,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.ue:
-        u = args.ue
-        # C-RNTIs in any form, e.g. 17921 as the pcap holds them, or 0x4601 as logs print them.
-        u_rnti = parse_any(u)
-        out_list = [r for r in out_list
-                    if u == r["cu_ue_f1ap_id"] or u in r["du_ue_f1ap_ids"]
-                    or any(u_rnti is not None and normalize(c) == u_rnti for c in r["crntis"])]
+        out_list = [r for r in out_list if args.ue == r["cu_ue_f1ap_id"] or args.ue in r["du_ue_f1ap_ids"]]
+    if rnti:
+        out_list = [r for r in out_list if any(normalize(c) == rnti for c in r["crntis"])]
 
     if args.json:
         print(json.dumps(out_list, indent=2))

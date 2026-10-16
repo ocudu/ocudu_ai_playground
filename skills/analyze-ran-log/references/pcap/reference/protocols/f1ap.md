@@ -107,6 +107,7 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/f1ap_ue_ids.py <f1ap.pcap>
 # container (rrcReject/rrcSetup) that tshark leaves as hex in a release command.
 # NAS type is named from tshark's decode (ciphered post-security NAS shows '-').
 python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/f1ap_messages.py <f1ap.pcap>
-python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/f1ap_messages.py <f1ap.pcap> --ue 640   # one UE end-to-end
+python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/f1ap_messages.py <f1ap.pcap> --ue 640   # one UE by CU or DU F1AP id
+python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/f1ap_messages.py <f1ap.pcap> --rnti 4601 # by C-RNTI: 4601, 0x4601 or 17921
 python3 ${CLAUDE_SKILL_DIR}/scripts/pcap/f1ap_messages.py <f1ap.pcap> --nas      # only NAS-bearing msgs
 ```

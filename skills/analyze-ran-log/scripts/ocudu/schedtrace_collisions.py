@@ -22,7 +22,8 @@ Usage:
 
 Options:
   --kinds <a,b,...>   Kinds to report: PDSCH-PDSCH, PUSCH-PUSCH, PUSCH-PUCCH, PDCCH-PDSCH, PDCCH-PDCCH (default: all).
-  --rnti <R>          Keep collisions with an allocation of this RNTI, hex (0x4601) or decimal. Repeatable.
+  --rnti <R>          Keep collisions with an allocation of this RNTI, in any form: 4601 (hex as logs print it),
+                      0x4601, or 17921 (decimal as F1AP pcaps hold it). Repeatable.
   --summary           Print only the counts per kind, with the first and last slot of each.
   --max-rows <N>      Collisions printed at most per trace (default: 200).
   -j <K>              Worker processes (default: one per CPU up to 8 for traces over 16 MB, else 1).
@@ -43,6 +44,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent / "_lib"))
 
 from parsers import schedtrace  # noqa: E402
+from parsers.ran.rnti import parse_any  # noqa: E402
 from parsers.schedtrace import collisions, grid  # noqa: E402
 
 # Traces from this size are searched in parallel by default.
@@ -85,7 +87,10 @@ def find_all(path: Path, workers: int) -> list[collisions.Collision]:
 
 
 def parse_rnti(text: str) -> int:
-    return int(text, 16) if text.lower().startswith("0x") else int(text)
+    rnti = parse_any(text)
+    if rnti is None:
+        raise argparse.ArgumentTypeError(f"not an RNTI: {text!r}, expected 4601, 0x4601 or 17921")
+    return int(rnti, 16)
 
 
 def rnti_text(rnti: int | None) -> str:

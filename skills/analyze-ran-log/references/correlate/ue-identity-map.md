@@ -104,7 +104,7 @@ identifier chain above.
 ```bash
 python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir>                       # all UE contexts
 python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir> --traces              # one row per UE
-python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir> --where rnti=0x4607    # one RNTI
+python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir> --where rnti=4607      # one RNTI: 4607, 0x4607 or 17927
 python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir> --where amf_ngap=109 --traces
 python3 ${CLAUDE_SKILL_DIR}/scripts/correlate/ue_table.py <run-dir> --where du_ue=3 --after 12:24:30 --before 12:24:40
 ```

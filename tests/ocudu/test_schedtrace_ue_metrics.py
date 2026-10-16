@@ -43,6 +43,25 @@ class SchedtraceUeMetricsTest(unittest.TestCase):
         self.assertIn("12345", res.stdout)
         self.assertNotIn("0x4602", res.stdout)
 
+    def test_rnti_in_any_form(self):
+        for rnti in ("4601", "0x4601", "17921"):
+            res = run(str(TRACE), "--rnti", rnti, "--summary")
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertIn("0x4601", res.stdout, rnti)
+            self.assertNotIn("0x4602", res.stdout, rnti)
+
+    def test_filter_without_ues(self):
+        res = run(str(TRACE), "--rnti", "0x4700")
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertIn("no UE matches the filters", res.stdout)
+
+    def test_window_with_date_and_space(self):
+        # A date and time joined by a space, and a date, bound the slot of 2023-11-14T22:13:20 as ISO times.
+        for before, nof_slots in (("2023-11-14 22:13:21", 1), ("2023-11-14", 1), ("2023-11-13", 0)):
+            res = run(str(TRACE), "--before", before, "--summary")
+            self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertIn("slots=1" if nof_slots else "no slots in the window", res.stdout, before)
+
     def test_window_without_slots(self):
         res = run(str(TRACE), "--after", "23:00")
         self.assertEqual(res.returncode, 0, res.stderr)

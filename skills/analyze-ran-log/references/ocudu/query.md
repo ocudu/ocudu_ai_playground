@@ -28,7 +28,7 @@ Use the search script first when it fits:
 python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py <gnb.log> \
   [--layer <exact tag>] \
   [--ue <N>] \
-  [--rnti <hex>] \
+  [--rnti <RNTI>] \
   [--pci <N>] \
   [--after <HH:MM:SS.mmm>] \
   [--before <HH:MM:SS.mmm>] \
@@ -37,6 +37,11 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/ocudu_log_search.py <gnb.log> \
   [--count] \
   [--max-lines 200]
 ```
+
+RNTIs of every script take any form: `4601` (hex, as logs print it), `0x4601`, or
+`17921` (decimal, as F1AP pcaps hold it). `--after`/`--before` take a time of day
+(`13:35:40.5`), a date, or a date and time joined by `T` or a space, compared to
+the same precision.
 
 `--layer` is an **exact** tag match, not a substring — pass a tag that really
 appears in the log. There is **no `F1AP` or `E1AP` tag**; F1AP/E1AP traffic is
@@ -122,7 +127,10 @@ python3 ${CLAUDE_SKILL_DIR}/scripts/ocudu/schedtrace_ue_metrics.py <trace or run
 ```
 
 Fields follow the METRICS `Scheduler UE` lines where they mean the same: `dl_brate`
-is of the ACKed TBS, and 1 s periods match a 1 s METRICS period. Traces have no UL
+is of the ACKed TBS, and `dl_mcs` the rounded mean of the codewords. Periods are bins
+on whole multiples of `--period` since the epoch (UTC), while a METRICS period ends at
+the time of its line, so a 1 s period overlaps two METRICS periods: compare trends,
+not single values. Traces have no UL
 CRC or buffer status, so UL throughput is of the scheduled new transmissions
 (`ul_sched_brate`), and a DTX report counts as not ok.
 

@@ -64,6 +64,14 @@ class OcuduMetricsTest(unittest.TestCase):
         self.assertIn("Layer sched_ue: 1 rows", out)
         self.assertRegex(out, r"\n  5  14:10:11.345650  81  13\n")
 
+    def test_time_bounds(self):
+        # A date and time joined by a space, and a date, are ISO bounds, not times of day.
+        for args, nof_rows in ((("--after", "2026-06-29 14:10:11.3456"), 1), (("--before", "2026-06-29 14:10:10"), 0),
+                               (("--after", "14:10:11.3456"), 1), (("--before", "2026-06-29"), 2),
+                               (("--after", "2026-06-30"), 0)):
+            out = self.run_script("--layer", "sched_ue", "--rows", *args)
+            self.assertIn(f"Layer sched_ue: {nof_rows} rows", out, args)
+
     def test_parallel_workers(self):
         self.assertEqual(self.run_script("-j", "2", "--layer", "mac"), self.run_script("--layer", "mac"))
 
