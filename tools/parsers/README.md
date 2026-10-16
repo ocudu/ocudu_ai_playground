@@ -105,7 +105,8 @@ with open("gnb.log") as f:
 `events.iter_events()` recognizes the lines of known events (`events.EVENT_PATTERNS`) and reports the other warning and
 error lines as generic `warning` and `error` events, with the `ue=` and RNTI of their message if any. Records have `timestamp`, `type`, `category`, `layer`, `level`,
 `ue`, `rnti`, `cause` and `text`. Records of category `events.BINDING` (`ue_config`) are not events: they give
-`events.UeTracker` the RNTI of a UE created without it, e.g. a handover target.
+`events.UeTracker` the RNTI of a UE created without it, e.g. a handover target. A failed UE creation, e.g. on a UE
+index or C-RNTI clash, closes its context and leaves the UE it clashed with as it was.
 
 | Category    | Types                                                              |
 |-------------|--------------------------------------------------------------------|
@@ -113,7 +114,7 @@ error lines as generic `warning` and `error` events, with the `ue=` and RNTI of 
 | `lifecycle` | `ue_create`, `ue_delete`                                           |
 | `rrc`       | `rrc_setup_complete`, `rrc_release`, `rrc_reest_request`           |
 | `mobility`  | `ho_trigger`, `ho_preparation`                                     |
-| `failure`   | `rlf`, `rrc_reest_failed`, `rrc_reest_rejected`, `conres_timeout`, `conres_unacked`, `rrc_setup_timeout` |
+| `failure`   | `ue_create_failed`, `rlf`, `rrc_reest_failed`, `rrc_reest_rejected`, `conres_timeout`, `conres_unacked`, `rrc_setup_timeout` |
 | `warning`   | `warning` (other `[W]` lines)                                      |
 | `error`     | `error` (other `[E]` lines)                                        |
 
@@ -180,9 +181,12 @@ from parsers import schedtrace
 
 for ev in schedtrace.read("schedtrace_cell0.bin"):
     if ev["type"] == "CellSlotEvent":
-        harq = [i for i in ev["inputs"] or [] if i["type"] == "HarqAckEvent"]
-        print(ev["timestamp_us"], ev["slot_tx"], ev["latency_us"], len(ev["decision"]["ue_pdschs"] or []), harq)
+        harq = [i for i in ev["inputs"] or [] if i and i["type"] == "HarqAckEvent"]
+        pdschs = (ev["decision"] or {}).get("ue_pdschs") or []
+        print(ev["timestamp_us"], ev["slot_tx"], ev["latency_us"], len(pdschs), harq)
 ```
+
+`decision` is `None` in a slot without one, as is an element of `inputs` of union type `NONE`.
 
 OCUDU writes one `schedtrace_cell<N>.bin` per cell when the `trace.schedtrace` option is enabled: an 8-byte header
 (magic `SCHT`, then the major and minor version of the file format as little-endian `uint16`) and a series of
@@ -222,15 +226,18 @@ from the lowest CRB of its CORESET (TS 38.214 5.1.2.2.2), the others from the BW
 of their CCEs (TS 38.211 7.3.2.2). `skills/analyze-ran-log/scripts/ocudu/schedtrace_collisions.py` prints them.
 
 `schedtrace.ue_metrics` gives the per-UE metrics of a trace: `slot_items()` the DL and UL grants, HARQ-ACK and CSI
-reports and SRs of a slot, per UE, and `Aggregator` their sums per UE and 10 ms bin, as rows named after the fields of
-the METRICS `Scheduler UE` lines where they mean the same (`dl_brate` from the ACKed TBS, `dl_mcs`, `dl_nof_ok`,
-`dl_nof_nok` of the NACK and DTX reports, `dl_error_rate`, `cqi` and `dl_ri` as means of a bin, `sr_count`), plus the
-scheduler latency, PRBs and UEs of the cell per bin.
-Aggregators of parts of a trace merge; `Aggregator(bin_s=1)` gives 1 s bins, as METRICS periods, and `ue_totals()` the
-totals of each UE over a span. Bins are whole microseconds, at least one: `Aggregator.bin_s` holds the size rounded to
-them. `skills/analyze-ran-log/scripts/ocudu/schedtrace_ue_metrics.py` prints them. The trace has no UL CRC or buffer
-status: UL rates are of scheduled new transmissions (`ul_sched_brate`), and `ul_layers` is of the PUSCHs, not the RI of
-SRS. HARQ processes that time out without a report, or have no feedback, have no trace event, so they count in neither
+reports and SRs of a slot, per UE, a DL grant with the MCS of its first and second codeword (`mcs`, `mcs2`) and the TBS
+of both, and `Aggregator` their sums per UE and 10 ms bin, as rows named after the fields of the METRICS `Scheduler UE`
+lines where they mean the same (`dl_brate` from the ACKed TBS, `dl_mcs` as the mean of every codeword rounded half away
+from zero, `dl_nof_ok`, `dl_nof_nok` of the NACK and DTX reports, `dl_error_rate`, `cqi` and `dl_ri` as means of a bin,
+`sr_count`), plus the scheduler latency, PRBs and UEs of the cell per bin.
+Aggregators of parts of a trace merge; `Aggregator(bin_s=1)` gives 1 s bins, the length of the default METRICS period,
+and `ue_totals()` the totals of each UE over a span. Bins start at whole multiples of `bin_s` since the epoch, while a
+METRICS period ends at the time of its line, so a 1 s bin overlaps two METRICS periods. Bins are whole microseconds, at
+least one: `Aggregator.bin_s` holds the size rounded to them.
+`skills/analyze-ran-log/scripts/ocudu/schedtrace_ue_metrics.py` prints them. The trace has no UL CRC or buffer status:
+UL rates are of scheduled new transmissions (`ul_sched_brate`), and `ul_layers` is of the PUSCHs, not the RI of SRS.
+HARQ processes that time out without a report, or have no feedback, have no trace event, so they count in neither
 `dl_nof_ok` nor `dl_nof_nok`, unlike in METRICS.
 
 ```python
@@ -249,18 +256,18 @@ for t, record, *values in agg.ue_rows():
 
 ### Ad-hoc metrics of logs
 
-`parsers.log.adhoc` scans a byte range of a log for the numeric values of a `key=value` field, e.g. `tbs=` of the slot
-decision lines, optionally in the lines matching a regex and split by the nearest value of another key before each
-value in its line. Values with a unit are scaled as METRICS fields are. Ranges of `chunks.chunk_ranges()` scan
-independently. Without a key, `scan_lines()` gives the lines matching the regex, with their text, logger, level, UE
-index and RNTI.
+`parsers.log.adhoc` scans a byte range of a log for the numeric values of a `key=value` field, e.g. `tbs=` of the UE
+PDSCH lines of the slot decisions, optionally in the lines matching a regex and split by the nearest value of another
+key before each value in its line. Values with a unit are scaled as METRICS fields are. Ranges of
+`chunks.chunk_ranges()` scan independently. Without a key, `scan_lines()` gives the lines matching the regex, with their
+text, logger, level, UE index and RNTI.
 
 ```python
 import os
 
 from parsers.log import adhoc
 
-spec = adhoc.Spec("tbs", filter="slot decisions", split_key="ue")
+spec = adhoc.Spec("tbs", filter="UE PDSCH", split_key="ue")
 res = adhoc.scan("gnb.log", 0, os.path.getsize("gnb.log"), 1, spec)
 for t, line, offset, value, ue in res["rows"]:
     print(t, line, value, ue)
@@ -287,10 +294,12 @@ print(procedures.stats(procedures.latencies(mac, "start", "done")))
 ```
 
 Search entries are a timestamped line and its continuation lines, so filters match ASN.1 bodies too, and the
-configuration echo is left out unless asked for. Procedures are the `proc="..."` traces of the DU (`PROCEDURES`):
-stages that a build does not log are skipped. `console.summarize()` reads the console output of an application,
-`metrics_json.rollup()` its `metrics.json`, and `config.parse_config()` also gives the cell, AMF, duplex and pcap
-options. The `ocudu_log_search.py`, `ocudu_log_summary.py` and `ocudu_ue_proc_latency.py` scripts of the
+configuration echo is left out unless asked for. Time bounds are ISO dates or timestamps, with "T" or a space, or times
+of day, compared to the same precision; `search.iso_bound()` gives a bound the "T" form. An RNTI filter matches `rnti=`,
+`c-rnti=` and `tc-rnti=` tokens, not `ra-rnti=` or `temp_crnti=`. Procedures are the `proc="..."` traces of the DU
+(`PROCEDURES`): stages that a build does not log are skipped. `console.summarize()` reads the console output of an
+application, `metrics_json.rollup()` its `metrics.json`, and `config.parse_config()` also gives the cell, AMF, duplex
+and pcap options. The `ocudu_log_search.py`, `ocudu_log_summary.py` and `ocudu_ue_proc_latency.py` scripts of the
 analyze-ran-log skill print them.
 
 ### UEs of a run
@@ -320,9 +329,12 @@ by UPF TEID:
 
 ```python
 from parsers.correlate.run import run_traces
+from parsers.pcap.run import find_pcaps
 from parsers.pcap.tshark import Tshark
 
-ues, traces = run_traces(Tshark(), "run_dir/f1ap.pcap", ["run_dir/gnb.log"], ["run_dir/ngap.pcap", "run_dir/e1ap.pcap"])
+pcaps = find_pcaps("run_dir")
+cores = [p for p in (pcaps["ngap"], pcaps["e1ap"]) if p]
+ues, traces = run_traces(Tshark(), pcaps["f1ap"], ["run_dir/gnb.log"], cores)
 for ue in ues:
     print(ue.t_start, ue.first("ue_trace"), ue.first("rnti"), ue.first("du_ue"), ue.first("cu_ue"), ue.first("ran_ngap"))
 for trace in traces:
