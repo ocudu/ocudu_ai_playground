@@ -288,7 +288,8 @@ class EventStoreWriter:
         """Flushes pending events, writes the UE lanes and the indexes."""
         self._flush()
         self._conn.execute(f"CREATE INDEX idx_events ON events ({_TS})")
-        # A lane spans the events of one UE context; created but never deleted ones last until the end of the log.
+        # A lane spans the events of one UE context; created but never deleted ones last until the end of the log. A
+        # failed creation leaves no context.
         self._conn.execute(
             f"""
             CREATE TABLE lanes AS SELECT
@@ -299,7 +300,7 @@ class EventStoreWriter:
                 i.rnti,
                 i.label,
                 i.cu_ue,
-                MAX(e.type = 'ue_create') AND NOT MAX(e.type = 'ue_delete') AS open
+                MAX(e.type = 'ue_create') AND NOT MAX(e.type IN ('ue_delete', 'ue_create_failed')) AS open
             FROM events e LEFT JOIN lane_info i ON i.lane = e.lane WHERE e.lane IS NOT NULL GROUP BY e.lane
             """
         )

@@ -208,6 +208,19 @@ class StoreTest(unittest.TestCase):
                 back.append(after)
             self.assertEqual(back, want[::-1])
 
+    def test_trace_failed_creation(self):
+        lines = [
+            f'{_ts(1)} [DU-MNG  ] [I] ue=0 rnti=0x4601 proc="UE Create": Procedure started...',
+            f'{_ts(2)} [DU-MNG  ] [I] ue=1 rnti=0x4601 proc="UE Create": Procedure started...',
+            f'{_ts(2.1)} [DU-MNG  ] [W] ue=1 rnti=0x4601 proc="UE Create": Procedure failed. Cause: C-RNTI clash.',
+        ]
+        path = self.dir / "failed.log"
+        path.write_text("\n".join(lines) + "\n")
+        store = self.cache.open(path, LogMetricsSource())
+        self.cache.open_events(store, LogMetricsSource())
+        lanes = store.trace()["lanes"]
+        self.assertEqual([(lane["ue"], lane["open"]) for lane in lanes], [(0, True), (1, False)])
+
     def test_repeated_warnings(self):
         late = "[OFH     ] [W] Real-time timing worker woke up late, skipped '{}' symbols."
         lines = [f"{_ts(1 + 0.2 * i)} {late.format(i % 3)}" for i in range(5)]

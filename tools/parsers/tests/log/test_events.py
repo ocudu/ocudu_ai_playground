@@ -16,6 +16,7 @@ LINES = {
     "ue_create": '2026-07-30T20:53:14.482176 [DU-MNG  ] [I] ue=0 rnti=0x4601 proc="UE Create": Procedure started....',
     "ue_create_no_rnti": '2026-07-30T20:53:20.100000 [DU-MNG  ] [I] ue=3 proc="UE Create": Procedure started....',
     "ue_config": '2026-07-30T20:53:20.100100 [DU-MNG  ] [I] ue=3 rnti=0x4605 proc="UE Configuration": Procedure started....',
+    "ue_create_failed": '2026-04-09T21:20:28.714986 [DU-MNG  ] [W] ue=865 rnti=0x1 proc="UE Create": Procedure failed. Cause: Failed to create DU UE context. Cause: UE already existed with same ue_index or C-RNTI.',
     "ue_delete": '2026-07-30T20:53:25.816892 [DU-MNG  ] [I] ue=0 proc="UE Delete": Procedure finished successfully.',
     "rrc_setup_complete": "2026-07-30T20:53:14.500000 [RRC     ] [I] ue=0 c-rnti=0x4601: DCCH UL rrcSetupComplete",
     "rrc_release": "2026-07-30T20:53:40.000000 [RRC     ] [I] ue=12 c-rnti=0x460f: DCCH DL rrcRelease",
@@ -143,6 +144,11 @@ class EventsTest(unittest.TestCase):
         self.assertEqual((no_cause["type"], no_cause["ue"], no_cause["cause"]), ("rrc_reest_failed", 13, None))
         self.assertEqual(parse("reest_rejected")["cause"], "Old UE bearers were not fully established")
 
+    def test_ue_create_failed(self):
+        rec = parse("ue_create_failed")
+        self.assertEqual((rec["type"], rec["category"], rec["ue"], rec["rnti"]), ("ue_create_failed", "failure", 865, "0x1"))
+        self.assertEqual(rec["cause"], "Failed to create DU UE context. Cause: UE already existed with same ue_index or C-RNTI")
+
     def test_attach_timeouts(self):
         conres, setup = parse("conres_timeout"), parse("rrc_setup_timeout")
         self.assertEqual((conres["type"], conres["category"], conres["ue"], conres["rnti"]), ("conres_timeout", "failure", 201, "0x46d4"))
@@ -241,6 +247,37 @@ class EventsTest(unittest.TestCase):
         tracker.assign(ev(7, "conres_timeout", "SCHED", ue=3, rnti="0x4604"))
         tracker.assign(ev(8, "ue_delete", "DU-MNG", ue=3))
         self.assertEqual([(lane.rnti, lane.deleted) for lane in tracker.lanes][2:], [("0x4603", False), ("0x4604", False)])
+
+    def test_ue_tracker_failed_creation(self):
+        def ev(t, type_, layer, ue=None, rnti=None):
+            return {"timestamp": datetime(2026, 1, 1, 0, 0, t), "type": type_, "layer": layer, "ue": ue, "rnti": rnti}
+
+        tracker = events.UeTracker()
+        assigned = [
+            tracker.assign(e)
+            for e in [
+                ev(0, "ue_create", "DU-MNG", ue=1, rnti="0x1"),
+                ev(1, "ue_create", "DU-MNG", ue=2, rnti="0x2"),
+                ev(2, "rrc_setup_complete", "RRC", ue=7, rnti="0x2"),
+                # A C-RNTI clash, of a creation that leaves no context.
+                ev(3, "ue_create", "DU-MNG", ue=5, rnti="0x1"),
+                ev(4, "ue_create_failed", "DU-MNG", ue=5, rnti="0x1"),
+                # A UE index clash.
+                ev(5, "ue_create", "DU-MNG", ue=2, rnti="0x9"),
+                ev(6, "ue_create_failed", "DU-MNG", ue=2, rnti="0x9"),
+                # The live UEs keep their RNTI and DU UE index, for DU and CU events.
+                ev(7, "rrc_setup_timeout", "RRC", ue=3, rnti="0x1"),
+                ev(8, "conres", "MAC", ue=1, rnti="0x1"),
+                ev(9, "warning", "SCHED", ue=2),
+                ev(10, "rrc_release", "RRC", ue=7),
+                ev(11, "ue_delete", "DU-MNG", ue=2),
+            ]
+        ]
+        self.assertEqual(assigned, [0, 1, 1, 2, 2, 3, 3, 0, 0, 1, 1, 1])
+        self.assertEqual([(lane.du_ue, lane.created, lane.deleted) for lane in tracker.lanes],
+                         [(1, True, False), (2, True, True), (5, False, False), (2, False, False)])
+        # A failure of no ongoing creation changes nothing.
+        self.assertIsNone(tracker.assign(ev(12, "ue_create_failed", "DU-MNG", ue=4, rnti="0x4")))
 
     def test_categories_cover_patterns(self):
         self.assertTrue({p.category for p in events.EVENT_PATTERNS} <= {*events.CATEGORIES, events.BINDING})

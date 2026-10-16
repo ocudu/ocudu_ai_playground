@@ -74,6 +74,9 @@ EVENT_PATTERNS = (
     _p("rrc_reest_request", "rrc", "RRC", _RRC_PREFIX + r"CCCH UL rrcReestablishmentRequest" + _RRC_SUFFIX),
     _p("ho_trigger", "mobility", "CU-CP", r"ue=(?P<ue>\d+): Trigger intra-CU \((?:inter|intra)-DU\) handover"),
     _p("ho_preparation", "mobility", "NGAP", r"ue=(?P<ue>\d+) ran_ue=\d+ amf_ue=\d+: Starting HO preparation"),
+    # A UE index or C-RNTI clash with a live UE, among others, which leaves no context.
+    _p("ue_create_failed", "failure", "DU-MNG",
+       r'ue=(?P<ue>\d+)(?: rnti=(?P<rnti>0x\w+))? proc="UE Create": Procedure failed\. Cause: (?P<cause>.*?)\.?$'),
     _p("rlf", "failure", "DU-MNG", r'ue=(?P<ue>\d+) rnti=(?P<rnti>0x\w+): RLF detected with cause "(?P<cause>[^"]+)"'),
     _p("rrc_reest_failed", "failure", "RRC",
        r'ue=(?P<ue>\d+) c-rnti=(?P<rnti>0x\w+): "RRC Reestablishment Procedure".* failed\.(?: Cause: (?P<cause>.*))?'),
@@ -239,6 +242,8 @@ class UeTracker:
         self._by_rnti: dict[str, UeLane] = {}
         self._by_du_ue: dict[int, UeLane] = {}
         self._cu_ue_rnti: dict[int, str] = {}
+        # Per DU UE index of an ongoing creation, its lane and the lanes that it displaced from the DU UE index and RNTI.
+        self._creating: dict[int, tuple[UeLane, UeLane | None, UeLane | None]] = {}
 
     def assign(self, event: dict[str, Any]) -> int | None:
         """Returns the id of the UE context of an event, or None for events of no UE."""
@@ -256,12 +261,16 @@ class UeTracker:
         if layer in _CU_UP_LOGGERS:
             ue = None
         if type_ == "ue_create":
-            lane = self._by_rnti.get(rnti) if rnti else None
+            prev_du, prev_rnti = self._by_du_ue.get(ue), self._by_rnti.get(rnti) if rnti else None
+            lane = prev_rnti
             if lane is None or lane.du_ue is not None:
                 lane = self._new_lane(t, rnti)
             lane.du_ue, lane.created = ue, True
             self._by_du_ue[ue] = lane
+            self._creating[ue] = (lane, prev_du, prev_rnti)
             return lane
+        if type_ == "ue_create_failed":
+            return self._fail_creation(ue, rnti)
         if category == BINDING:
             # Only within the lifetime of the context, since DU UE indexes are soon reused.
             lane = self._by_du_ue.get(ue) if ue is not None else None
@@ -270,6 +279,7 @@ class UeTracker:
                 self._by_rnti[rnti] = lane
             return lane
         if type_ == "ue_delete":
+            self._creating.pop(ue, None)
             lane = self._by_du_ue.pop(ue, None)
             if lane is not None:
                 lane.deleted = True
@@ -302,6 +312,23 @@ class UeTracker:
             return self._by_du_ue.get(ue)
         cu_rnti = self._cu_ue_rnti.get(ue)
         return self._by_rnti.get(cu_rnti) if cu_rnti else None
+
+    def _fail_creation(self, ue: int | None, rnti: str | None) -> UeLane | None:
+        """Closes the lane of a failed creation and gives its DU UE index and RNTI back to the UEs that held them."""
+        lane, prev_du, prev_rnti = self._creating.pop(ue, (None, None, None)) if ue is not None else (None, None, None)
+        if lane is None or lane.rnti != rnti:
+            return None
+        lane.created = False
+        if self._by_du_ue.get(ue) is lane:
+            del self._by_du_ue[ue]
+            # The clash is often with a live UE of the same index, which the creation must not end.
+            if prev_du is not None and prev_du is not lane and not prev_du.deleted:
+                self._by_du_ue[ue] = prev_du
+        if rnti and self._by_rnti.get(rnti) is lane:
+            del self._by_rnti[rnti]
+            if prev_rnti is not None and prev_rnti is not lane and not prev_rnti.deleted:
+                self._by_rnti[rnti] = prev_rnti
+        return lane
 
     def _new_lane(self, t: datetime | float, rnti: str | None) -> UeLane:
         lane = UeLane(len(self.lanes), None, rnti, t)
