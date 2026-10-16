@@ -18,49 +18,57 @@ Each context row is one cell of a UE: a handover or reestablishment gives a new 
 Usage:
   python3 ue_table.py <path>                          # all UE contexts of the run
   python3 ue_table.py <path> --traces                 # one row per UE trace
-  python3 ue_table.py <path> --where rnti=0x4602      # the context of an RNTI
+  python3 ue_table.py <path> --where rnti=4602        # the context of an RNTI, in any form: 4602, 0x4602, 17922
   python3 ue_table.py <path> --where ue_trace=3       # the contexts of a UE
   python3 ue_table.py <path> --where ran_ngap=7 --traces
   python3 ue_table.py <path> --after 12:24:34 --before 12:24:40 --csv
 
-<path>: a run dir, component dir or test dir, resolved like ocudu_log_summary.py, or the log itself.
+<path>: a run dir, component dir or test dir, resolved like ocudu_log_summary.py, or the log itself. A pcap or
+config file of a run stands for its run dir.
 
 Options:
   --where <k=v>       Keep rows with identifier k equal to v: rnti, du_ue, cu_ue, ue_trace, du_f1ap, cu_f1ap, ran_ngap,
-                      amf_ngap, cu_cp_e1ap, cu_up_e1ap. Repeatable.
-  --after/--before    Keep rows alive in a window, as an ISO timestamp or a HH:MM:SS[.ffffff] time of day (UTC).
+                      amf_ngap, cu_cp_e1ap, cu_up_e1ap. rnti in any form: 4601 (hex as logs print it), 0x4601, or
+                      17921 (decimal as F1AP pcaps hold it). Repeatable.
+  --after/--before    Keep rows alive in a window, as an ISO timestamp (date and time joined by T or a space), a date,
+                      or a HH:MM:SS[.ffffff] time of day, compared to the same precision, UTC.
   --traces            One row per UE trace rather than per UE context.
   --with-ra           Also list the random accesses of no UE (a PRACH in the log only, e.g. a failed RA).
-  --log <file>        Log to use instead of the one of the run.
+  --log <file>        Log to use instead of the one of the run, e.g. of no standard name. Its directory is the run
+                      dir when <path> does not exist.
   --f1ap <file>       F1AP pcap to use instead of the one of the run. Without one, the UEs are the log ones only.
   --csv               Print CSV, with all the columns. The text table leaves out the columns no row has.
 
-The ngap.pcap and e1ap.pcap of the run are used when present. The DU and CU-CP UE indexes are different ids, both
-reused soon after a UE is released; RNTIs and protocol UE ids are not, so prefer them as keys.
+The NGAP and E1AP pcaps of the run, <proto>.pcap or with a prefix, e.g. gnb_ngap.pcap, are used when present. The DU
+and CU-CP UE indexes are different ids, both reused soon after a UE is released; RNTIs and protocol UE ids are not, so
+prefer them as keys.
 """
 
 from __future__ import annotations
 
 import argparse
 import csv
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(SCRIPT_DIR.parent / "_lib"))
-sys.path.insert(0, str(SCRIPT_DIR.parent / "ocudu"))
 
-from ocudu_log_summary import primary_log_in, resolve_run_dir  # noqa: E402
 from parsers.correlate import run  # noqa: E402
 from parsers.correlate.ues import Ue, UeTrace  # noqa: E402
-from parsers.pcap.run import find_pcaps  # noqa: E402
+from parsers.log.run import LOG_NAMES, primary_log_in, resolve_run_dir  # noqa: E402
+from parsers.log.search import iso_bound  # noqa: E402
+from parsers.pcap.run import find_pcaps, pcap_proto  # noqa: E402
 from parsers.pcap.tshark import Tshark  # noqa: E402
-from parsers.ran.rnti import normalize as normalize_rnti  # noqa: E402
+from parsers.ran.rnti import parse_any as parse_rnti  # noqa: E402
 
 ID_COLUMNS = ("ue_trace", "rnti", "du_ue", "cu_ue", "du_f1ap", "cu_f1ap", "ran_ngap", "amf_ngap", "cu_cp_e1ap", "cu_up_e1ap")
 COLUMNS = ("start", "end", "duration_s", *ID_COLUMNS, "sources")
 TRACE_COLUMNS = ("start", "end", "duration_s", "contexts", *ID_COLUMNS)
+# Suffixes of the files of a run that are not logs.
+OTHER_SUFFIXES = (".pcap", ".pcapng", ".yml", ".yaml", ".json", ".bin", ".cfg", ".conf", ".gz", ".bz2", ".xz", ".tar")
 
 
 def utc(epoch: float) -> datetime:
@@ -68,18 +76,51 @@ def utc(epoch: float) -> datetime:
 
 
 def time_bound(ref: str, epoch: float) -> str:
-    """The form of a timestamp that compares with a --after/--before value."""
+    """The form of a timestamp that compares with a --after/--before value, normalized by iso_bound()."""
     t = utc(epoch)
     # Cut to the precision of the bound, so that both bound forms are inclusive alike.
-    if "T" in ref:
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", ref[:10]):
         return t.replace(tzinfo=None).isoformat(timespec="microseconds")[: len(ref)]
     return t.strftime("%H:%M:%S.%f")[: len(ref)]
+
+
+def resolve_inputs(path_str: str, log_str: str | None) -> tuple[Path, Path]:
+    """The run dir and the log of a <path> and --log. Raises FileNotFoundError without them."""
+    path = Path(path_str)
+    log = Path(log_str) if log_str else None
+    if log is not None and not log.is_file():
+        raise FileNotFoundError(f"no log file {log}")
+    if path.is_file():
+        run_dir = path.parent
+        if log is None and not is_other_artifact(path):
+            log = path
+    elif path.is_dir():
+        try:
+            run_dir = resolve_run_dir(path)
+        except FileNotFoundError:
+            # A run whose log has no standard name, given with --log.
+            if log is None:
+                raise
+            run_dir = path
+    elif log is not None:
+        run_dir = log.parent
+    else:
+        raise FileNotFoundError(f"not found: {path}")
+    log = log or primary_log_in(run_dir)
+    if log is None:
+        raise FileNotFoundError(f"no OCUDU log ({', '.join(LOG_NAMES)}) in {run_dir}, see --log")
+    return run_dir, log
+
+
+def is_other_artifact(path: Path) -> bool:
+    """Whether a file of a run is not a log, e.g. a pcap or a config."""
+    return pcap_proto(path) is not None or path.suffix in OTHER_SUFFIXES
 
 
 def matches(ids: dict[str, list[str]], where: list[tuple[str, str]]) -> bool:
     for name, value in where:
         if name == "rnti":
-            value = normalize_rnti(value) or value
+            value = parse_rnti(value) or value
         if value not in ids.get(name, ()):
             return False
     return True
@@ -140,18 +181,20 @@ def main(argv=None) -> int:
             ap.error(f"--where takes k=v, not {item!r}")
         where.append((name.strip(), value.strip()))
 
-    path = Path(args.path)
-    run_dir = path.parent if path.is_file() else resolve_run_dir(args.path)
-    log = Path(args.log) if args.log else (path if path.is_file() else primary_log_in(run_dir))
-    # The pcaps of the run, <proto>.pcap or with a prefix, e.g. gnb_f1ap.pcap.
-    pcaps = find_pcaps(run_dir) if run_dir.is_dir() else {}
-    f1ap = Path(args.f1ap) if args.f1ap else pcaps.get("f1ap")
-    if f1ap is None or not f1ap.is_file():
-        print(f"note: no F1AP pcap in {run_dir}; the UEs are the ones of the log only.", file=sys.stderr)
-        f1ap = None
-    if log is None or not log.is_file():
-        print(f"error: no OCUDU log under {run_dir}", file=sys.stderr)
+    after, before = iso_bound(args.after), iso_bound(args.before)
+    try:
+        run_dir, log = resolve_inputs(args.path, args.log)
+    except FileNotFoundError as e:
+        print(f"error: {e}", file=sys.stderr)
         return 1
+    if args.f1ap and not Path(args.f1ap).is_file():
+        print(f"error: no F1AP pcap {args.f1ap}", file=sys.stderr)
+        return 1
+    # The pcaps of the run, <proto>.pcap or with a prefix, e.g. gnb_f1ap.pcap.
+    pcaps = find_pcaps(run_dir)
+    f1ap = Path(args.f1ap) if args.f1ap else pcaps.get("f1ap")
+    if f1ap is None:
+        print(f"note: no F1AP pcap in {run_dir}; the UEs are the ones of the log only.", file=sys.stderr)
 
     cores = [p for p in (pcaps.get("ngap"), pcaps.get("e1ap")) if p is not None]
     ues, traces = run.run_traces(Tshark(), f1ap, [log], cores)
@@ -159,8 +202,8 @@ def main(argv=None) -> int:
     ra_only = {ue.key for ue in ues if "du_ue" not in ue.ids and "du_f1ap" not in ue.ids}
 
     def alive(t_start: float, t_end: float, is_open: bool) -> bool:
-        return (not args.after or is_open or time_bound(args.after, t_end) >= args.after) and (
-            not args.before or time_bound(args.before, t_start) <= args.before
+        return (not after or is_open or time_bound(after, t_end) >= after) and (
+            not before or time_bound(before, t_start) <= before
         )
 
     if args.traces:
